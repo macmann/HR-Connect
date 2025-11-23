@@ -541,6 +541,7 @@ function showPanel(name) {
   const recruitmentBtn = document.getElementById('tabRecruitment');
   const managerBtn  = document.getElementById('tabManagerApps');
   const reportBtn   = document.getElementById('tabLeaveReport');
+  const locationBtn = document.getElementById('tabLocationInsights');
   const settingsBtn = document.getElementById('tabSettings');
   const financeBtn = document.getElementById('tabFinance');
   const profilePanel = document.getElementById('profilePanel');
@@ -549,10 +550,11 @@ function showPanel(name) {
   const recruitmentPanel = document.getElementById('recruitmentPanel');
   const managerPanel = document.getElementById('managerAppsPanel');
   const reportPanel  = document.getElementById('leaveReportPanel');
+  const locationPanel = document.getElementById('locationPanel');
   const settingsPanel = document.getElementById('settingsPanel');
   const financePanel = document.getElementById('financePanel');
 
-  [profileBtn, portalBtn, manageBtn, recruitmentBtn, managerBtn, reportBtn, settingsBtn, financeBtn].forEach(btn => btn && btn.classList.remove('active-tab'));
+  [profileBtn, portalBtn, manageBtn, recruitmentBtn, managerBtn, reportBtn, locationBtn, settingsBtn, financeBtn].forEach(btn => btn && btn.classList.remove('active-tab'));
 
   if (profilePanel) profilePanel.classList.add('hidden');
   portalPanel.classList.add('hidden');
@@ -560,6 +562,7 @@ function showPanel(name) {
   recruitmentPanel.classList.add('hidden');
   managerPanel.classList.add('hidden');
   reportPanel.classList.add('hidden');
+  if (locationPanel) locationPanel.classList.add('hidden');
   settingsPanel.classList.add('hidden');
   if (financePanel) financePanel.classList.add('hidden');
 
@@ -596,11 +599,15 @@ function showPanel(name) {
     reportPanel.classList.remove('hidden');
     reportBtn.classList.add('active-tab');
     loadLeaveReport();
-    loadLocationInsights();
     calendarCurrent = new Date();
     loadLeaveCalendar();
     const cards = document.getElementById('leaveRangeCards');
     if (cards) cards.innerHTML = '';
+  }
+  if (name === 'location') {
+    if (locationPanel) locationPanel.classList.remove('hidden');
+    if (locationBtn) locationBtn.classList.add('active-tab');
+    loadLocationInsights();
   }
   if (name === 'settings') {
     settingsPanel.classList.remove('hidden');
@@ -628,13 +635,14 @@ function toggleTabsByRole() {
   const recruitmentTab = document.getElementById('tabRecruitment');
   const managerAppsTab = document.getElementById('tabManagerApps');
   const leaveReportTab = document.getElementById('tabLeaveReport');
+  const locationTab = document.getElementById('tabLocationInsights');
   const settingsTab = document.getElementById('tabSettings');
   const financeTab = document.getElementById('tabFinance');
 
   const managerVisible = isManagerRole(currentUser?.role);
   const superAdminVisible = isSuperAdmin(currentUser);
 
-  [manageTab, recruitmentTab, managerAppsTab, leaveReportTab, settingsTab].forEach(tab => {
+  [manageTab, recruitmentTab, managerAppsTab, leaveReportTab, locationTab, settingsTab].forEach(tab => {
     if (!tab) return;
     tab.classList.toggle('hidden', !managerVisible);
   });
@@ -3718,6 +3726,8 @@ async function init() {
   if (managerTab) managerTab.onclick = () => showPanel('managerApps');
   const reportTab = document.getElementById('tabLeaveReport');
   if (reportTab) reportTab.onclick = () => showPanel('leaveReport');
+  const locationTab = document.getElementById('tabLocationInsights');
+  if (locationTab) locationTab.onclick = () => showPanel('location');
   const settingsTab = document.getElementById('tabSettings');
   if (settingsTab) settingsTab.onclick = () => showPanel('settings');
   const financeTab = document.getElementById('tabFinance');
@@ -4680,20 +4690,21 @@ function buildLocationPieSvg(segments, total) {
   const cy = 100;
   const radius = 90;
   let accumulated = 0;
+  const labels = [];
   const slices = segments.map(segment => {
     const startAngle = (accumulated / total) * 360;
     const endAngle = ((accumulated + segment.count) / total) * 360;
+    const midAngle = (startAngle + endAngle) / 2;
     accumulated += segment.count;
     const tooltip = buildLocationTooltip(segment);
+    const valuePos = polarToCartesian(cx, cy, radius * 0.6, midAngle);
+    labels.push(
+      `<text class="location-pie__value" x="${valuePos.x.toFixed(1)}" y="${valuePos.y.toFixed(1)}">${segment.count}</text>`
+    );
     return buildPieSliceMarkup(cx, cy, radius, startAngle, endAngle, segment.color, tooltip);
   }).join('');
 
-  const centerLabel = [
-    `<text class="location-pie__label" x="${cx}" y="${cy - 4}">${total}</text>`,
-    `<text class="location-pie__label--muted" x="${cx}" y="${cy + 14}">Active</text>`
-  ].join('');
-
-  return `<svg class="location-pie__svg" viewBox="0 0 200 200" role="presentation" aria-hidden="true">${slices}${centerLabel}</svg>`;
+  return `<svg class="location-pie__svg" viewBox="0 0 200 200" role="presentation" aria-hidden="true">${slices}${labels.join('')}</svg>`;
 }
 
 function renderLocationLegend(segments, container) {

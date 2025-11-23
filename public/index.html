@@ -380,6 +380,16 @@
       text-anchor: middle;
     }
 
+    .location-pie__value {
+      font-size: 12px;
+      font-weight: 700;
+      fill: #ffffff;
+      text-anchor: middle;
+      paint-order: stroke;
+      stroke: rgba(17, 24, 39, 0.25);
+      stroke-width: 3px;
+    }
+
     .location-legend {
       display: flex;
       flex-direction: column;
@@ -533,6 +543,10 @@
             <button id="tabLeaveReport" class="tab-button hidden">
               <span class="material-symbols-rounded">monitoring</span>
               <span>Leave Report</span>
+            </button>
+            <button id="tabLocationInsights" class="tab-button hidden">
+              <span class="material-symbols-rounded">public</span>
+              <span>Location Insights</span>
             </button>
             <button id="tabSettings" class="tab-button hidden">
               <span class="material-symbols-rounded">settings</span>
@@ -1207,27 +1221,6 @@
           <p class="panel-subtitle">Export snapshots, explore calendar activity, and track leave totals.</p>
         </div>
 
-        <div class="md-card location-insights">
-          <div class="location-insights__header">
-            <div>
-              <div class="card-title">Employee Locations</div>
-              <p class="card-subtitle">Active employees by their current location.</p>
-            </div>
-            <span id="locationTotalBadge" class="location-insights__total">0 Active</span>
-          </div>
-          <div class="location-insights__content">
-            <div
-              id="locationPie"
-              class="location-pie"
-              role="img"
-              aria-live="polite"
-              aria-label="Active employees by location"
-            ></div>
-            <div id="locationLegend" class="location-legend"></div>
-          </div>
-          <p id="locationEmpty" class="location-empty text-muted hidden">No active employees available.</p>
-        </div>
-
         <div class="list-card__actions" style="justify-content:flex-start;">
           <button id="exportLeavesBtn" class="md-button md-button--outlined">
             <span class="material-symbols-rounded">file_download</span>
@@ -1292,6 +1285,38 @@
         </div>
 
         <div id="leaveRangeCards"></div>
+      </section>
+
+      <!-- Location Insights Panel -->
+      <section id="locationPanel" class="panel hidden">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="material-symbols-rounded">public</span>
+            Location Insights
+          </h2>
+          <p class="panel-subtitle">Active employees grouped by their current location.</p>
+        </div>
+
+        <div class="md-card location-insights">
+          <div class="location-insights__header">
+            <div>
+              <div class="card-title">Employee Locations</div>
+              <p class="card-subtitle">Active employees by their current location.</p>
+            </div>
+            <span id="locationTotalBadge" class="location-insights__total">0 Active</span>
+          </div>
+          <div class="location-insights__content">
+            <div
+              id="locationPie"
+              class="location-pie"
+              role="img"
+              aria-live="polite"
+              aria-label="Active employees by location"
+            ></div>
+            <div id="locationLegend" class="location-legend"></div>
+          </div>
+          <p id="locationEmpty" class="location-empty text-muted hidden">No active employees available.</p>
+        </div>
       </section>
 
       <!-- Settings Panel -->
