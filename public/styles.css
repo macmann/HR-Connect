@@ -1035,8 +1035,8 @@
   background-color: #ffffff;
   overflow: hidden;
   /* expanded height to show most of the viewport while keeping scroll when overflowing */
-  min-height: 60vh;
-  max-height: 85vh;
+  min-height: 120vh;
+  max-height: 170vh;
   overflow-y: auto;
 }
 
