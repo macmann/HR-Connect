@@ -455,6 +455,11 @@ const financeRefreshButton = document.getElementById('financeRefresh');
 const financeTableBody = document.getElementById('employee-cards');
 const financeEmptyState = document.getElementById('financeEmptyState');
 const financeSearchInput = document.getElementById('employee-search');
+const financeSubtabButtons = document.querySelectorAll('[data-finance-subtab]');
+const financeSubtabPanels = {
+  employees: document.getElementById('active-employees'),
+  payroll: document.getElementById('payrollSummarySection')
+};
 const payrollSummaryBody = document.getElementById('payrollSummaryBody');
 const payrollSummaryMonth = document.getElementById('payrollSummaryMonth');
 const payrollSummaryEmpty = document.getElementById('payrollSummaryEmpty');
@@ -465,6 +470,7 @@ let financeLoading = false;
 let financeSaving = false;
 let financeSavingId = null;
 let financeSearchTerm = '';
+let financeActiveSubtab = 'employees';
 
 document.addEventListener('DOMContentLoaded', function () {
   var searchInput = document.getElementById('employee-search');
@@ -661,6 +667,25 @@ function getCurrentPayrollMonthValue() {
   return `${year}-${month}`;
 }
 
+function updateFinanceSubtab(name = 'employees') {
+  if (!name || !financeSubtabPanels[name]) return;
+
+  financeActiveSubtab = name;
+
+  financeSubtabButtons.forEach(button => {
+    const isActive = button.dataset.financeSubtab === name;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+
+  Object.entries(financeSubtabPanels).forEach(([panelName, panelEl]) => {
+    if (!panelEl) return;
+    const isActive = panelName === name;
+    panelEl.classList.toggle('hidden', !isActive);
+    panelEl.classList.toggle('finance-subtab-panel--active', isActive);
+  });
+}
+
 function formatFinanceUpdatedAt(value) {
   if (!value) return 'Updated: Not set';
   const date = new Date(value);
@@ -698,6 +723,17 @@ function setupFinanceModule() {
   if (financeInitialized) return;
   if (!financeMonthInput || !financeTableBody) return;
   financeInitialized = true;
+
+  if (financeSubtabButtons.length) {
+    financeSubtabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetTab = button.dataset.financeSubtab || 'employees';
+        updateFinanceSubtab(targetTab);
+      });
+    });
+    updateFinanceSubtab(financeActiveSubtab);
+  }
+
   financeMonthInput.value = financeMonthInput.value || getCurrentPayrollMonthValue();
   financeMonthInput.addEventListener('change', () => {
     if (!isSuperAdmin(currentUser)) return;
