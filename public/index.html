@@ -1513,6 +1513,27 @@
           <p class="panel-subtitle">Manage salary records for active employees and review payroll by month.</p>
         </div>
 
+        <div class="finance-subtabs" role="tablist" aria-label="Finance subtabs">
+          <button
+            type="button"
+            class="finance-subtab"
+            data-finance-subtab="employees"
+            role="tab"
+            aria-selected="true"
+          >
+            Active Employees
+          </button>
+          <button
+            type="button"
+            class="finance-subtab"
+            data-finance-subtab="payroll"
+            role="tab"
+            aria-selected="false"
+          >
+            Payroll Summary
+          </button>
+        </div>
+
         <div class="md-card finance-controls-card">
           <div class="finance-controls">
             <div class="finance-month-field">
@@ -1530,7 +1551,7 @@
           <p class="card-subtitle">Select a month to review payroll details. Salaries entered below apply across months.</p>
         </div>
 
-        <section id="active-employees" class="active-employees-section">
+        <section id="active-employees" class="active-employees-section" role="tabpanel" aria-label="Active employees">
           <div class="active-employees-header">
             <div>
               <h2 class="active-employees-title">Active Employees</h2>
@@ -1564,7 +1585,12 @@
           </div>
         </section>
 
-        <section id="payrollSummarySection" class="payroll-summary-section">
+        <section
+          id="payrollSummarySection"
+          class="payroll-summary-section hidden"
+          role="tabpanel"
+          aria-label="Payroll summary"
+        >
           <div class="payroll-summary-container">
             <div class="payroll-summary-header">
               <div>
