@@ -314,6 +314,119 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
+    /* Location insight */
+    .location-insights {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .location-insights__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .location-insights__content {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      align-items: center;
+    }
+
+    .location-insights__total {
+      align-self: center;
+      background-color: #eef2ff;
+      color: #4338ca;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-weight: 700;
+      font-size: 13px;
+      border: 1px solid #c7d2fe;
+      white-space: nowrap;
+    }
+
+    .location-pie {
+      min-height: 240px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 50%, #f8fafc, #f3f4f6);
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .location-pie__svg {
+      width: 100%;
+      max-width: 320px;
+      height: auto;
+      overflow: visible;
+    }
+
+    .location-pie__label {
+      font-size: 16px;
+      font-weight: 700;
+      fill: #111827;
+      text-anchor: middle;
+    }
+
+    .location-pie__label--muted {
+      font-size: 11px;
+      fill: #6b7280;
+      text-anchor: middle;
+    }
+
+    .location-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .location-legend__item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      border: 1px solid #e5e7eb;
+      background-color: #f9fafb;
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .location-legend__swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      margin-top: 4px;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.08);
+    }
+
+    .location-legend__label {
+      margin: 0;
+      font-weight: 700;
+      color: #111827;
+      font-size: 13px;
+    }
+
+    .location-legend__meta {
+      margin: 4px 0 0;
+      color: #6b7280;
+      font-size: 12px;
+    }
+
+    .location-empty {
+      margin: 0;
+      font-style: italic;
+    }
+
+    .location-loading {
+      color: #6b7280;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body class="app-shell">
@@ -1092,6 +1205,27 @@
             Leave Report
           </h2>
           <p class="panel-subtitle">Export snapshots, explore calendar activity, and track leave totals.</p>
+        </div>
+
+        <div class="md-card location-insights">
+          <div class="location-insights__header">
+            <div>
+              <div class="card-title">Employee Locations</div>
+              <p class="card-subtitle">Active employees by their current location.</p>
+            </div>
+            <span id="locationTotalBadge" class="location-insights__total">0 Active</span>
+          </div>
+          <div class="location-insights__content">
+            <div
+              id="locationPie"
+              class="location-pie"
+              role="img"
+              aria-live="polite"
+              aria-label="Active employees by location"
+            ></div>
+            <div id="locationLegend" class="location-legend"></div>
+          </div>
+          <p id="locationEmpty" class="location-empty text-muted hidden">No active employees available.</p>
         </div>
 
         <div class="list-card__actions" style="justify-content:flex-start;">

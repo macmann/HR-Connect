@@ -14,6 +14,8 @@ const POST_LOGIN_AUTH =
 const POST_LOGIN_TIMEOUT_MS = 5000;
 const CHAT_WIDGET_URL =
   'https://qa.atenxion.ai/chat-widget?agentchainId=6900712037c0ed036821b334';
+const INACTIVE_EMPLOYEE_STATUSES = new Set(['inactive', 'deactivated', 'disabled', 'terminated']);
+const LOCATION_COLORS = ['#6366f1', '#22c55e', '#06b6d4', '#f97316', '#a855f7', '#f43f5e', '#10b981', '#a3e635'];
 
 function normalizeRole(role) {
   return typeof role === 'string' ? role.trim().toLowerCase() : '';
@@ -28,6 +30,19 @@ function isManagerRole(roleOrUser) {
 function isSuperAdmin(roleOrUser) {
   const role = typeof roleOrUser === 'string' ? roleOrUser : roleOrUser?.role;
   return normalizeRole(role) === 'superadmin';
+}
+
+function isActiveEmployeeStatus(status) {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  if (!normalized) return true;
+  return !INACTIVE_EMPLOYEE_STATUSES.has(normalized);
+}
+
+function isEmployeeActive(employee) {
+  if (!employee || typeof employee !== 'object') return false;
+  const statusKey = Object.keys(employee).find(key => key.toLowerCase() === 'status');
+  const statusValue = statusKey ? employee[statusKey] : '';
+  return isActiveEmployeeStatus(statusValue);
 }
 
 function normalizeInternFlag(value) {
@@ -581,6 +596,7 @@ function showPanel(name) {
     reportPanel.classList.remove('hidden');
     reportBtn.classList.add('active-tab');
     loadLeaveReport();
+    loadLocationInsights();
     calendarCurrent = new Date();
     loadLeaveCalendar();
     const cards = document.getElementById('leaveRangeCards');
@@ -4608,6 +4624,150 @@ async function onEmpTableClick(e) {
 }
 
 // ======== LEAVE REPORT LOGIC ========
+function getEmployeeLocationValue(employee) {
+  if (!employee || typeof employee !== 'object') return 'Unspecified';
+  const prioritizedKeys = ['Country / City', 'country/city', 'country_city', 'location', 'city'];
+  for (const key of prioritizedKeys) {
+    const value = employee[key];
+    if (value) return String(value).trim();
+  }
+  const fallbackKey = Object.keys(employee).find(k => k.toLowerCase() === 'location');
+  if (fallbackKey && employee[fallbackKey]) return String(employee[fallbackKey]).trim();
+  return 'Unspecified';
+}
+
+function resolveInternFlagKey(employees = []) {
+  const sample = employees.find(emp => emp && typeof emp === 'object');
+  if (!sample) return 'internFlag';
+  return Object.keys(sample).find(key => key.toLowerCase() === 'internflag') || 'internFlag';
+}
+
+function buildLocationTooltip(segment) {
+  const header = `${segment.location} • ${segment.count} ${segment.count === 1 ? 'employee' : 'employees'}`;
+  const body = segment.employees
+    .map(emp => `${emp.name} — ${emp.statusLabel}`)
+    .join('\n');
+  return escapeHtml(body ? `${header}\n${body}` : header).replace(/\n/g, '&#10;');
+}
+
+function polarToCartesian(cx, cy, radius, angleInDegrees) {
+  const angleInRadians = (angleInDegrees - 90) * Math.PI / 180.0;
+  return {
+    x: cx + radius * Math.cos(angleInRadians),
+    y: cy + radius * Math.sin(angleInRadians)
+  };
+}
+
+function buildPieSliceMarkup(cx, cy, radius, startAngle, endAngle, color, tooltip) {
+  const delta = endAngle - startAngle;
+  if (delta >= 360 - 0.01) {
+    return `<g><circle cx="${cx}" cy="${cy}" r="${radius}" fill="${color}"></circle><title>${tooltip}</title></g>`;
+  }
+  const start = polarToCartesian(cx, cy, radius, endAngle);
+  const end = polarToCartesian(cx, cy, radius, startAngle);
+  const largeArcFlag = delta > 180 ? 1 : 0;
+  const d = [
+    'M', start.x.toFixed(3), start.y.toFixed(3),
+    'A', radius, radius, 0, largeArcFlag, 0, end.x.toFixed(3), end.y.toFixed(3),
+    'L', cx, cy,
+    'Z'
+  ].join(' ');
+  return `<path d="${d}" fill="${color}"><title>${tooltip}</title></path>`;
+}
+
+function buildLocationPieSvg(segments, total) {
+  const cx = 100;
+  const cy = 100;
+  const radius = 90;
+  let accumulated = 0;
+  const slices = segments.map(segment => {
+    const startAngle = (accumulated / total) * 360;
+    const endAngle = ((accumulated + segment.count) / total) * 360;
+    accumulated += segment.count;
+    const tooltip = buildLocationTooltip(segment);
+    return buildPieSliceMarkup(cx, cy, radius, startAngle, endAngle, segment.color, tooltip);
+  }).join('');
+
+  const centerLabel = [
+    `<text class="location-pie__label" x="${cx}" y="${cy - 4}">${total}</text>`,
+    `<text class="location-pie__label--muted" x="${cx}" y="${cy + 14}">Active</text>`
+  ].join('');
+
+  return `<svg class="location-pie__svg" viewBox="0 0 200 200" role="presentation" aria-hidden="true">${slices}${centerLabel}</svg>`;
+}
+
+function renderLocationLegend(segments, container) {
+  if (!container) return;
+  container.innerHTML = segments.map(segment => {
+    const internCount = segment.employees.filter(emp => emp.statusLabel === 'Intern').length;
+    const fullTimeCount = segment.count - internCount;
+    const meta = [
+      fullTimeCount ? `${fullTimeCount} full time` : '',
+      internCount ? `${internCount} intern${internCount > 1 ? 's' : ''}` : ''
+    ].filter(Boolean).join(' • ');
+
+    return `
+      <div class="location-legend__item">
+        <span class="location-legend__swatch" style="background:${segment.color};"></span>
+        <div>
+          <p class="location-legend__label">${escapeHtml(segment.location)}</p>
+          <p class="location-legend__meta">${segment.count} active${meta ? ' · ' + meta : ''}</p>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadLocationInsights() {
+  const pieContainer = document.getElementById('locationPie');
+  const legendContainer = document.getElementById('locationLegend');
+  const emptyState = document.getElementById('locationEmpty');
+  const totalBadge = document.getElementById('locationTotalBadge');
+  if (!pieContainer || !legendContainer) return;
+
+  pieContainer.innerHTML = '<div class="location-loading">Loading…</div>';
+  legendContainer.innerHTML = '';
+  if (emptyState) emptyState.classList.add('hidden');
+
+  const employees = await getJSON('/employees');
+  const activeEmployees = Array.isArray(employees) ? employees.filter(isEmployeeActive) : [];
+  const internFlagKey = resolveInternFlagKey(activeEmployees);
+
+  if (totalBadge) {
+    totalBadge.textContent = `${activeEmployees.length} Active`;
+  }
+
+  if (!activeEmployees.length) {
+    pieContainer.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('hidden');
+    return;
+  }
+
+  const locationMap = new Map();
+  activeEmployees.forEach(emp => {
+    const location = getEmployeeLocationValue(emp) || 'Unspecified';
+    const statusLabel = normalizeInternFlag(emp?.[internFlagKey]) ? 'Intern' : 'Full Time';
+    const entry = locationMap.get(location) || { count: 0, employees: [] };
+    entry.count += 1;
+    entry.employees.push({ name: emp?.name || 'Unknown', statusLabel });
+    locationMap.set(location, entry);
+  });
+
+  const segments = Array.from(locationMap.entries())
+    .map(([location, details], index) => ({
+      location: location || 'Unspecified',
+      count: details.count,
+      employees: details.employees,
+      color: LOCATION_COLORS[index % LOCATION_COLORS.length]
+    }))
+    .sort((a, b) => b.count - a.count || a.location.localeCompare(b.location));
+
+  pieContainer.innerHTML = buildLocationPieSvg(segments, activeEmployees.length);
+  renderLocationLegend(segments, legendContainer);
+
+  if (emptyState) emptyState.classList.add('hidden');
+}
+
 async function loadLeaveReport() {
   const data = await getJSON('/leave-report');
   const body = document.getElementById('leaveReportBody');
