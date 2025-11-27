@@ -34,6 +34,9 @@ const upload = multer({
 
 function normalizePosition(position = {}) {
   const stringId = position._id ? position._id.toString() : undefined;
+  const status = typeof position.status === 'string' && position.status.trim()
+    ? position.status.trim()
+    : 'Open';
   return {
     _id: stringId,
     id: position.id ?? stringId,
@@ -43,23 +46,40 @@ function normalizePosition(position = {}) {
     employmentType: position.employmentType || '',
     description: position.description || '',
     requirements: position.requirements || '',
-    createdAt: position.createdAt || null
+    createdAt: position.createdAt || null,
+    status,
+    isPublished: typeof position.isPublished === 'boolean'
+      ? position.isPublished
+      : status.toLowerCase() === 'open'
+  };
+}
+
+function buildPublishedQuery() {
+  return {
+    $or: [
+      { isPublished: true },
+      { status: { $in: ['Open', 'open'] } },
+      { isPublished: { $exists: false }, status: { $exists: false } }
+    ]
   };
 }
 
 router.get('/positions', async (req, res) => {
   try {
     const database = getDatabase();
+    const publishedQuery = buildPublishedQuery();
     const positions = await database
       .collection('positions')
-      .find({ isPublished: true }, {
+      .find(publishedQuery, {
         projection: {
           title: 1,
           department: 1,
           location: 1,
           employmentType: 1,
           createdAt: 1,
-          id: 1
+          id: 1,
+          status: 1,
+          isPublished: 1
         }
       })
       .sort({ createdAt: -1 })
@@ -84,7 +104,7 @@ router.get('/positions/:id', async (req, res) => {
     const database = getDatabase();
     const position = await database
       .collection('positions')
-      .findOne({ _id: positionId, isPublished: true });
+      .findOne({ _id: positionId, ...buildPublishedQuery() });
 
     if (!position) {
       return res.status(404).json({ error: 'position_not_found' });
@@ -111,7 +131,10 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
     const candidatesCollection = database.collection('candidates');
     const applicationsCollection = database.collection('applications');
 
-    const position = await positionsCollection.findOne({ _id: positionObjectId, isPublished: true });
+    const position = await positionsCollection.findOne({
+      _id: positionObjectId,
+      ...buildPublishedQuery()
+    });
     if (!position) {
       return res.status(404).json({ error: 'position_not_found' });
     }
