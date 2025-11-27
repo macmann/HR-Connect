@@ -1267,6 +1267,17 @@ function parsePositionStatus(status) {
   return null;
 }
 
+function normalizeAiInterviewQuestions(aiInterviewQuestions) {
+  return Array.isArray(aiInterviewQuestions)
+    ? aiInterviewQuestions
+        .filter(q => q && typeof q.text === 'string' && q.text.trim().length > 0)
+        .map((q, index) => ({
+          id: q.id || `q${index + 1}`,
+          text: q.text.trim()
+        }))
+    : [];
+}
+
 function normalizePositionsData(dbInstance) {
   if (!dbInstance || !dbInstance.data) return;
   dbInstance.data.positions = dbInstance.data.positions || [];
@@ -1287,6 +1298,7 @@ function normalizePositionsData(dbInstance) {
     position.description = position.description || '';
     position.requirements = position.requirements || '';
     position.status = parsePositionStatus(position.status) || 'Open';
+    position.aiInterviewQuestions = normalizeAiInterviewQuestions(position.aiInterviewQuestions);
   });
 }
 
@@ -2234,6 +2246,7 @@ init().then(async () => {
     const title = (req.body.title || '').trim();
     const department = (req.body.department || '').trim();
     const description = (req.body.description || '').trim();
+    const aiInterviewQuestions = normalizeAiInterviewQuestions(req.body.aiInterviewQuestions);
     const providedStatus = parsePositionStatus(req.body.status);
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
@@ -2248,6 +2261,7 @@ init().then(async () => {
       title,
       department,
       description,
+      aiInterviewQuestions,
       status: providedStatus || 'Open',
       createdAt: timestamp,
       updatedAt: timestamp
@@ -2373,6 +2387,7 @@ init().then(async () => {
     const title = (req.body.title || '').trim();
     const department = (req.body.department || '').trim();
     const description = (req.body.description || '').trim();
+    const aiInterviewQuestions = normalizeAiInterviewQuestions(req.body.aiInterviewQuestions);
     const providedStatus = parsePositionStatus(req.body.status);
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
@@ -2387,6 +2402,7 @@ init().then(async () => {
       title,
       department,
       description,
+      aiInterviewQuestions,
       status: providedStatus || 'Open',
       createdAt: new Date().toISOString()
     };
@@ -2406,6 +2422,10 @@ init().then(async () => {
     const departmentProvided = Object.prototype.hasOwnProperty.call(req.body, 'department');
     const descriptionProvided = Object.prototype.hasOwnProperty.call(req.body, 'description');
     const statusProvided = Object.prototype.hasOwnProperty.call(req.body, 'status');
+    const aiInterviewQuestionsProvided = Object.prototype.hasOwnProperty.call(
+      req.body,
+      'aiInterviewQuestions'
+    );
     const nextTitle = titleProvided ? String(req.body.title || '').trim() : position.title;
     if (!nextTitle) {
       return res.status(400).json({ error: 'Title is required' });
@@ -2420,6 +2440,9 @@ init().then(async () => {
     }
     if (descriptionProvided) {
       position.description = String(req.body.description || '').trim();
+    }
+    if (aiInterviewQuestionsProvided) {
+      position.aiInterviewQuestions = normalizeAiInterviewQuestions(req.body.aiInterviewQuestions);
     }
     position.status = nextStatus || 'Open';
     position.updatedAt = new Date().toISOString();

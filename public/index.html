@@ -984,6 +984,23 @@
                 <label class="md-label" for="positionDescription">Description</label>
                 <textarea id="positionDescription" name="description" class="md-textarea" rows="3" placeholder="Add role highlights or notes"></textarea>
               </div>
+              <div class="md-field">
+                <div class="md-field__label-row">
+                  <label class="md-label" for="aiQuestionsList">AI Interview Questions</label>
+                  <p class="text-muted" style="margin: 4px 0 0;">These questions will be used for the written AI interview for this position. You can auto-generate suggestions with AI and then edit them.</p>
+                </div>
+                <div id="aiQuestionsList" class="ai-questions-list"></div>
+                <div class="ai-questions-actions">
+                  <button id="addAiQuestionBtn" type="button" class="md-button md-button--text md-button--small">
+                    <span class="material-symbols-rounded">add</span>
+                    Add Question
+                  </button>
+                  <button id="generateAiQuestionsBtn" type="button" class="md-button md-button--filled md-button--small">
+                    <span class="material-symbols-rounded">auto_awesome</span>
+                    Auto-generate with AI
+                  </button>
+                </div>
+              </div>
               <div class="form-actions">
                 <button id="positionSubmitBtn" type="submit" class="md-button md-button--filled md-button--small">
                   <span id="positionSubmitIcon" class="material-symbols-rounded">save</span>

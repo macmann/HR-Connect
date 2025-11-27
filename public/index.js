@@ -258,6 +258,121 @@ function refreshTabGroupVisibility() {
   });
 }
 
+function setRecruitmentPositionQuestions(questions = []) {
+  recruitmentPositionQuestions = Array.isArray(questions)
+    ? questions.map((q, index) => ({
+        id: q?.id || `q${index + 1}`,
+        text: q?.text || ''
+      }))
+    : [];
+  renderRecruitmentPositionQuestions();
+}
+
+function renderRecruitmentPositionQuestions() {
+  const list = document.getElementById('aiQuestionsList');
+  if (!list) return;
+  if (!recruitmentPositionQuestions.length) {
+    list.innerHTML =
+      '<p class="text-muted" style="font-style: italic; margin: 0;">No questions yet. Add your own or auto-generate suggestions.</p>';
+    return;
+  }
+
+  list.innerHTML = recruitmentPositionQuestions
+    .map((question, index) => {
+      const label = `Question ${index + 1}`;
+      const text = escapeHtml(question.text || '');
+      return `
+        <div class="ai-question-row" data-question-index="${index}">
+          <div class="ai-question-row__header">
+            <span class="ai-question-row__label">${label}</span>
+            <button type="button" class="md-button md-button--text md-button--small" data-action="remove-question" data-question-index="${index}">
+              <span class="material-symbols-rounded">delete</span>
+              Remove
+            </button>
+          </div>
+          <textarea class="md-textarea" rows="2" data-question-index="${index}" placeholder="Enter the interview question">${text}</textarea>
+        </div>
+      `;
+    })
+    .join('');
+}
+
+function onAiQuestionListInput(ev) {
+  const textarea = ev.target.closest('textarea[data-question-index]');
+  if (!textarea) return;
+  const index = Number(textarea.getAttribute('data-question-index'));
+  if (Number.isNaN(index) || !recruitmentPositionQuestions[index]) return;
+  recruitmentPositionQuestions[index].text = textarea.value || '';
+}
+
+function onAiQuestionListClick(ev) {
+  const removeBtn = ev.target.closest('[data-action="remove-question"]');
+  if (removeBtn) {
+    const index = Number(removeBtn.getAttribute('data-question-index'));
+    if (!Number.isNaN(index)) {
+      recruitmentPositionQuestions.splice(index, 1);
+      renderRecruitmentPositionQuestions();
+    }
+  }
+}
+
+function onAddAiQuestionClick() {
+  recruitmentPositionQuestions.push({
+    id: `q${recruitmentPositionQuestions.length + 1}`,
+    text: ''
+  });
+  renderRecruitmentPositionQuestions();
+  const list = document.getElementById('aiQuestionsList');
+  if (list) {
+    const lastTextarea = list.querySelector('textarea:last-of-type');
+    if (lastTextarea) lastTextarea.focus();
+  }
+}
+
+async function onGenerateAiQuestionsClick() {
+  const button = document.getElementById('generateAiQuestionsBtn');
+  const editingId = recruitmentEditingPositionId;
+  if (!editingId) {
+    alert('Please save the position first, then click Auto-generate.');
+    return;
+  }
+
+  const position = recruitmentPositions.find(pos => pos.id == editingId);
+  const objectId = position?._id;
+  if (!objectId) {
+    alert('Please save the position first, then click Auto-generate.');
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Generating...';
+  }
+
+  try {
+    const res = await apiFetch(`/api/hr/positions/${objectId}/ai-questions/generate`, {
+      method: 'POST'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !Array.isArray(data.questions)) {
+      throw new Error('Failed to generate');
+    }
+    const normalized = data.questions.map((q, index) => ({
+      id: q?.id || `q${index + 1}`,
+      text: q?.text || ''
+    }));
+    setRecruitmentPositionQuestions(normalized);
+  } catch (err) {
+    console.error('Unable to auto-generate interview questions', err);
+    alert('Unable to auto-generate questions right now. Please try again later.');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Auto-generate with AI';
+    }
+  }
+}
+
 const PIPELINE_STATUSES = ['New', 'Selected for Interview', 'Interview Completed', 'Rejected', 'Hired'];
 const POSITION_STATUSES = ['Open', 'Closed'];
 const CANDIDATE_CV_HELP_DEFAULT = 'Accepted formats: PDF or Word documents.';
@@ -281,6 +396,7 @@ let recruitmentCandidateSearchError = null;
 const candidateCvPreviewUrls = new Map();
 const candidateDetailsCache = new Map();
 let candidateCvModalCandidateId = null;
+let recruitmentPositionQuestions = [];
 let currentDrawerFields = [];
 let hireModalState = { candidateId: null, select: null, previousStatus: null, candidate: null };
 let currentHireFields = [];
@@ -2304,6 +2420,22 @@ async function initRecruitment() {
   if (commentFormEl) commentFormEl.addEventListener('submit', onCommentSubmit);
   setCommentFormEnabled(false);
 
+  const aiQuestionsList = document.getElementById('aiQuestionsList');
+  if (aiQuestionsList) {
+    aiQuestionsList.addEventListener('input', onAiQuestionListInput);
+    aiQuestionsList.addEventListener('click', onAiQuestionListClick);
+  }
+
+  const addAiQuestionBtn = document.getElementById('addAiQuestionBtn');
+  if (addAiQuestionBtn) addAiQuestionBtn.addEventListener('click', onAddAiQuestionClick);
+
+  const generateAiQuestionsBtn = document.getElementById('generateAiQuestionsBtn');
+  if (generateAiQuestionsBtn) {
+    generateAiQuestionsBtn.addEventListener('click', onGenerateAiQuestionsClick);
+  }
+
+  renderRecruitmentPositionQuestions();
+
   const detailsCloseBtn = document.getElementById('candidateDetailsCloseBtn');
   if (detailsCloseBtn) detailsCloseBtn.onclick = closeCandidateDetailsModal;
 
@@ -2445,6 +2577,7 @@ function fillPositionForm(position) {
   if (statusEl) statusEl.value = normalizePositionStatus(position?.status);
   const descEl = document.getElementById('positionDescription');
   if (descEl) descEl.value = position?.description || '';
+  setRecruitmentPositionQuestions(position?.aiInterviewQuestions || []);
 }
 
 function startPositionEdit(position) {
@@ -2482,6 +2615,7 @@ function resetPositionForm() {
   if (cancelBtn) cancelBtn.classList.add('hidden');
   const statusEl = document.getElementById('positionStatus');
   if (statusEl) statusEl.value = 'Open';
+  setRecruitmentPositionQuestions([]);
 }
 
 function onPositionEditCancel() {
@@ -2558,11 +2692,18 @@ async function onPositionSubmit(ev) {
   ev.preventDefault();
   const form = ev.target;
   const formData = new FormData(form);
+  const aiInterviewQuestions = recruitmentPositionQuestions
+    .filter(q => q.text && q.text.trim().length > 0)
+    .map((q, index) => ({
+      id: q.id || `q${index + 1}`,
+      text: q.text.trim()
+    }));
   const payload = {
     title: (formData.get('title') || '').toString().trim(),
     department: (formData.get('department') || '').toString().trim(),
     description: (formData.get('description') || '').toString().trim(),
-    status: normalizePositionStatus(formData.get('status'))
+    status: normalizePositionStatus(formData.get('status')),
+    aiInterviewQuestions
   };
   if (!payload.title) {
     alert('Position title is required');
@@ -2583,6 +2724,7 @@ async function onPositionSubmit(ev) {
       resetPositionForm();
     } else {
       form.reset();
+      setRecruitmentPositionQuestions([]);
     }
     await loadRecruitmentPositions();
   } catch (err) {

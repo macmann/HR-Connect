@@ -1118,3 +1118,38 @@
   border-top: 1px solid #e5e7eb;
 }
 
+.ai-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.ai-question-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.ai-question-row__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-question-row__label {
+  font-weight: 600;
+  color: #111827;
+  font-size: 14px;
+}
+
+.ai-questions-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
