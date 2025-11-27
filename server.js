@@ -1255,6 +1255,22 @@ const CANDIDATE_STATUSES = [
   'Rejected',
   'Hired'
 ];
+const POSITION_STATUSES = ['Open', 'Closed'];
+
+function parsePositionStatus(status) {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  if (!normalized || normalized === 'open') return 'Open';
+  if (normalized === 'closed') return 'Closed';
+  return null;
+}
+
+function normalizePositionsData(dbInstance) {
+  if (!dbInstance || !dbInstance.data) return;
+  dbInstance.data.positions = dbInstance.data.positions || [];
+  dbInstance.data.positions.forEach(position => {
+    position.status = parsePositionStatus(position.status) || 'Open';
+  });
+}
 
 function buildPositionTitleMap(positions = []) {
   return new Map(positions.map(pos => [String(pos.id), pos.title || null]));
@@ -2152,12 +2168,16 @@ init().then(async () => {
   // ========== RECRUITMENT PIPELINE ==========
   app.post('/api/recruitment/roles', authRequired, managerOnly, async (req, res) => {
     await db.read();
-    db.data.positions = db.data.positions || [];
+    normalizePositionsData(db);
     const title = (req.body.title || '').trim();
     const department = (req.body.department || '').trim();
     const description = (req.body.description || '').trim();
+    const providedStatus = parsePositionStatus(req.body.status);
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
+    }
+    if (req.body.status !== undefined && providedStatus === null) {
+      return res.status(400).json({ error: 'Status must be Open or Closed' });
     }
     const id = Date.now();
     const timestamp = new Date().toISOString();
@@ -2166,6 +2186,7 @@ init().then(async () => {
       title,
       department,
       description,
+      status: providedStatus || 'Open',
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -2176,6 +2197,7 @@ init().then(async () => {
 
   app.post('/api/recruitment/candidates', authRequired, managerOnly, async (req, res) => {
     await db.read();
+    normalizePositionsData(db);
     db.data.positions = db.data.positions || [];
     db.data.candidates = db.data.candidates || [];
     const resolvedRoleId = Number(req.body.roleId || req.body.positionId);
@@ -2279,17 +2301,22 @@ init().then(async () => {
 
   app.get('/recruitment/positions', authRequired, managerOnly, async (req, res) => {
     await db.read();
-    db.data.positions = db.data.positions || [];
+    normalizePositionsData(db);
     res.json(db.data.positions);
   });
 
   app.post('/recruitment/positions', authRequired, managerOnly, async (req, res) => {
     await db.read();
+    normalizePositionsData(db);
     const title = (req.body.title || '').trim();
     const department = (req.body.department || '').trim();
     const description = (req.body.description || '').trim();
+    const providedStatus = parsePositionStatus(req.body.status);
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
+    }
+    if (req.body.status !== undefined && providedStatus === null) {
+      return res.status(400).json({ error: 'Status must be Open or Closed' });
     }
     db.data.positions = db.data.positions || [];
     const id = Date.now();
@@ -2298,6 +2325,7 @@ init().then(async () => {
       title,
       department,
       description,
+      status: providedStatus || 'Open',
       createdAt: new Date().toISOString()
     };
     db.data.positions.push(newPosition);
@@ -2307,7 +2335,7 @@ init().then(async () => {
 
   app.patch('/recruitment/positions/:id', authRequired, managerOnly, async (req, res) => {
     await db.read();
-    db.data.positions = db.data.positions || [];
+    normalizePositionsData(db);
     const position = db.data.positions.find(p => p.id == req.params.id);
     if (!position) {
       return res.status(404).json({ error: 'Position not found' });
@@ -2315,9 +2343,14 @@ init().then(async () => {
     const titleProvided = Object.prototype.hasOwnProperty.call(req.body, 'title');
     const departmentProvided = Object.prototype.hasOwnProperty.call(req.body, 'department');
     const descriptionProvided = Object.prototype.hasOwnProperty.call(req.body, 'description');
+    const statusProvided = Object.prototype.hasOwnProperty.call(req.body, 'status');
     const nextTitle = titleProvided ? String(req.body.title || '').trim() : position.title;
     if (!nextTitle) {
       return res.status(400).json({ error: 'Title is required' });
+    }
+    const nextStatus = statusProvided ? parsePositionStatus(req.body.status) : parsePositionStatus(position.status);
+    if (statusProvided && nextStatus === null) {
+      return res.status(400).json({ error: 'Status must be Open or Closed' });
     }
     position.title = nextTitle;
     if (departmentProvided) {
@@ -2326,6 +2359,7 @@ init().then(async () => {
     if (descriptionProvided) {
       position.description = String(req.body.description || '').trim();
     }
+    position.status = nextStatus || 'Open';
     position.updatedAt = new Date().toISOString();
     await db.write();
     res.json(position);
@@ -2352,6 +2386,7 @@ init().then(async () => {
 
   app.post('/recruitment/candidates', authRequired, managerOnly, async (req, res) => {
     await db.read();
+    normalizePositionsData(db);
     const { positionId, name, contact, cv } = req.body;
     const status = CANDIDATE_STATUSES.includes(req.body.status) ? req.body.status : 'New';
     if (!positionId) return res.status(400).json({ error: 'Position is required' });

@@ -55,6 +55,12 @@ function normalizeInternFlag(value) {
   return Boolean(value);
 }
 
+function normalizePositionStatus(value) {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'closed') return 'Closed';
+  return 'Open';
+}
+
 function updateChatWidgetUser(employeeId) {
   const iframe = document.getElementById('chatWidgetIframe');
   if (!iframe || typeof URL !== 'function') return;
@@ -253,6 +259,7 @@ function refreshTabGroupVisibility() {
 }
 
 const PIPELINE_STATUSES = ['New', 'Selected for Interview', 'Interview Completed', 'Rejected', 'Hired'];
+const POSITION_STATUSES = ['Open', 'Closed'];
 const CANDIDATE_CV_HELP_DEFAULT = 'Accepted formats: PDF or Word documents.';
 const CANDIDATE_CV_HELP_EDIT = 'Accepted formats: PDF or Word documents. Leave blank to keep the current CV.';
 let recruitmentPositions = [];
@@ -2338,7 +2345,9 @@ async function initRecruitment() {
 async function loadRecruitmentPositions() {
   if (!currentUser || !isManagerRole(currentUser)) return;
   const data = await getJSON('/recruitment/positions');
-  recruitmentPositions = Array.isArray(data) ? data : [];
+  recruitmentPositions = Array.isArray(data)
+    ? data.map(pos => ({ ...pos, status: normalizePositionStatus(pos.status) }))
+    : [];
   recruitmentPositions.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
   if (recruitmentEditingPositionId) {
@@ -2385,20 +2394,24 @@ function renderRecruitmentPositions() {
   }
   const markup = recruitmentPositions.map(pos => {
     const isActive = pos.id == recruitmentActivePositionId;
+    const status = normalizePositionStatus(pos.status);
+    const statusClass = status === 'Closed' ? 'position-item__status--closed' : 'position-item__status--open';
+    const statusBadge = `<span class="position-item__status ${statusClass}">${status}</span>`;
     const created = formatRecruitmentDate(pos.createdAt);
     const metaParts = [];
     if (pos.department) metaParts.push(escapeHtml(pos.department));
     if (created) metaParts.push(escapeHtml(created));
     const meta = metaParts.length ? `<div class="position-item__meta">${metaParts.join(' • ')}</div>` : '';
-    const description = pos.description ? `<div class="position-item__description">${escapeHtml(pos.description)}</div>` : '';
     return `
       <div class="position-item${isActive ? ' position-item--active' : ''}" data-position-id="${pos.id}">
         <button type="button" class="position-item__select" data-action="select-position" data-position-id="${pos.id}">
           <span class="material-symbols-rounded position-item__icon">work</span>
           <div class="position-item__content">
-            <div class="position-item__title">${escapeHtml(pos.title)}</div>
+            <div class="position-item__title-row">
+              <div class="position-item__title">${escapeHtml(pos.title)}</div>
+              ${statusBadge}
+            </div>
             ${meta}
-            ${description}
           </div>
           <span class="material-symbols-rounded position-item__chevron">chevron_right</span>
         </button>
@@ -2420,6 +2433,8 @@ function fillPositionForm(position) {
   if (titleEl) titleEl.value = position?.title || '';
   const deptEl = document.getElementById('positionDepartment');
   if (deptEl) deptEl.value = position?.department || '';
+  const statusEl = document.getElementById('positionStatus');
+  if (statusEl) statusEl.value = normalizePositionStatus(position?.status);
   const descEl = document.getElementById('positionDescription');
   if (descEl) descEl.value = position?.description || '';
 }
@@ -2457,6 +2472,8 @@ function resetPositionForm() {
   if (icon) icon.textContent = 'save';
   const cancelBtn = document.getElementById('positionCancelEditBtn');
   if (cancelBtn) cancelBtn.classList.add('hidden');
+  const statusEl = document.getElementById('positionStatus');
+  if (statusEl) statusEl.value = 'Open';
 }
 
 function onPositionEditCancel() {
@@ -2472,8 +2489,10 @@ function updateCandidatePositionSelect() {
     return;
   }
   const options = recruitmentPositions.map(pos => {
+    const status = normalizePositionStatus(pos.status);
+    const statusSuffix = status === 'Closed' ? ' (Closed)' : '';
     const label = pos.department ? `${escapeHtml(pos.title)} • ${escapeHtml(pos.department)}` : escapeHtml(pos.title);
-    return `<option value="${pos.id}">${label}</option>`;
+    return `<option value="${pos.id}">${label}${statusSuffix}</option>`;
   }).join('');
   select.innerHTML = options;
   if (recruitmentActivePositionId) {
@@ -2534,7 +2553,8 @@ async function onPositionSubmit(ev) {
   const payload = {
     title: (formData.get('title') || '').toString().trim(),
     department: (formData.get('department') || '').toString().trim(),
-    description: (formData.get('description') || '').toString().trim()
+    description: (formData.get('description') || '').toString().trim(),
+    status: normalizePositionStatus(formData.get('status'))
   };
   if (!payload.title) {
     alert('Position title is required');
@@ -2587,6 +2607,12 @@ async function onCandidateSubmit(ev) {
     return;
   }
   const editingId = recruitmentEditingCandidateId;
+  const selectedPosition = recruitmentPositions.find(pos => pos.id == positionId);
+  const positionStatus = normalizePositionStatus(selectedPosition?.status);
+  if (!editingId && positionStatus === 'Closed') {
+    alert('This position is closed. Reopen it before adding new candidates.');
+    return;
+  }
   const hasNewCv = file && file.size;
   if (!editingId && !hasNewCv) {
     alert('Please upload a CV.');
