@@ -2,42 +2,59 @@ const pdfParse = require("pdf-parse");
 const fs = require("fs");
 const path = require("path");
 
+// __dirname is .../utils, so repo root is one level up
+const repoRoot = path.join(__dirname, "..");
+
 function resolveCvPath(cvPath) {
   if (!cvPath) {
     throw new Error("No CV path provided");
   }
 
-  let normalized = cvPath.trim();
+  let p = cvPath.trim();
 
-  // If it's already absolute, just verify it
-  if (path.isAbsolute(normalized)) {
-    if (fs.existsSync(normalized)) {
-      return normalized;
+  // CASE A: Public URL-style path starting with /uploads/...
+  // This is NOT a real filesystem root, we must resolve relative to repo root.
+  if (p.startsWith("/uploads/")) {
+    const rel = p.replace(/^\/+/, ""); // "uploads/cv/xxx.pdf"
+
+    const candidates = [
+      path.join(repoRoot, rel),               // <repoRoot>/uploads/...
+      path.join(repoRoot, "public", rel),     // <repoRoot>/public/uploads/...
+    ];
+
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
     }
-    console.error("CV absolute path does not exist:", normalized);
-    throw new Error("CV file not found at " + normalized);
+
+    console.error("CV file not found for /uploads path. Tried:", candidates);
+    throw new Error("CV file not found at " + candidates.join(" OR "));
   }
 
-  // Otherwise, treat it as a relative/public path like "/uploads/cv/..."
-  if (normalized.startsWith("/")) {
-    normalized = normalized.substring(1);
-  }
-
-  // __dirname is .../utils
-  const rootDir = path.join(__dirname, ".."); // project root (one level up from utils)
-  const candidatePaths = [
-    path.join(rootDir, normalized),              // e.g. /project/uploads/cv/...
-    path.join(rootDir, "public", normalized),    // e.g. /project/public/uploads/cv/...
-  ];
-
-  for (const p of candidatePaths) {
+  // CASE B: Already a true absolute filesystem path (e.g. from Multer file.path)
+  if (path.isAbsolute(p)) {
     if (fs.existsSync(p)) {
       return p;
     }
+    console.error("CV absolute path does not exist:", p);
+    throw new Error("CV file not found at " + p);
   }
 
-  console.error("CV file not found. Tried paths:", candidatePaths);
-  throw new Error("CV file not found at " + candidatePaths.join(" OR "));
+  // CASE C: Relative path (e.g. "uploads/cv/xxx.pdf")
+  const candidates = [
+    path.join(repoRoot, p),
+    path.join(repoRoot, "public", p),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  console.error("CV file not found. Tried relative paths:", candidates);
+  throw new Error("CV file not found at " + candidates.join(" OR "));
 }
 
 async function extractTextFromPdf(cvPath) {

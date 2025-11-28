@@ -56,7 +56,13 @@ router.post('/applications/:applicationId/ai-screening/run', async (req, res) =>
 
     let cvText;
     try {
-      console.log('Application CV paths:', application.cvFilePathAbsolute, application.cvFilePath);
+      console.log(
+        'Application CV paths:',
+        application.cvFilePathAbsolute,
+        application.cvFilePath,
+        application.cvPath
+      );
+
       cvText = await extractTextFromPdf(
         application.cvFilePathAbsolute ||
         application.cvFilePath ||
