@@ -50,14 +50,18 @@ router.post('/applications/:applicationId/ai-screening/run', async (req, res) =>
       return res.status(404).json({ success: false, error: 'position_not_found' });
     }
 
-    if (!application.cvFilePath) {
+    if (!application.cvFilePath && !application.cvFilePathAbsolute && !application.cvPath) {
       return res.status(400).json({ success: false, error: 'cv_not_found_for_application' });
     }
 
     let cvText;
     try {
-      console.log('Application CV path from DB:', application.cvFilePath || application.cvPath);
-      cvText = await extractTextFromPdf(application.cvFilePath || application.cvPath);
+      console.log('Application CV paths:', application.cvFilePathAbsolute, application.cvFilePath);
+      cvText = await extractTextFromPdf(
+        application.cvFilePathAbsolute ||
+        application.cvFilePath ||
+        application.cvPath
+      );
     } catch (err) {
       console.error('Failed to extract text from CV for manual screening:', err);
       return res.status(500).json({ success: false, error: 'failed_to_read_cv' });
