@@ -56,7 +56,7 @@ router.post('/applications/:applicationId/ai-screening/run', async (req, res) =>
 
     let cvText;
     try {
-      console.log('Application CV path:', application.cvFilePath || application.cvPath);
+      console.log('Application CV path from DB:', application.cvFilePath || application.cvPath);
       cvText = await extractTextFromPdf(application.cvFilePath || application.cvPath);
     } catch (err) {
       console.error('Failed to extract text from CV for manual screening:', err);

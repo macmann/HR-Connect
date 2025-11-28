@@ -7,20 +7,24 @@ function resolveCvPath(cvPath) {
     throw new Error("No CV path provided");
   }
 
-  // Normalize cvPath (remove leading / if it's like "/uploads/...")
   let normalized = cvPath.trim();
+
+  // Example: "/uploads/cv/xxx.pdf" -> "uploads/cv/xxx.pdf"
   if (normalized.startsWith("/")) {
     normalized = normalized.substring(1);
   }
 
-  // Base dir is project src root (one level up from utils/)
-  const baseDir = path.join(__dirname, "..");
+  // __dirname is .../src/utils
+  const srcDir = path.join(__dirname, "..");       // /opt/render/project/src
+  const rootDir = path.join(srcDir, "..");         // /opt/render/project
 
-  // Try a few common locations:
-  // 1) as-is relative to baseDir (e.g. "uploads/cv/..." )
-  let candidatePaths = [
-    path.join(baseDir, normalized),
-    path.join(baseDir, "public", normalized) // e.g. "public/uploads/cv/..."
+  const candidatePaths = [
+    // 1) /opt/render/project/src/uploads/...
+    path.join(srcDir, normalized),
+    // 2) /opt/render/project/src/public/uploads/...
+    path.join(srcDir, "public", normalized),
+    // 3) /opt/render/project/uploads/...
+    path.join(rootDir, normalized),
   ];
 
   for (const p of candidatePaths) {
@@ -29,7 +33,6 @@ function resolveCvPath(cvPath) {
     }
   }
 
-  // If still not found, log and throw with full paths we checked
   console.error("CV file not found. Tried paths:", candidatePaths);
   throw new Error("CV file not found at " + candidatePaths.join(" OR "));
 }
@@ -37,14 +40,9 @@ function resolveCvPath(cvPath) {
 async function extractTextFromPdf(cvPath) {
   const absolutePath = resolveCvPath(cvPath);
 
-  try {
-    const buffer = fs.readFileSync(absolutePath);
-    const result = await pdfParse(buffer);
-    return result.text || "";
-  } catch (err) {
-    console.error("PDF parsing failed at", absolutePath, err);
-    throw err;
-  }
+  const buffer = fs.readFileSync(absolutePath);
+  const result = await pdfParse(buffer);
+  return result.text || "";
 }
 
 module.exports = { extractTextFromPdf };
