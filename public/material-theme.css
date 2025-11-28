@@ -580,6 +580,8 @@ body {
   border-bottom: 1px solid rgba(148, 163, 184, 0.25);
   backdrop-filter: blur(12px);
   align-items: stretch;
+  position: relative;
+  z-index: 40;
 }
 
 .tab-bar--secondary {
