@@ -2662,27 +2662,77 @@ init().then(async () => {
     const candidate = db.data.candidates.find(c =>
       c.id == candidateId || (c._id && c._id.toString() === candidateId)
     );
-    const filePath = candidate?.cvFilePath
-      ? path.join(__dirname, candidate.cvFilePath.replace(/^[/\\]+/, ''))
+    const candidateMongoId = candidate?._id ? candidate._id.toString() : null;
+    const candidateLegacyId = candidate?.id ?? null;
+    const recruitmentApplications = Array.isArray(db.data.recruitmentApplications)
+      ? db.data.recruitmentApplications
+      : [];
+
+    const findApplicationDate = app => {
+      if (!app) return null;
+      if (app.createdAt) {
+        const created = new Date(app.createdAt);
+        if (!Number.isNaN(created.getTime())) return created;
+      }
+      if (app._id?.getTimestamp) {
+        const ts = app._id.getTimestamp();
+        if (ts instanceof Date && !Number.isNaN(ts.getTime())) return ts;
+      }
+      return null;
+    };
+
+    const applications = recruitmentApplications
+      .filter(app => {
+        if (!app) return false;
+        const appCandidateId = app.candidateId?.toString?.() ?? app.candidateId;
+        const appLegacyId = app.candidateLegacyId ?? appCandidateId;
+        const matchesMongo = candidateMongoId && appCandidateId && appCandidateId.toString() === candidateMongoId;
+        const matchesLegacy = candidateLegacyId != null && appLegacyId != null && appLegacyId == candidateLegacyId;
+        return matchesMongo || matchesLegacy;
+      })
+      .sort((a, b) => {
+        const aDate = findApplicationDate(a)?.getTime() || 0;
+        const bDate = findApplicationDate(b)?.getTime() || 0;
+        return bDate - aDate;
+      });
+
+    const application = applications[0] || null;
+    const cvFilePath = application?.cvFilePath || candidate?.cvFilePath || null;
+    const filename = (application?.cvFilename || candidate?.cvFilename || candidate?.cv?.filename || 'cv').replace(/"/g, '');
+    const contentType =
+      application?.cvContentType ||
+      candidate?.cvContentType ||
+      candidate?.cv?.contentType ||
+      'application/octet-stream';
+
+    const filePath = cvFilePath
+      ? path.isAbsolute(cvFilePath)
+        ? cvFilePath
+        : path.join(__dirname, cvFilePath.replace(/^[/\\]+/, ''))
       : null;
     const hasFile = filePath && fs.existsSync(filePath);
+
     if (hasFile) {
-      const filename = (candidate.cvFilename || candidate.cv?.filename || 'cv').replace(/"/g, '');
-      res.setHeader(
-        'Content-Type',
-        candidate.cvContentType || candidate.cv?.contentType || 'application/octet-stream'
-      );
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       return fs.createReadStream(filePath).pipe(res);
     }
-    if (!candidate || !candidate.cv || !candidate.cv.data) {
+
+    const cvData = application?.cv?.data || candidate?.cv?.data;
+    const inlineContentType = application?.cv?.contentType || contentType;
+
+    if (!candidate || (!cvData && !candidate?.cv?.data)) {
       return res.status(404).json({ error: 'CV not found' });
     }
-    const filename = (candidate.cv.filename || 'cv').replace(/"/g, '');
-    const buffer = Buffer.from(candidate.cv.data, 'base64');
-    res.setHeader('Content-Type', candidate.cv.contentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(buffer);
+
+    if (cvData) {
+      const buffer = Buffer.from(cvData, 'base64');
+      res.setHeader('Content-Type', inlineContentType || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(buffer);
+    }
+
+    return res.status(404).json({ error: 'CV not found' });
   }
 
   app.get('/recruitment/candidates/:id/cv', authRequired, managerOnly, streamCandidateCv);
