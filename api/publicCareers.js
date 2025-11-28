@@ -120,9 +120,10 @@ router.get('/positions/:id', async (req, res) => {
 });
 
 router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
+  const positionId = req.params.id;
   let positionObjectId;
   try {
-    positionObjectId = new ObjectId(req.params.id);
+    positionObjectId = new ObjectId(positionId);
   } catch (error) {
     return res.status(400).json({ error: 'invalid_id' });
   }
@@ -229,7 +230,7 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
     const cvText = await extractTextFromPdf(cvAbsolutePath);
     const positionForScreening = await db
       .collection('positions')
-      .findOne({ _id: new ObjectId(positionObjectId) });
+      .findOne({ _id: new ObjectId(positionId) });
 
     let aiScreeningResult = null;
     try {
