@@ -199,6 +199,60 @@
       border-radius: 10px;
     }
 
+    .recruitment-subtabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 10px 24px rgba(79, 70, 229, 0.08);
+      margin-bottom: 16px;
+    }
+
+    .recruitment-subtab {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #0f172a;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      box-shadow: 0 8px 16px rgba(15, 23, 42, 0.06);
+    }
+
+    .recruitment-subtab:hover:not(.active) {
+      border-color: #94a3b8;
+      background: #f8fafc;
+      box-shadow: 0 12px 22px rgba(15, 23, 42, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .recruitment-subtab:focus-visible {
+      outline: 3px solid rgba(79, 70, 229, 0.25);
+      outline-offset: 2px;
+    }
+
+    .recruitment-subtab.active {
+      background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+      color: #fff;
+      border-color: #4f46e5;
+      box-shadow: 0 16px 32px rgba(79, 70, 229, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .recruitment-subtab.active:hover {
+      filter: brightness(1.02);
+    }
+
     .column-visibility__menu {
       position: absolute;
       right: 0;
