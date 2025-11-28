@@ -2579,6 +2579,14 @@ init().then(async () => {
         );
       });
       const applicationId = application?._id?.toString?.();
+      const applicationData = application
+        ? {
+            id: applicationId,
+            status: application?.status || null,
+            createdAt: application?.createdAt || null,
+            aiScreeningResult: application?.aiScreeningResult || null
+          }
+        : null;
       return {
         ...rest,
         id,
@@ -2587,6 +2595,7 @@ init().then(async () => {
         cv: cv ? { filename: cv.filename, contentType: cv.contentType } : null,
         source: c.source || null,
         applicationId,
+        application: applicationData,
         applicationStatus: application?.status || null,
         applicationCreatedAt: application?.createdAt || null
       };

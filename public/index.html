@@ -1965,11 +1965,11 @@
               </div>
             </div>
             <div class="candidate-details-column candidate-details-column--preview">
-              <div class="candidate-cv-panel">
-                <div class="candidate-cv-header">
-                  <div>
-                    <div class="candidate-cv-title">CV Preview</div>
-                    <div id="candidateDetailsCvFilename" class="candidate-cv-filename text-muted">-</div>
+                <div class="candidate-cv-panel">
+                  <div class="candidate-cv-header">
+                    <div>
+                      <div class="candidate-cv-title">CV Preview</div>
+                      <div id="candidateDetailsCvFilename" class="candidate-cv-filename text-muted">-</div>
                   </div>
                   <button type="button" id="candidateDetailsDownloadBtn" class="md-button md-button--tonal">
                     <span class="material-symbols-rounded">download</span>
@@ -1979,6 +1979,40 @@
                 <div id="candidateCvPreview" class="candidate-cv-preview">
                   <div id="candidateCvPreviewMessage" class="cv-preview-message">Select a candidate to view their CV.</div>
                   <iframe id="candidateCvIframe" class="cv-preview-frame hidden" title="Candidate CV preview" frameborder="0"></iframe>
+                </div>
+              </div>
+              <div id="ai-cv-screening" class="mt-4 p-4 rounded-lg bg-gray-50 border border-gray-200">
+                <h3 class="font-semibold text-lg mb-2">AI CV Screening</h3>
+
+                <!-- Fit Level + Score -->
+                <div class="mb-2">
+                  <span class="font-medium">Fit:</span>
+                  <span id="aiFitLevel" class="ml-1"></span>
+                  <span id="aiFitScore" class="ml-2 text-xs px-2 py-1 bg-indigo-100 text-indigo-600 rounded-full"></span>
+                </div>
+
+                <!-- Summary -->
+                <div class="mb-2">
+                  <span class="font-medium">Summary:</span>
+                  <p id="aiSummary" class="text-sm text-gray-700 mt-1"></p>
+                </div>
+
+                <!-- Strengths -->
+                <div class="mb-2">
+                  <span class="font-medium">Strengths:</span>
+                  <ul id="aiStrengths" class="list-disc ml-6 text-sm text-gray-700"></ul>
+                </div>
+
+                <!-- Concerns -->
+                <div class="mb-2">
+                  <span class="font-medium">Concerns:</span>
+                  <ul id="aiConcerns" class="list-disc ml-6 text-sm text-gray-700"></ul>
+                </div>
+
+                <!-- Recommendation -->
+                <div class="mt-2">
+                  <span class="font-medium">Recommendation:</span>
+                  <span id="aiRecommendation" class="ml-1 px-2 py-1 rounded text-white text-xs"></span>
                 </div>
               </div>
             </div>

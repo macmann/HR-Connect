@@ -433,6 +433,7 @@ const candidateCvPreviewUrls = new Map();
 const candidateDetailsCache = new Map();
 const aiInterviewCache = new Map();
 let candidateCvModalCandidateId = null;
+let aiCvScreeningTemplate = '';
 let recruitmentPositionQuestions = [];
 let currentDrawerFields = [];
 let hireModalState = { candidateId: null, select: null, previousStatus: null, candidate: null };
@@ -507,6 +508,10 @@ function adaptSearchResultToCandidate(result) {
 document.addEventListener('DOMContentLoaded', () => {
   setupTabGroupMenus();
   const params = new URLSearchParams(window.location.search);
+  const aiScreeningPanel = document.getElementById('ai-cv-screening');
+  if (aiScreeningPanel) {
+    aiCvScreeningTemplate = aiScreeningPanel.innerHTML;
+  }
   if (params.get('token')) {
     localStorage.setItem('brillar_token', params.get('token'));
     try {
@@ -3583,6 +3588,58 @@ async function loadCandidateCvPreview(candidate) {
   }
 }
 
+function renderAiCvScreening(application) {
+  const panel = document.getElementById('ai-cv-screening');
+  if (!panel) return;
+
+  if (!application || !application.aiScreeningResult) {
+    panel.innerHTML = "<p class='text-gray-500 text-sm'>No AI screening result available.</p>";
+    return;
+  }
+
+  if (!panel.querySelector('#aiFitLevel') && aiCvScreeningTemplate) {
+    panel.innerHTML = aiCvScreeningTemplate;
+  }
+
+  const r = application.aiScreeningResult;
+
+  const fitLevelEl = document.getElementById('aiFitLevel');
+  const fitScoreEl = document.getElementById('aiFitScore');
+  const summaryEl = document.getElementById('aiSummary');
+  const strengthsUl = document.getElementById('aiStrengths');
+  const concernsUl = document.getElementById('aiConcerns');
+  const rec = document.getElementById('aiRecommendation');
+
+  if (!fitLevelEl || !fitScoreEl || !summaryEl || !strengthsUl || !concernsUl || !rec) return;
+
+  fitLevelEl.innerText = r.fitLevel;
+  fitScoreEl.innerText = r.fitScore != null ? r.fitScore.toFixed(1) : '';
+
+  summaryEl.innerText = r.summary || '';
+
+  strengthsUl.innerHTML = '';
+  (r.strengths || []).forEach(s => {
+    const li = document.createElement('li');
+    li.innerText = s;
+    strengthsUl.appendChild(li);
+  });
+
+  concernsUl.innerHTML = '';
+  (r.concerns || []).forEach(c => {
+    const li = document.createElement('li');
+    li.innerText = c;
+    concernsUl.appendChild(li);
+  });
+
+  rec.innerText = r.recommendation;
+  rec.classList.remove('bg-green-600', 'bg-yellow-600', 'bg-red-600');
+  rec.classList.add(
+    r.recommendation === 'proceed_to_ai_interview' ? 'bg-green-600' :
+    r.recommendation === 'manual_review' ? 'bg-yellow-600' :
+    'bg-red-600'
+  );
+}
+
 function setCommentFormEnabled(enabled) {
   const textarea = document.getElementById('commentText');
   const submitBtn = document.getElementById('commentSubmitBtn');
@@ -3686,6 +3743,7 @@ function closeCandidateDetailsModal() {
   updateCommentSubmitLabel();
   setCommentFormEnabled(false);
   resetCandidateCvPreview();
+  renderAiCvScreening(null);
   const list = document.getElementById('commentsList');
   if (list) {
     list.classList.add('text-muted');
@@ -3738,6 +3796,7 @@ function populateCandidateDetails(candidate) {
     downloadBtn.disabled = !hasCv;
   }
   updateCandidateCommentsCount(candidate?.commentCount, candidate);
+  renderAiCvScreening(candidate?.application);
   const cachedAiInterview = candidate?.applicationId ? aiInterviewCache.get(candidate.applicationId) : null;
   renderCandidateAiInterviewPanel(candidate, { data: cachedAiInterview });
   loadCandidateAiInterview(candidate);
