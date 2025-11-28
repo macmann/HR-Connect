@@ -415,6 +415,7 @@ const CANDIDATE_CV_HELP_EDIT = 'Accepted formats: PDF or Word documents. Leave b
 let recruitmentPositions = [];
 let recruitmentCandidates = [];
 let recruitmentActivePositionId = null;
+let recruitmentActiveSubtab = 'pipeline';
 let recruitmentInitialized = false;
 let recruitmentActiveCommentCandidateId = null;
 let recruitmentCandidateComments = [];
@@ -628,6 +629,12 @@ const financeSubtabPanels = {
   employees: document.getElementById('active-employees'),
   payroll: document.getElementById('payrollSummarySection')
 };
+const recruitmentSubtabButtons = document.querySelectorAll('[data-recruitment-subtab]');
+const recruitmentSubtabPanels = {
+  search: document.getElementById('recruitmentSearchSection'),
+  positions: document.getElementById('recruitmentPositionsSection'),
+  pipeline: document.getElementById('recruitmentPipelineSection')
+};
 const payrollSummaryBody = document.getElementById('payrollSummaryBody');
 const payrollSummaryMonth = document.getElementById('payrollSummaryMonth');
 const payrollSummaryEmpty = document.getElementById('payrollSummaryEmpty');
@@ -759,6 +766,7 @@ function showPanel(name) {
     if (isManagerRole(currentUser?.role)) {
       if (recruitmentInitialized) {
         loadRecruitmentPositions();
+        updateRecruitmentSubtab(recruitmentActiveSubtab);
       } else {
         initRecruitment();
       }
@@ -856,6 +864,25 @@ function updateFinanceSubtab(name = 'employees') {
     const isActive = panelName === name;
     panelEl.classList.toggle('hidden', !isActive);
     panelEl.classList.toggle('finance-subtab-panel--active', isActive);
+  });
+}
+
+function updateRecruitmentSubtab(name = 'pipeline') {
+  if (!name || !recruitmentSubtabPanels[name]) return;
+
+  recruitmentActiveSubtab = name;
+
+  recruitmentSubtabButtons.forEach(button => {
+    const isActive = button.dataset.recruitmentSubtab === name;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+
+  Object.entries(recruitmentSubtabPanels).forEach(([panelName, panelEl]) => {
+    if (!panelEl) return;
+    const isActive = panelName === name;
+    panelEl.classList.toggle('hidden', !isActive);
+    panelEl.classList.toggle('recruitment-subtab-panel--active', isActive);
   });
 }
 
@@ -2424,6 +2451,15 @@ async function initRecruitment() {
   if (!currentUser || !isManagerRole(currentUser)) return;
   if (recruitmentInitialized) return;
   recruitmentInitialized = true;
+
+  if (recruitmentSubtabButtons.length) {
+    recruitmentSubtabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        updateRecruitmentSubtab(button.dataset.recruitmentSubtab);
+      });
+    });
+  }
+  updateRecruitmentSubtab(recruitmentActiveSubtab);
 
   const positionForm = document.getElementById('positionForm');
   if (positionForm) positionForm.addEventListener('submit', onPositionSubmit);

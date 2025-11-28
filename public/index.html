@@ -1632,172 +1632,223 @@
           <p class="panel-subtitle">Open roles and monitor every candidate from first touch to hiring.</p>
         </div>
 
-        <div class="card-grid card-grid--single">
-          <div class="md-card">
-            <div class="card-title">
-              <span class="material-symbols-rounded">manage_search</span>
-              Candidate Lookup
-            </div>
-            <p class="card-subtitle">Find applicants across every position to check their previous submissions.</p>
-            <div class="md-field table-search">
-              <label class="md-label" for="candidateSearchInput">Search candidates</label>
-              <div class="md-input-wrapper">
-                <span class="material-symbols-rounded">search</span>
-                <input id="candidateSearchInput" type="text" class="md-input" placeholder="Search by name or contact" autocomplete="off" spellcheck="false">
-              </div>
-            </div>
-            <div id="candidateSearchResults" class="candidate-search-results text-muted">
-              Start typing to look up existing applicants.
-            </div>
-          </div>
+        <div class="recruitment-subtabs" role="tablist" aria-label="Recruitment subtabs">
+          <button
+            type="button"
+            class="recruitment-subtab"
+            data-recruitment-subtab="search"
+            role="tab"
+            aria-selected="false"
+          >
+            Candidate Lookup
+          </button>
+          <button
+            type="button"
+            class="recruitment-subtab"
+            data-recruitment-subtab="positions"
+            role="tab"
+            aria-selected="false"
+          >
+            Positions
+          </button>
+          <button
+            type="button"
+            class="recruitment-subtab active"
+            data-recruitment-subtab="pipeline"
+            role="tab"
+            aria-selected="true"
+          >
+            Pipeline
+          </button>
         </div>
 
-        <div class="card-grid">
-          <div class="md-card">
-            <div class="card-title">
-              <span class="material-symbols-rounded">playlist_add</span>
-              Create Position
+        <section
+          id="recruitmentSearchSection"
+          class="recruitment-tab-panel hidden"
+          role="tabpanel"
+          aria-label="Candidate lookup"
+        >
+          <div class="card-grid card-grid--single">
+            <div class="md-card">
+              <div class="card-title">
+                <span class="material-symbols-rounded">manage_search</span>
+                Candidate Lookup
+              </div>
+              <p class="card-subtitle">Find applicants across every position to check their previous submissions.</p>
+              <div class="md-field table-search">
+                <label class="md-label" for="candidateSearchInput">Search candidates</label>
+                <div class="md-input-wrapper">
+                  <span class="material-symbols-rounded">search</span>
+                  <input id="candidateSearchInput" type="text" class="md-input" placeholder="Search by name or contact" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+              <div id="candidateSearchResults" class="candidate-search-results text-muted">
+                Start typing to look up existing applicants.
+              </div>
             </div>
-            <p class="card-subtitle">Document new openings so your hiring team stays aligned.</p>
-            <form id="positionForm" class="form-stack">
-              <div class="md-field">
-                <label class="md-label" for="positionTitle">Position title</label>
-                <div class="md-input-wrapper">
-                  <span class="material-symbols-rounded">badge</span>
-                  <input id="positionTitle" name="title" type="text" class="md-input" placeholder="e.g., Senior Designer" required>
-                </div>
+          </div>
+        </section>
+
+        <section
+          id="recruitmentPositionsSection"
+          class="recruitment-tab-panel hidden"
+          role="tabpanel"
+          aria-label="Positions"
+        >
+          <div class="card-grid">
+            <div class="md-card">
+              <div class="card-title">
+                <span class="material-symbols-rounded">playlist_add</span>
+                Create Position
               </div>
-              <div class="md-field">
-                <label class="md-label" for="positionDepartment">Department</label>
-                <div class="md-input-wrapper">
-                  <span class="material-symbols-rounded">business_center</span>
-                  <input id="positionDepartment" name="department" type="text" class="md-input" placeholder="Optional">
+              <p class="card-subtitle">Document new openings so your hiring team stays aligned.</p>
+              <form id="positionForm" class="form-stack">
+                <div class="md-field">
+                  <label class="md-label" for="positionTitle">Position title</label>
+                  <div class="md-input-wrapper">
+                    <span class="material-symbols-rounded">badge</span>
+                    <input id="positionTitle" name="title" type="text" class="md-input" placeholder="e.g., Senior Designer" required>
+                  </div>
                 </div>
-              </div>
-              <div class="md-field">
-                <label class="md-label" for="positionStatus">Status</label>
-                <div class="md-input-wrapper">
-                  <span class="material-symbols-rounded">flag</span>
-                  <select id="positionStatus" name="status" class="md-select">
-                    <option value="Open">Open</option>
-                    <option value="Closed">Closed</option>
-                  </select>
+                <div class="md-field">
+                  <label class="md-label" for="positionDepartment">Department</label>
+                  <div class="md-input-wrapper">
+                    <span class="material-symbols-rounded">business_center</span>
+                    <input id="positionDepartment" name="department" type="text" class="md-input" placeholder="Optional">
+                  </div>
                 </div>
-              </div>
-              <div class="md-field">
-                <label class="md-label" for="positionDescription">Description</label>
-                <textarea id="positionDescription" name="description" class="md-textarea" rows="3" placeholder="Add role highlights or notes"></textarea>
-              </div>
-              <div class="md-field">
-                <div class="md-field__label-row">
-                  <label class="md-label" for="aiQuestionsList">AI Interview Questions</label>
-                  <p class="text-muted" style="margin: 4px 0 0;">These questions will be used for the written AI interview for this position. You can auto-generate suggestions with AI and then edit them.</p>
+                <div class="md-field">
+                  <label class="md-label" for="positionStatus">Status</label>
+                  <div class="md-input-wrapper">
+                    <span class="material-symbols-rounded">flag</span>
+                    <select id="positionStatus" name="status" class="md-select">
+                      <option value="Open">Open</option>
+                      <option value="Closed">Closed</option>
+                    </select>
+                  </div>
                 </div>
-                <div id="aiQuestionsList" class="ai-questions-list"></div>
-                <div class="ai-questions-actions">
-                  <button id="addAiQuestionBtn" type="button" class="md-button md-button--text md-button--small">
-                    <span class="material-symbols-rounded">add</span>
-                    Add Question
+                <div class="md-field">
+                  <label class="md-label" for="positionDescription">Description</label>
+                  <textarea id="positionDescription" name="description" class="md-textarea" rows="3" placeholder="Add role highlights or notes"></textarea>
+                </div>
+                <div class="md-field">
+                  <div class="md-field__label-row">
+                    <label class="md-label" for="aiQuestionsList">AI Interview Questions</label>
+                    <p class="text-muted" style="margin: 4px 0 0;">These questions will be used for the written AI interview for this position. You can auto-generate suggestions with AI and then edit them.</p>
+                  </div>
+                  <div id="aiQuestionsList" class="ai-questions-list"></div>
+                  <div class="ai-questions-actions">
+                    <button id="addAiQuestionBtn" type="button" class="md-button md-button--text md-button--small">
+                      <span class="material-symbols-rounded">add</span>
+                      Add Question
+                    </button>
+                    <button id="generateAiQuestionsBtn" type="button" class="md-button md-button--filled md-button--small">
+                      <span class="material-symbols-rounded">auto_awesome</span>
+                      Auto-generate with AI
+                    </button>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button id="positionSubmitBtn" type="submit" class="md-button md-button--filled md-button--small">
+                    <span id="positionSubmitIcon" class="material-symbols-rounded">save</span>
+                    <span class="position-submit-label">Save Position</span>
                   </button>
-                  <button id="generateAiQuestionsBtn" type="button" class="md-button md-button--filled md-button--small">
-                    <span class="material-symbols-rounded">auto_awesome</span>
-                    Auto-generate with AI
+                  <button id="positionCancelEditBtn" type="button" class="md-button md-button--text md-button--small hidden">
+                    <span class="material-symbols-rounded">close</span>
+                    Cancel Edit
                   </button>
                 </div>
-              </div>
-              <div class="form-actions">
-                <button id="positionSubmitBtn" type="submit" class="md-button md-button--filled md-button--small">
-                  <span id="positionSubmitIcon" class="material-symbols-rounded">save</span>
-                  <span class="position-submit-label">Save Position</span>
-                </button>
-                <button id="positionCancelEditBtn" type="button" class="md-button md-button--text md-button--small hidden">
-                  <span class="material-symbols-rounded">close</span>
-                  Cancel Edit
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <div class="md-card">
-            <div class="card-title">
-              <span class="material-symbols-rounded">view_list</span>
-              Open Positions
+              </form>
             </div>
-            <div id="positionsList" class="positions-list">
-              <p class="text-muted" style="font-style: italic;">No positions yet. Add your first opening to start sourcing talent.</p>
+
+            <div class="md-card">
+              <div class="card-title">
+                <span class="material-symbols-rounded">view_list</span>
+                Open Positions
+              </div>
+              <div id="positionsList" class="positions-list">
+                <p class="text-muted" style="font-style: italic;">No positions yet. Add your first opening to start sourcing talent.</p>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="card-grid">
-          <div class="md-card">
-            <div class="card-title">
-              <span class="material-symbols-rounded">person_add</span>
-              Add Candidate
-            </div>
-            <form id="candidateForm" class="form-grid">
-              <div class="md-field">
-                <label class="md-label" for="candidatePositionSelect">Position</label>
-                <div class="md-input-wrapper">
-                  <span class="material-symbols-rounded">work</span>
-                  <select id="candidatePositionSelect" name="positionId" class="md-select" required></select>
+        <section
+          id="recruitmentPipelineSection"
+          class="recruitment-tab-panel recruitment-subtab-panel--active"
+          role="tabpanel"
+          aria-label="Pipeline"
+        >
+          <div class="card-grid">
+            <div class="md-card">
+              <div class="card-title">
+                <span class="material-symbols-rounded">person_add</span>
+                Add Candidate
+              </div>
+              <form id="candidateForm" class="form-grid">
+                <div class="md-field">
+                  <label class="md-label" for="candidatePositionSelect">Position</label>
+                  <div class="md-input-wrapper">
+                    <span class="material-symbols-rounded">work</span>
+                    <select id="candidatePositionSelect" name="positionId" class="md-select" required></select>
+                  </div>
                 </div>
-              </div>
-              <div class="md-field">
-                <label class="md-label" for="candidateName">Candidate name</label>
-                <div class="md-input-wrapper">
-                  <span class="material-symbols-rounded">badge</span>
-                  <input id="candidateName" name="name" type="text" class="md-input" placeholder="Full name" required>
+                <div class="md-field">
+                  <label class="md-label" for="candidateName">Candidate name</label>
+                  <div class="md-input-wrapper">
+                    <span class="material-symbols-rounded">badge</span>
+                    <input id="candidateName" name="name" type="text" class="md-input" placeholder="Full name" required>
+                  </div>
                 </div>
-              </div>
-              <div class="md-field">
-                <label class="md-label" for="candidateContact">Contact details</label>
-                <div class="md-input-wrapper">
-                  <span class="material-symbols-rounded">call</span>
-                  <input id="candidateContact" name="contact" type="text" class="md-input" placeholder="Email or phone" required>
+                <div class="md-field">
+                  <label class="md-label" for="candidateContact">Contact details</label>
+                  <div class="md-input-wrapper">
+                    <span class="material-symbols-rounded">call</span>
+                    <input id="candidateContact" name="contact" type="text" class="md-input" placeholder="Email or phone" required>
+                  </div>
                 </div>
-              </div>
-              <div class="md-field">
-                <label class="md-label" for="candidateCv">Upload CV</label>
-                <input id="candidateCv" name="cv" type="file" accept=".pdf,.doc,.docx,.docm,.rtf" required>
-                <p id="candidateCvHelpText" class="text-muted" style="margin-top:4px;">Accepted formats: PDF or Word documents.</p>
-              </div>
-              <div class="form-actions">
-                <button id="candidateSubmitBtn" type="submit" class="md-button md-button--filled">
-                  <span id="candidateSubmitIcon" class="material-symbols-rounded">upload_file</span>
-                  <span class="candidate-submit-label">Add to Pipeline</span>
-                </button>
-                <button id="candidateCancelEditBtn" type="button" class="md-button md-button--text hidden">
-                  <span class="material-symbols-rounded">close</span>
-                  Cancel Edit
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <div class="md-card" style="overflow-x:auto;">
-            <div class="card-title">
-              <span class="material-symbols-rounded">timeline</span>
-              Candidate Pipeline
+                <div class="md-field">
+                  <label class="md-label" for="candidateCv">Upload CV</label>
+                  <input id="candidateCv" name="cv" type="file" accept=".pdf,.doc,.docx,.docm,.rtf" required>
+                  <p id="candidateCvHelpText" class="text-muted" style="margin-top:4px;">Accepted formats: PDF or Word documents.</p>
+                </div>
+                <div class="form-actions">
+                  <button id="candidateSubmitBtn" type="submit" class="md-button md-button--filled">
+                    <span id="candidateSubmitIcon" class="material-symbols-rounded">upload_file</span>
+                    <span class="candidate-submit-label">Add to Pipeline</span>
+                  </button>
+                  <button id="candidateCancelEditBtn" type="button" class="md-button md-button--text hidden">
+                    <span class="material-symbols-rounded">close</span>
+                    Cancel Edit
+                  </button>
+                </div>
+              </form>
             </div>
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Candidate</th>
-                  <th>Contact</th>
-                  <th>Status</th>
-                  <th class="candidate-actions-header">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="candidateTableBody">
-                <tr>
-                  <td colspan="4" class="text-muted" style="padding:16px; font-style: italic;">Select a position to view candidates.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
 
-        </div>
+            <div class="md-card recruitment-table-card">
+              <div class="card-title">
+                <span class="material-symbols-rounded">timeline</span>
+                Candidate Pipeline
+              </div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Candidate</th>
+                    <th>Contact</th>
+                    <th>Status</th>
+                    <th class="candidate-actions-header">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="candidateTableBody">
+                  <tr>
+                    <td colspan="4" class="text-muted" style="padding:16px; font-style: italic;">Select a position to view candidates.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        </section>
       </section>
 
       <div id="candidateDetailsModal" class="modal-backdrop hidden">
