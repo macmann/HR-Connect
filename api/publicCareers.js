@@ -147,8 +147,15 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
       return res.status(400).json({ error: 'missing_required_fields' });
     }
 
-    const cvFilename = req.file.filename;
-    const cvFilePath = req.file?.path || `uploads/cv/${cvFilename}`;
+    const file = req.file;
+    const diskPathAbsolute = file?.path;
+    const publicPath = file ? `/uploads/cv/${file.filename}` : null;
+
+    const cvInfo = {
+      cvFilePath: publicPath,
+      cvFilePathAbsolute: diskPathAbsolute,
+      cvFilename: file?.originalname || file?.filename
+    };
     const now = new Date();
 
     const existingCandidate = await candidatesCollection.findOne({ email: email.trim().toLowerCase() });
@@ -165,8 +172,9 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
         positionId: position.id || existingCandidate.positionId,
         updatedAt: now,
         source: existingCandidate.source || 'careers_portal',
-        cvFilePath,
-        cvFilename: req.file.originalname || cvFilename,
+        cvFilePath: cvInfo.cvFilePath,
+        cvFilePathAbsolute: cvInfo.cvFilePathAbsolute,
+        cvFilename: cvInfo.cvFilename,
         cvContentType: req.file.mimetype || null
       };
       if (!existingCandidate.id) {
@@ -187,8 +195,9 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
         positionId: position.id || null,
         status: 'New',
         source: 'careers_portal',
-        cvFilePath,
-        cvFilename: req.file.originalname || cvFilename,
+        cvFilePath: cvInfo.cvFilePath,
+        cvFilePathAbsolute: cvInfo.cvFilePathAbsolute,
+        cvFilename: cvInfo.cvFilename,
         cvContentType: req.file.mimetype || null,
         createdAt: now,
         updatedAt: now,
@@ -207,8 +216,9 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
       type: 'recruitment',
       status: 'applied',
       source: 'careers_portal',
-      cvFilePath,
-      cvFilename: req.file.originalname || cvFilename,
+      cvFilePath: cvInfo.cvFilePath,
+      cvFilePathAbsolute: cvInfo.cvFilePathAbsolute,
+      cvFilename: cvInfo.cvFilename,
       coverLetterText: coverLetterText || null,
       createdAt: now,
       email: email.trim().toLowerCase(),
@@ -223,8 +233,12 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
       _id: applicationResult.insertedId
     };
 
-    console.log('Application CV path from DB:', savedApplication.cvFilePath || savedApplication.cvPath);
-    const cvText = await extractTextFromPdf(savedApplication.cvFilePath || savedApplication.cvPath);
+    console.log('Application CV path from DB:', savedApplication.cvFilePathAbsolute, savedApplication.cvFilePath || savedApplication.cvPath);
+    const cvText = await extractTextFromPdf(
+      savedApplication.cvFilePathAbsolute ||
+      savedApplication.cvFilePath ||
+      savedApplication.cvPath
+    );
     const positionForScreening = await db
       .collection('positions')
       .findOne({ _id: new ObjectId(positionId) });
