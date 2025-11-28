@@ -891,60 +891,143 @@
           <p class="panel-subtitle">Keep employee records tidy, upload new team members, and adjust balances instantly.</p>
         </div>
 
-        <div class="card-grid">
-          <div class="md-card">
-            <div class="card-title">
-              <span class="material-symbols-rounded">diversity_3</span>
-              Active Employees
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card__icon" aria-hidden="true">
+              <span class="material-symbols-rounded">group</span>
             </div>
-            <p class="card-subtitle">Monitor your roster and ensure everyone's details stay current.</p>
-            <div class="balance-chip" style="background: rgba(16,200,84,0.12); color:#0f7b32;">
-              <span class="material-symbols-rounded">groups</span>
-              <div>
-                <span class="label">Currently active</span>
-                <strong id="activeCountNum">0</strong>
-                <span class="unit">members</span>
-              </div>
+            <div class="kpi-card__content">
+              <p class="kpi-card__label">Total Employees</p>
+              <p id="totalEmployeesMetric" class="kpi-card__value">0</p>
             </div>
           </div>
-          <div class="md-card">
-            <div class="card-title">
-              <span class="material-symbols-rounded">upload_file</span>
-              Quick Actions
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--success" aria-hidden="true">
+              <span class="material-symbols-rounded">verified_user</span>
             </div>
-            <div class="list-card__actions" style="justify-content:flex-start;">
-              <button id="csvUploadBtn" class="md-button md-button--outlined">
-                <span class="material-symbols-rounded">cloud_upload</span>
-                Upload Employees CSV
-              </button>
-              <button id="leaveCsvUploadBtn" class="md-button md-button--outlined">
-                <span class="material-symbols-rounded">event_available</span>
-                Upload Leave CSV
-              </button>
-              <button id="addEmployeeBtn" class="md-button md-button--filled">
-                <span class="material-symbols-rounded">person_add</span>
-                Add Employee
-              </button>
-              <input id="csvInput" type="file" accept=".csv" class="hidden">
-              <input id="leaveCsvInput" type="file" accept=".csv" class="hidden">
+            <div class="kpi-card__content">
+              <p class="kpi-card__label">Active</p>
+              <p id="activeCountNum" class="kpi-card__value">0</p>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--warning" aria-hidden="true">
+              <span class="material-symbols-rounded">workspace_premium</span>
+            </div>
+            <div class="kpi-card__content">
+              <p class="kpi-card__label">Interns</p>
+              <p id="internCountMetric" class="kpi-card__value">0</p>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--info" aria-hidden="true">
+              <span class="material-symbols-rounded">business_center</span>
+            </div>
+            <div class="kpi-card__content">
+              <p class="kpi-card__label">Departments</p>
+              <p id="departmentCountMetric" class="kpi-card__value">0</p>
             </div>
           </div>
         </div>
 
-        <div class="md-card" style="overflow-x:auto;">
-          <div class="table-toolbar">
-            <div class="md-field table-search">
-              <label class="md-label" for="empSearchInput">Search employees</label>
-              <div class="md-input-wrapper">
+        <div class="action-bar card-elevated">
+          <div class="action-bar__primary">
+            <button id="csvUploadBtn" class="md-button md-button--outlined">
+              <span class="material-symbols-rounded">cloud_upload</span>
+              Upload Employees CSV
+            </button>
+            <button id="leaveCsvUploadBtn" class="md-button md-button--outlined">
+              <span class="material-symbols-rounded">event_available</span>
+              Upload Leave CSV
+            </button>
+            <button id="addEmployeeBtn" class="md-button md-button--filled">
+              <span class="material-symbols-rounded">person_add</span>
+              Add Employee
+            </button>
+            <input id="csvInput" type="file" accept=".csv" class="hidden">
+            <input id="leaveCsvInput" type="file" accept=".csv" class="hidden">
+          </div>
+          <div class="action-bar__secondary">
+            <div class="view-toggle" role="group" aria-label="Toggle employee view">
+              <button id="tableViewBtn" class="view-toggle__btn view-toggle__btn--active" type="button">
+                <span class="material-symbols-rounded">table</span>
+                Table View
+              </button>
+              <button id="cardViewBtn" class="view-toggle__btn" type="button">
+                <span class="material-symbols-rounded">view_agenda</span>
+                Card View
+              </button>
+            </div>
+            <div class="filter-group">
+              <label class="filter-label" for="employeeStatusFilter">Filters</label>
+              <div class="filter-controls">
+                <select id="employeeStatusFilter" class="md-select filter-select">
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+                <select id="employeeInternFilter" class="md-select filter-select">
+                  <option value="all">All Types</option>
+                  <option value="intern">Interns</option>
+                  <option value="fte">Full-time</option>
+                </select>
+              </div>
+            </div>
+            <div class="search-bar">
+              <label class="filter-label" for="empSearchInput">Search</label>
+              <div class="search-input">
                 <span class="material-symbols-rounded">search</span>
-                <input id="empSearchInput" type="text" class="md-input" placeholder="Search name, role, status, etc." autocomplete="off" spellcheck="false">
+                <input id="empSearchInput" type="text" placeholder="Search name, title, department..." autocomplete="off" spellcheck="false">
               </div>
             </div>
           </div>
-          <table id="empTable" class="data-table">
-            <thead id="empTableHead"></thead>
-            <tbody id="empTableBody"></tbody>
-          </table>
+        </div>
+
+        <div class="md-card card-elevated data-grid-card">
+          <div class="data-grid__header">
+            <div>
+              <p class="data-grid__eyebrow">Employee directory</p>
+              <h3 class="data-grid__title">Responsive DataGrid</h3>
+            </div>
+            <div class="column-visibility" id="columnTogglePanel">
+              <button type="button" class="md-button md-button--text column-visibility__trigger">
+                <span class="material-symbols-rounded">view_column</span>
+                Columns
+              </button>
+              <div class="column-visibility__menu" aria-label="Toggle columns"></div>
+            </div>
+          </div>
+          <div class="data-grid__toolbar">
+            <div class="chip-group" id="dataGridPills"></div>
+            <div class="data-grid__controls">
+              <label class="sr-only" for="employeePageSize">Rows per page</label>
+              <select id="employeePageSize" class="md-select data-grid__select">
+                <option value="5">5 rows</option>
+                <option value="8" selected>8 rows</option>
+                <option value="12">12 rows</option>
+                <option value="20">20 rows</option>
+              </select>
+            </div>
+          </div>
+          <div class="data-grid__surface">
+            <div class="data-grid__scroll">
+              <table id="empTable" class="data-grid-table">
+                <thead id="empTableHead"></thead>
+                <tbody id="empTableBody"></tbody>
+              </table>
+            </div>
+            <div id="empPagination" class="data-grid__pagination"></div>
+          </div>
+        </div>
+
+        <div id="employeeCardWrapper" class="md-card card-elevated employee-card-wrapper hidden">
+          <div class="data-grid__header">
+            <div>
+              <p class="data-grid__eyebrow">Responsive cards</p>
+              <h3 class="data-grid__title">Mobile-first Employee Cards</h3>
+            </div>
+          </div>
+          <div id="employeeCardGrid" class="employee-card-grid"></div>
         </div>
 
         <div

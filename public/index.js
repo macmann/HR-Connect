@@ -3,6 +3,17 @@
 let currentUser = null;
 let calendarCurrent = new Date();
 let empSearchTerm = '';
+const employeeGridState = {
+  sort: { key: '', direction: 'asc' },
+  columnVisibility: {},
+  columnWidths: {},
+  expanded: new Set(),
+  view: 'table',
+  page: 1,
+  pageSize: 8,
+  statusFilter: 'all',
+  internFilter: 'all'
+};
 let companyHolidays = [];
 let holidaysLoaded = false;
 let holidaysLoading = null;
@@ -4344,6 +4355,55 @@ async function init() {
   if (empSearchInput) {
     empSearchInput.addEventListener('input', () => {
       empSearchTerm = empSearchInput.value;
+      employeeGridState.page = 1;
+      loadEmployeesManage();
+    });
+  }
+
+  const employeeStatusFilter = document.getElementById('employeeStatusFilter');
+  if (employeeStatusFilter) {
+    employeeStatusFilter.addEventListener('change', () => {
+      employeeGridState.statusFilter = employeeStatusFilter.value;
+      employeeGridState.page = 1;
+      loadEmployeesManage();
+    });
+  }
+
+  const employeeInternFilter = document.getElementById('employeeInternFilter');
+  if (employeeInternFilter) {
+    employeeInternFilter.addEventListener('change', () => {
+      employeeGridState.internFilter = employeeInternFilter.value;
+      employeeGridState.page = 1;
+      loadEmployeesManage();
+    });
+  }
+
+  const employeePageSize = document.getElementById('employeePageSize');
+  if (employeePageSize) {
+    employeePageSize.addEventListener('change', () => {
+      employeeGridState.pageSize = Number(employeePageSize.value) || 8;
+      employeeGridState.page = 1;
+      loadEmployeesManage();
+    });
+  }
+
+  const tableViewBtn = document.getElementById('tableViewBtn');
+  const cardViewBtn = document.getElementById('cardViewBtn');
+  if (tableViewBtn && cardViewBtn) {
+    tableViewBtn.addEventListener('click', () => {
+      employeeGridState.view = 'table';
+      tableViewBtn.classList.add('view-toggle__btn--active');
+      cardViewBtn.classList.remove('view-toggle__btn--active');
+      document.getElementById('employeeCardWrapper')?.classList.add('hidden');
+      document.querySelector('.data-grid-card')?.classList.remove('hidden');
+      loadEmployeesManage();
+    });
+    cardViewBtn.addEventListener('click', () => {
+      employeeGridState.view = 'cards';
+      cardViewBtn.classList.add('view-toggle__btn--active');
+      tableViewBtn.classList.remove('view-toggle__btn--active');
+      document.getElementById('employeeCardWrapper')?.classList.remove('hidden');
+      document.querySelector('.data-grid-card')?.classList.add('hidden');
       loadEmployeesManage();
     });
   }
@@ -4968,6 +5028,14 @@ window.cancelApp = async function(appId) {
 async function loadEmployeesManage() {
   const emps = await getJSON('/employees');
   const employees = Array.isArray(emps) ? emps : [];
+  const head = document.getElementById('empTableHead');
+  const body = document.getElementById('empTableBody');
+  const pagination = document.getElementById('empPagination');
+  const dataGridCard = document.querySelector('.data-grid-card');
+  const cardsWrapper = document.getElementById('employeeCardWrapper');
+
+  if (!head || !body) return;
+
   const internFlagKey = employees.length
     ? Object.keys(employees[0]).find(k => k.toLowerCase() === 'internflag') || 'internFlag'
     : 'internFlag';
@@ -4976,121 +5044,449 @@ async function loadEmployeesManage() {
     ...emp,
     [internFlagKey]: normalizeInternFlag(emp ? emp[internFlagKey] : false)
   }));
-  const activeCount = normalizedEmps.filter(e => {
-    const statusKey = Object.keys(e).find(k => k.toLowerCase() === 'status');
-    return e[statusKey] === 'active';
-  }).length;
-  const countNumElem = document.getElementById('activeCountNum');
-  if (countNumElem) countNumElem.textContent = activeCount;
 
-  const head = document.getElementById('empTableHead');
-  const body = document.getElementById('empTableBody');
-  head.innerHTML = '';
-  body.innerHTML = '';
   const searchInput = document.getElementById('empSearchInput');
   if (searchInput && searchInput.value !== empSearchTerm) {
     searchInput.value = empSearchTerm;
   }
-  if (!normalizedEmps.length) {
-    head.innerHTML = '<tr><th style="padding:16px;">No data</th></tr>';
-    return;
+  const pageSizeSelect = document.getElementById('employeePageSize');
+  if (pageSizeSelect && Number(pageSizeSelect.value) !== employeeGridState.pageSize) {
+    pageSizeSelect.value = String(employeeGridState.pageSize);
+  }
+  const statusFilterSelect = document.getElementById('employeeStatusFilter');
+  if (statusFilterSelect && statusFilterSelect.value !== employeeGridState.statusFilter) {
+    statusFilterSelect.value = employeeGridState.statusFilter;
+  }
+  const internFilterSelect = document.getElementById('employeeInternFilter');
+  if (internFilterSelect && internFilterSelect.value !== employeeGridState.internFilter) {
+    internFilterSelect.value = employeeGridState.internFilter;
   }
 
-  const sampleEmployee = normalizedEmps[0];
-  let noKey = Object.keys(sampleEmployee).find(k => k.toLowerCase() === 'no');
-  let nameKey = Object.keys(sampleEmployee).find(k => k.toLowerCase() === 'name');
-  let statusKey = Object.keys(sampleEmployee).find(k => k.toLowerCase() === 'status');
-  let roleKey = Object.keys(sampleEmployee).find(k => k.toLowerCase() === 'role');
-  // Exclude id, name, status, leaveBalances, no from dynamic keys
-  let keys = Object.keys(sampleEmployee).filter(
-    k =>
-      k !== 'id' &&
-      k.toLowerCase() !== 'name' &&
-      k.toLowerCase() !== 'status' &&
-      k.toLowerCase() !== 'leavebalances' &&
-      k.toLowerCase() !== 'no' &&
-      k.toLowerCase() !== internFlagKeyNormalized
+  const sampleEmployee = normalizedEmps[0] || {};
+  const findKey = (aliases, fallback = '') => {
+    return Object.keys(sampleEmployee).find(k => aliases.includes(k.toLowerCase())) || fallback;
+  };
+
+  const nameKey = findKey(['name', 'employee name'], 'name');
+  const statusKey = findKey(['status'], 'status');
+  const roleKey = findKey(['role', 'position']);
+  const titleKey = findKey(['title', 'jobtitle', 'job title']);
+  const emailKey = findKey(['email', 'work email']);
+  const supervisorKey = findKey(['supervisor', 'manager', 'reportingmanager', 'reporting manager']);
+  const departmentKey = findKey(['department', 'dept']);
+  const joinDateKey = findKey(['joindate', 'joiningdate', 'startdate', 'date of joining']);
+  const employeeIdKey = findKey(['employeeid', 'employee_id', 'empid']);
+
+  const metric = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  };
+
+  const activeCount = normalizedEmps.filter(e => isActiveEmployeeStatus(e[statusKey])).length;
+  const internCount = normalizedEmps.filter(e => normalizeInternFlag(e[internFlagKey])).length;
+  const deptSet = new Set(
+    normalizedEmps
+      .map(e => (departmentKey ? (e[departmentKey] || 'Unassigned') : null))
+      .filter(Boolean)
   );
+  metric('totalEmployeesMetric', normalizedEmps.length);
+  metric('activeCountNum', activeCount);
+  metric('internCountMetric', internCount);
+  metric('departmentCountMetric', deptSet.size);
+
+  const baseHiddenKeys = new Set(['id', 'leavebalances', 'password']);
+  const optionalKeys = Object.keys(sampleEmployee).filter(k => {
+    const lower = k.toLowerCase();
+    return ![
+      nameKey.toLowerCase(),
+      statusKey.toLowerCase(),
+      internFlagKeyNormalized,
+      (titleKey || '').toLowerCase(),
+      (emailKey || '').toLowerCase(),
+      (supervisorKey || '').toLowerCase(),
+      (employeeIdKey || '').toLowerCase(),
+      (departmentKey || '').toLowerCase()
+    ].includes(lower) && !baseHiddenKeys.has(lower);
+  });
+
+  const buildColumns = () => {
+    const cols = [
+      { key: nameKey, label: 'Name', sticky: 'name', sortable: true, width: 220, truncate: true, alwaysVisible: true },
+      { key: statusKey, label: 'Status', sticky: 'status', sortable: true, width: 150, type: 'status', alwaysVisible: true }
+    ];
+    if (titleKey) cols.push({ key: titleKey, label: 'Title', sortable: true, width: 170, type: 'title', truncate: true });
+    cols.push({ key: internFlagKey, label: 'Intern', width: 120, type: 'intern' });
+    if (emailKey) cols.push({ key: emailKey, label: 'Email', width: 220, truncate: true });
+    if (supervisorKey) cols.push({ key: supervisorKey, label: 'Supervisor', width: 200, truncate: true });
+    if (employeeIdKey) cols.push({ key: employeeIdKey, label: 'ID', width: 140, truncate: true });
+    if (departmentKey) cols.push({ key: departmentKey, label: 'Department', sortable: true, width: 160 });
+    optionalKeys.forEach(key => {
+      cols.push({ key, label: key.charAt(0).toUpperCase() + key.slice(1), width: 160, truncate: true });
+    });
+    cols.push({ key: 'actions', label: 'Actions', sticky: 'actions', width: 230, type: 'actions', alwaysVisible: true });
+    return cols;
+  };
+
+  const columns = buildColumns();
+  columns.forEach(col => {
+    if (employeeGridState.columnVisibility[col.key] === undefined) {
+      employeeGridState.columnVisibility[col.key] = true;
+    }
+    if (employeeGridState.columnWidths[col.key] === undefined && col.width) {
+      employeeGridState.columnWidths[col.key] = col.width;
+    }
+  });
 
   const searchValue = empSearchTerm.trim().toLowerCase();
-
   const filtered = normalizedEmps.filter(emp => {
+    const statusValue = String(emp[statusKey] ?? '').toLowerCase();
+    if (employeeGridState.statusFilter !== 'all' && statusValue !== employeeGridState.statusFilter) return false;
+    const isIntern = normalizeInternFlag(emp[internFlagKey]);
+    if (employeeGridState.internFilter === 'intern' && !isIntern) return false;
+    if (employeeGridState.internFilter === 'fte' && isIntern) return false;
     if (!searchValue) return true;
     return Object.entries(emp).some(([key, value]) => {
       if (key.toLowerCase() === 'id') return false;
       if (value === null || typeof value === 'undefined') return false;
       if (typeof value === 'object') {
-        try {
-          return JSON.stringify(value).toLowerCase().includes(searchValue);
-        } catch (e) {
-          return false;
-        }
+        try { return JSON.stringify(value).toLowerCase().includes(searchValue); } catch (e) { return false; }
       }
       return String(value).toLowerCase().includes(searchValue);
     });
   });
 
-  // Sort managers first by name, then remaining employees by name A-Z
-  filtered.sort((a, b) => {
-    const roleA = roleKey ? normalizeRole(a[roleKey]) : '';
-    const roleB = roleKey ? normalizeRole(b[roleKey]) : '';
-    const nameA = (a[nameKey] || '').toLowerCase();
-    const nameB = (b[nameKey] || '').toLowerCase();
-    const aIsManager = roleA === 'manager' || roleA === 'superadmin';
-    const bIsManager = roleB === 'manager' || roleB === 'superadmin';
-    if (aIsManager && !bIsManager) return -1;
-    if (!aIsManager && bIsManager) return 1;
-    return nameA.localeCompare(nameB);
-  });
+  const renderPills = () => {
+    const pillContainer = document.getElementById('dataGridPills');
+    if (!pillContainer) return;
+    const pills = [];
+    if (empSearchTerm.trim()) {
+      pills.push(`<span class="data-grid__pill"><span class="material-symbols-rounded">search</span>${escapeHtml(empSearchTerm.trim())}</span>`);
+    }
+    if (employeeGridState.statusFilter !== 'all') {
+      pills.push(`<span class="data-grid__pill"><span class="material-symbols-rounded">verified</span>Status: ${employeeGridState.statusFilter}</span>`);
+    }
+    if (employeeGridState.internFilter !== 'all') {
+      const label = employeeGridState.internFilter === 'intern' ? 'Interns' : 'Full-time';
+      pills.push(`<span class="data-grid__pill"><span class="material-symbols-rounded">workspace_premium</span>${label}</span>`);
+    }
+    pillContainer.innerHTML = pills.length ? pills.join('') : '<span class="text-muted">No filters applied</span>';
+  };
 
-  // Table header
-  head.innerHTML = '<tr>' +
-    `<th class="sticky-col no-col">No</th>` +
-    `<th class="sticky-col name-col">Name</th>` +
-    `<th>Status</th>` +
-    `<th class="intern-flag-col">Intern</th>` +
-    keys.map(k => `<th>${k.charAt(0).toUpperCase() + k.slice(1)}</th>`).join('') +
-    `<th class="sticky-col actions-col">Actions</th>` +
-    '</tr>';
-
-  if (!filtered.length) {
-    body.innerHTML = `<tr><td class="table-empty" colspan="${keys.length + 5}">No employees match your search.</td></tr>`;
-    return;
+  if (!employeeGridState.sort.key) {
+    employeeGridState.sort = { key: nameKey, direction: 'asc' };
   }
 
-  filtered.forEach((emp, idx) => {
-    const internFlagId = `intern-flag-${String(emp.id ?? idx)}`;
-    const internChecked = normalizeInternFlag(emp[internFlagKey]);
-    body.innerHTML += `<tr>
-      <td class="sticky-col no-col">${emp[noKey] ?? idx + 1}</td>
-      <td class="sticky-col name-col">${emp[nameKey] ?? ''}</td>
-      <td>
-        <span class="status-pill ${emp[statusKey] === 'active' ? 'status-pill--active' : 'status-pill--inactive'}">
-          ${emp[statusKey]}
-        </span>
-      </td>
-      <td class="intern-flag-cell">
-        <input
-          type="checkbox"
-          id="${escapeHtml(internFlagId)}"
-          class="intern-flag-toggle"
-          data-employee-id="${escapeHtml(String(emp.id ?? ''))}"
-          aria-label="Toggle intern flag for ${escapeHtml(emp[nameKey] ?? 'employee')}"
-          ${internChecked ? 'checked' : ''}
-        >
-      </td>
-      ${keys.map(k => `<td>${typeof emp[k] === 'object' ? JSON.stringify(emp[k]) : (emp[k] ?? '')}</td>`).join('')}
-      <td class="sticky-col actions-col">
-        <div class="table-actions">
-          <button onclick="openEditEmployee('${emp.id}')">Edit</button>
-          <button data-action="toggle" data-id="${emp.id}" class="${emp[statusKey]==='active' ? 'action-danger' : ''}">
-            ${emp[statusKey] === 'active' ? 'Deactivate' : 'Activate'}
-          </button>
-          <button data-action="delete" data-id="${emp.id}" class="action-danger">Delete</button>
-        </div>
-      </td>
-    </tr>`;
+  const compareValues = (a, b, key) => {
+    const valA = a[key];
+    const valB = b[key];
+    if (typeof valA === 'number' && typeof valB === 'number') return valA - valB;
+    return String(valA ?? '').localeCompare(String(valB ?? ''), undefined, { sensitivity: 'base' });
+  };
+
+  filtered.sort((a, b) => {
+    const { key, direction } = employeeGridState.sort;
+    if (!key || key === 'actions') return 0;
+    const multiplier = direction === 'desc' ? -1 : 1;
+    return compareValues(a, b, key) * multiplier;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / employeeGridState.pageSize));
+  if (employeeGridState.page > totalPages) employeeGridState.page = totalPages;
+  const startIdx = (employeeGridState.page - 1) * employeeGridState.pageSize;
+  const pageRows = filtered.slice(startIdx, startIdx + employeeGridState.pageSize);
+
+  const visibleColumns = columns.filter(col => col.alwaysVisible || employeeGridState.columnVisibility[col.key]);
+  const nameWidth = employeeGridState.columnWidths[nameKey] || 220;
+  const tableEl = document.getElementById('empTable');
+  if (tableEl) {
+    tableEl.style.setProperty('--name-col-width', `${nameWidth}px`);
+  }
+
+  const renderValue = (value) => {
+    if (value === null || typeof value === 'undefined') return '';
+    if (typeof value === 'object') return escapeHtml(JSON.stringify(value));
+    return escapeHtml(String(value));
+  };
+
+  const renderStatusBadge = status => {
+    const normalized = String(status || '').toLowerCase();
+    const active = normalized === 'active';
+    const badgeClass = active ? 'badge--success' : 'badge--neutral';
+    const label = status || 'Unknown';
+    return `<span class="badge ${badgeClass}">${escapeHtml(label)}</span>`;
+  };
+
+  const renderTitleBadge = title => {
+    if (!title) return '<span class="text-muted">-</span>';
+    return `<span class="badge badge--info">${escapeHtml(title)}</span>`;
+  };
+
+  const renderHeader = () => {
+    head.innerHTML = '<tr>' + visibleColumns.map(col => {
+      const width = employeeGridState.columnWidths[col.key] || col.width || 160;
+      const stickyClass = col.sticky ? `sticky-${col.sticky}` : '';
+      const sortIcon = employeeGridState.sort.key === col.key
+        ? `<span class="sort-indicator material-symbols-rounded">${employeeGridState.sort.direction === 'asc' ? 'north' : 'south'}</span>`
+        : '';
+      const sortable = col.type !== 'actions' && col.type !== 'intern';
+      const sortAttrs = sortable ? `data-sortable="true" data-sort-key="${col.key}"` : '';
+      return `<th data-col-key="${col.key}" class="${stickyClass}" style="min-width:${width}px;max-width:${width}px;width:${width}px;" ${sortAttrs}>
+        <button type="button" class="sort-button" data-sort-toggle="${col.key}">
+          <span>${escapeHtml(col.label)}</span>${sortIcon}
+        </button>
+        <span class="resize-handle" data-resize="${col.key}"><span></span></span>
+      </th>`;
+    }).join('') + '</tr>';
+  };
+
+  const renderBody = () => {
+    if (!pageRows.length) {
+      body.innerHTML = `<tr><td colspan="${visibleColumns.length}" class="table-empty">No employees match your search.</td></tr>`;
+      return;
+    }
+    body.innerHTML = pageRows.map((emp, idx) => {
+      const rowId = String(emp.id ?? idx);
+      const expanded = employeeGridState.expanded.has(rowId);
+      const cells = visibleColumns.map(col => {
+        const width = employeeGridState.columnWidths[col.key] || col.width || 160;
+        const stickyClass = col.sticky ? `sticky-${col.sticky}` : '';
+        const value = emp[col.key];
+        if (col.type === 'status') {
+          return `<td data-col-key="${col.key}" class="${stickyClass}" style="min-width:${width}px;max-width:${width}px;width:${width}px;">${renderStatusBadge(value)}</td>`;
+        }
+        if (col.type === 'title') {
+          return `<td data-col-key="${col.key}" class="${stickyClass}" style="min-width:${width}px;max-width:${width}px;width:${width}px;">${renderTitleBadge(value)}</td>`;
+        }
+        if (col.type === 'intern') {
+          const isOn = normalizeInternFlag(value);
+          return `<td data-col-key="${col.key}" style="min-width:${width}px;max-width:${width}px;width:${width}px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="badge ${isOn ? 'badge--warning' : 'badge--neutral'}">${isOn ? 'Intern' : 'Full-time'}</span>
+              <label class="intern-toggle ${isOn ? 'is-on' : ''}">
+                <input
+                  type="checkbox"
+                  class="intern-flag-toggle sr-only"
+                  data-employee-id="${escapeHtml(String(emp.id ?? ''))}"
+                  ${isOn ? 'checked' : ''}
+                  aria-label="Toggle intern flag for ${escapeHtml(emp[nameKey] ?? 'employee')}"
+                >
+              </label>
+            </div>
+          </td>`;
+        }
+        if (col.type === 'actions') {
+          return `<td data-col-key="${col.key}" class="${stickyClass}" style="min-width:${width}px;max-width:${width}px;width:${width}px;">
+            <div class="table-actions">
+              <button onclick="openEditEmployee('${emp.id}')">Edit</button>
+              <button data-action="toggle" data-id="${emp.id}" class="${emp[statusKey]==='active' ? 'action-danger' : ''}">
+                ${emp[statusKey] === 'active' ? 'Deactivate' : 'Activate'}
+              </button>
+              <button data-action="delete" data-id="${emp.id}" class="action-danger">Delete</button>
+            </div>
+          </td>`;
+        }
+        const content = renderValue(value);
+        const ellipsis = col.truncate ? 'cell-ellipsis' : '';
+        const tooltip = col.truncate ? `title="${content}"` : '';
+        return `<td data-col-key="${col.key}" class="${ellipsis} ${stickyClass}" style="min-width:${width}px;max-width:${width}px;width:${width}px;" ${tooltip}>${content || '<span class="text-muted">-</span>'}</td>`;
+      }).join('');
+
+      const details = [
+        { label: 'Supervisor', value: supervisorKey ? emp[supervisorKey] : '' },
+        { label: 'Join Date', value: joinDateKey ? emp[joinDateKey] : '' },
+        { label: 'Department', value: departmentKey ? emp[departmentKey] : '' },
+        { label: 'Emergency Contact', value: emp.emergencyContact || emp.emergency || '' },
+        { label: 'Email', value: emailKey ? emp[emailKey] : '' }
+      ];
+
+      return `
+        <tr class="data-row" data-row-id="${rowId}">${cells}</tr>
+        <tr class="detail-row ${expanded ? '' : 'hidden'}" data-detail-for="${rowId}">
+          <td colspan="${visibleColumns.length}">
+            <div class="detail-grid">
+              ${details.map(item => `
+                <div class="detail-grid__item">
+                  <p class="detail-grid__label">${escapeHtml(item.label)}</p>
+                  <p class="detail-grid__value">${renderValue(item.value) || '<span class="text-muted">-</span>'}</p>
+                </div>
+              `).join('')}
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+  };
+
+  const renderPagination = () => {
+    if (!pagination) return;
+    pagination.innerHTML = `
+      <div class="data-grid__pill">
+        <span class="material-symbols-rounded">group</span>
+        ${filtered.length} of ${normalizedEmps.length} employees
+      </div>
+      <div class="pagination-buttons">
+        <button data-page="prev" ${employeeGridState.page === 1 ? 'disabled' : ''}>Prev</button>
+        <span>Page ${employeeGridState.page} / ${totalPages}</span>
+        <button data-page="next" ${employeeGridState.page === totalPages ? 'disabled' : ''}>Next</button>
+      </div>
+    `;
+    pagination.querySelector('[data-page="prev"]')?.addEventListener('click', () => {
+      if (employeeGridState.page > 1) {
+        employeeGridState.page -= 1;
+        loadEmployeesManage();
+      }
+    });
+    pagination.querySelector('[data-page="next"]')?.addEventListener('click', () => {
+      if (employeeGridState.page < totalPages) {
+        employeeGridState.page += 1;
+        loadEmployeesManage();
+      }
+    });
+  };
+
+  const renderColumnToggle = () => {
+    const menu = document.querySelector('#columnTogglePanel .column-visibility__menu');
+    if (!menu) return;
+    menu.innerHTML = columns
+      .filter(col => !col.alwaysVisible)
+      .map(col => {
+        const checked = employeeGridState.columnVisibility[col.key] !== false;
+        return `<label>
+          <input type="checkbox" data-column-toggle="${col.key}" ${checked ? 'checked' : ''}>
+          ${escapeHtml(col.label)}
+        </label>`;
+      }).join('');
+
+    menu.querySelectorAll('input[data-column-toggle]').forEach(input => {
+      input.addEventListener('change', ev => {
+        const key = ev.target.getAttribute('data-column-toggle');
+        employeeGridState.columnVisibility[key] = ev.target.checked;
+        loadEmployeesManage();
+      });
+    });
+  };
+
+  renderPills();
+  renderHeader();
+  renderBody();
+  renderPagination();
+  renderColumnToggle();
+
+  const columnMenu = document.querySelector('#columnTogglePanel .column-visibility__menu');
+  const columnTrigger = document.querySelector('#columnTogglePanel .column-visibility__trigger');
+  if (columnTrigger && columnMenu && !columnTrigger.dataset.bound) {
+    columnTrigger.dataset.bound = 'true';
+    columnTrigger.addEventListener('click', () => columnMenu.classList.toggle('is-open'));
+    document.addEventListener('click', e => {
+      if (!columnMenu.contains(e.target) && !columnTrigger.contains(e.target)) {
+        columnMenu.classList.remove('is-open');
+      }
+    });
+  }
+
+  const enableSorting = () => {
+    head.querySelectorAll('[data-sort-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-sort-toggle');
+        if (employeeGridState.sort.key === key) {
+          employeeGridState.sort.direction = employeeGridState.sort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+          employeeGridState.sort = { key, direction: 'asc' };
+        }
+        loadEmployeesManage();
+      });
+    });
+  };
+
+  const enableResizing = () => {
+    let activeKey = null;
+    let startX = 0;
+    let startWidth = 0;
+
+    const onMove = e => {
+      if (!activeKey) return;
+      const delta = e.pageX - startX;
+      const newWidth = Math.max(120, startWidth + delta);
+      employeeGridState.columnWidths[activeKey] = newWidth;
+      loadEmployeesManage();
+    };
+
+    const onUp = () => {
+      activeKey = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+
+    head.querySelectorAll('[data-resize]').forEach(handle => {
+      handle.addEventListener('mousedown', e => {
+        activeKey = handle.getAttribute('data-resize');
+        startX = e.pageX;
+        const th = handle.closest('th');
+        startWidth = th ? th.offsetWidth : 160;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    });
+  };
+
+  const renderCards = () => {
+    const grid = document.getElementById('employeeCardGrid');
+    if (!grid) return;
+    if (employeeGridState.view !== 'cards') {
+      grid.innerHTML = '';
+      return;
+    }
+    grid.innerHTML = pageRows.map(emp => {
+      const statusBadge = renderStatusBadge(emp[statusKey]);
+      const titleBadge = titleKey ? renderTitleBadge(emp[titleKey]) : '';
+      const supervisor = supervisorKey ? renderValue(emp[supervisorKey]) : '';
+      const email = emailKey ? renderValue(emp[emailKey]) : '';
+      const name = renderValue(emp[nameKey]);
+      return `
+        <article class="employee-card hover-rise">
+          <div class="employee-card__header">
+            <div>
+              <p class="employee-card__name">${name || 'Unnamed'}</p>
+              <p class="employee-card__title">${titleKey ? renderValue(emp[titleKey]) : ''}</p>
+            </div>
+            ${statusBadge}
+          </div>
+          <div class="employee-card__meta">
+            <div>
+              <small>Title</small>
+              <p>${titleBadge || '<span class="text-muted">-</span>'}</p>
+            </div>
+            <div>
+              <small>Email</small>
+              <p class="cell-ellipsis" title="${email}">${email || '<span class="text-muted">-</span>'}</p>
+            </div>
+            <div>
+              <small>Supervisor</small>
+              <p class="cell-ellipsis" title="${supervisor}">${supervisor || '<span class="text-muted">-</span>'}</p>
+            </div>
+            <div>
+              <small>Type</small>
+              <p><span class="badge ${normalizeInternFlag(emp[internFlagKey]) ? 'badge--warning' : 'badge--neutral'}">${normalizeInternFlag(emp[internFlagKey]) ? 'Intern' : 'Full-time'}</span></p>
+            </div>
+            <div>
+              <small>Status</small>
+              <p>${statusBadge}</p>
+            </div>
+          </div>
+        </article>`;
+    }).join('');
+  };
+
+  enableSorting();
+  enableResizing();
+  renderCards();
+
+  if (employeeGridState.view === 'cards') {
+    if (dataGridCard) dataGridCard.classList.add('hidden');
+    if (cardsWrapper) cardsWrapper.classList.remove('hidden');
+  } else {
+    if (dataGridCard) dataGridCard.classList.remove('hidden');
+    if (cardsWrapper) cardsWrapper.classList.add('hidden');
+  }
 }
 
 // Called when edit button is clicked
@@ -5131,6 +5527,20 @@ async function onInternFlagChange(event) {
 
 // Table actions (toggle, delete)
 async function onEmpTableClick(e) {
+  const interactive = e.target.closest('button, a, input, select, label');
+  const row = e.target.closest('tr.data-row');
+  if (row && !interactive) {
+    const rowId = row.dataset.rowId;
+    if (employeeGridState.expanded.has(rowId)) {
+      employeeGridState.expanded.delete(rowId);
+    } else {
+      employeeGridState.expanded.add(rowId);
+    }
+    const detailRow = document.querySelector(`tr[data-detail-for="${rowId}"]`);
+    if (detailRow) detailRow.classList.toggle('hidden');
+    return;
+  }
+
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
   const { action, id } = btn.dataset;
