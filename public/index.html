@@ -301,12 +301,17 @@
     .data-grid-table .sticky-actions {
       position: sticky;
       z-index: 5;
-      background: inherit;
+      background: #ffffff;
     }
 
     .data-grid-table .sticky-name { left: 0; z-index: 7; }
     .data-grid-table .sticky-status { left: var(--name-col-width, 240px); z-index: 6; }
-    .data-grid-table .sticky-actions { right: 0; z-index: 6; }
+    .data-grid-table .sticky-actions {
+      right: 0;
+      z-index: 6;
+      box-shadow: -10px 0 18px rgba(15, 23, 42, 0.08);
+      background: linear-gradient(90deg, #ffffff 0%, #f8fafc 80%);
+    }
 
     .data-grid-table th,
     .data-grid-table td {
