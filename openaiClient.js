@@ -28,13 +28,20 @@ The questions should:
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: 'You output strictly valid JSON.' },
+      { role: 'system', content: 'You output strictly valid JSON only. Do NOT include markdown code fences. Do NOT include explanations.' },
       { role: 'user', content: prompt }
     ],
     temperature: 0.7
   });
 
-  const content = response.choices[0].message.content.trim();
+  let content = response.choices[0].message.content.trim();
+
+  // Clean markdown fences like ```json ... ```
+  if (content.startsWith("```")) {
+    content = content.replace(/^```[a-zA-Z]*\s*/, "") // remove opening ``` or ```json
+                     .replace(/```$/, "") // remove trailing ```
+                     .trim();
+  }
 
   let questions;
   try {
