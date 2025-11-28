@@ -7,6 +7,57 @@ const router = express.Router();
 
 // TODO: apply auth middleware if available
 
+router.get('/ai-interview/application/:applicationId', async (req, res) => {
+  try {
+    const db = getDatabase();
+    const { applicationId } = req.params;
+
+    let appId;
+    try {
+      appId = new ObjectId(applicationId);
+    } catch (e) {
+      return res.status(400).json({ error: 'invalid_application_id' });
+    }
+
+    const session = await db
+      .collection('ai_interview_sessions')
+      .findOne({ applicationId: appId }, { sort: { createdAt: -1 } });
+
+    if (!session) {
+      return res.json({ hasSession: false });
+    }
+
+    let result = null;
+    if (session.aiResultId) {
+      result = await db.collection('ai_interview_results').findOne({ _id: session.aiResultId });
+    }
+
+    return res.json({
+      hasSession: true,
+      session: {
+        id: session._id,
+        status: session.status,
+        createdAt: session.createdAt,
+        completedAt: session.completedAt
+      },
+      result: result
+        ? {
+            scores: result.scores,
+            verdict: result.verdict,
+            summary: result.summary,
+            strengths: result.strengths,
+            risks: result.risks,
+            recommendedNextSteps: result.recommendedNextSteps,
+            createdAt: result.createdAt
+          }
+        : null
+    });
+  } catch (err) {
+    console.error('Error fetching AI interview info for application:', err);
+    return res.status(500).json({ error: 'failed_to_fetch_ai_interview_info' });
+  }
+});
+
 // POST /api/hr/ai-interview/sessions
 // Body: { applicationId: "<id>" }
 router.post('/ai-interview/sessions', async (req, res) => {

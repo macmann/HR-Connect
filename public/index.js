@@ -395,11 +395,13 @@ let recruitmentCandidateSearchLoading = false;
 let recruitmentCandidateSearchError = null;
 const candidateCvPreviewUrls = new Map();
 const candidateDetailsCache = new Map();
+const aiInterviewCache = new Map();
 let candidateCvModalCandidateId = null;
 let recruitmentPositionQuestions = [];
 let currentDrawerFields = [];
 let hireModalState = { candidateId: null, select: null, previousStatus: null, candidate: null };
 let currentHireFields = [];
+let activeAiInterviewApplicationId = null;
 let profileData = null;
 let profileLoading = null;
 let emailSettings = null;
@@ -2449,6 +2451,9 @@ async function initRecruitment() {
   const detailsDownloadBtn = document.getElementById('candidateDetailsDownloadBtn');
   if (detailsDownloadBtn) detailsDownloadBtn.addEventListener('click', onCandidateDetailsDownloadClick);
 
+  const aiInterviewPanel = document.getElementById('candidateAiInterviewPanel');
+  if (aiInterviewPanel) aiInterviewPanel.addEventListener('click', onCandidateAiPanelClick);
+
   const hireCloseBtn = document.getElementById('candidateHireCloseBtn');
   if (hireCloseBtn) hireCloseBtn.onclick = closeCandidateHireModal;
 
@@ -3296,8 +3301,9 @@ async function onCandidateTableClick(ev) {
   const aiInterviewBtn = ev.target.closest('[data-action="send-ai-interview"]');
   if (aiInterviewBtn) {
     const applicationId = aiInterviewBtn.getAttribute('data-application-id');
+    const candidateId = aiInterviewBtn.getAttribute('data-candidate-id');
     if (applicationId) {
-      await createAiInterviewSession(applicationId, aiInterviewBtn);
+      await createAiInterviewSession(applicationId, aiInterviewBtn, candidateId);
     }
     return;
   }
@@ -3327,7 +3333,7 @@ async function onCandidateTableClick(ev) {
   openCandidateDetailsModal(id);
 }
 
-async function createAiInterviewSession(applicationId, triggerButton) {
+async function createAiInterviewSession(applicationId, triggerButton, candidateId) {
   if (!applicationId) return;
   const button = triggerButton || null;
   if (button) button.disabled = true;
@@ -3349,10 +3355,59 @@ async function createAiInterviewSession(applicationId, triggerButton) {
     if (candidateEmail) details.push(`Candidate Email: ${candidateEmail}`);
     const info = details.length ? `\n${details.join('\n')}` : '';
     alert(`AI Interview session created.${info}`);
+    aiInterviewCache.delete(applicationId);
+    if (candidateId && recruitmentActiveDetailsCandidateId == candidateId) {
+      const candidate = getCachedCandidate(candidateId);
+      if (candidate) {
+        loadCandidateAiInterview(candidate, { force: true });
+      }
+    }
   } catch (err) {
     alert(err?.message || 'Failed to create AI interview session.');
   } finally {
     if (button) button.disabled = false;
+  }
+}
+
+async function updateCandidateStatusAndRefresh(candidateId, status) {
+  if (!candidateId || !status) return;
+  try {
+    const res = await apiFetch(`/recruitment/candidates/${candidateId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    if (!res.ok) throw new Error('Failed');
+    const updated = await res.json();
+    cacheCandidateDetails(updated);
+    await loadRecruitmentCandidates(recruitmentActivePositionId);
+  } catch (err) {
+    alert('Failed to update candidate status.');
+  }
+}
+
+async function onCandidateAiPanelClick(ev) {
+  const sendBtn = ev.target.closest('[data-action="ai-send-interview"]');
+  if (sendBtn) {
+    const applicationId = sendBtn.getAttribute('data-application-id');
+    const candidateId = sendBtn.getAttribute('data-candidate-id');
+    if (applicationId) {
+      await createAiInterviewSession(applicationId, sendBtn, candidateId);
+    }
+    return;
+  }
+
+  const moveBtn = ev.target.closest('[data-action="ai-move-human"]');
+  if (moveBtn) {
+    const candidateId = moveBtn.getAttribute('data-candidate-id');
+    await updateCandidateStatusAndRefresh(candidateId, 'Selected for Interview');
+    return;
+  }
+
+  const rejectBtn = ev.target.closest('[data-action="ai-reject"]');
+  if (rejectBtn) {
+    const candidateId = rejectBtn.getAttribute('data-candidate-id');
+    await updateCandidateStatusAndRefresh(candidateId, 'Rejected');
   }
 }
 
@@ -3560,6 +3615,8 @@ function closeCandidateDetailsModal() {
     delete downloadBtn.dataset.candidateId;
     downloadBtn.disabled = true;
   }
+  activeAiInterviewApplicationId = null;
+  renderCandidateAiInterviewPanel(null);
 }
 
 function populateCandidateDetails(candidate) {
@@ -3589,6 +3646,9 @@ function populateCandidateDetails(candidate) {
     downloadBtn.disabled = !hasCv;
   }
   updateCandidateCommentsCount(candidate?.commentCount, candidate);
+  const cachedAiInterview = candidate?.applicationId ? aiInterviewCache.get(candidate.applicationId) : null;
+  renderCandidateAiInterviewPanel(candidate, { data: cachedAiInterview });
+  loadCandidateAiInterview(candidate);
 }
 
 function refreshCandidateDetailsModal() {
@@ -3599,6 +3659,173 @@ function refreshCandidateDetailsModal() {
     return;
   }
   populateCandidateDetails(candidate);
+}
+
+function formatAiInterviewStatus(info) {
+  if (!info || info.hasSession === false) return 'Not sent';
+  if (info.result) return 'Completed';
+  return 'Pending';
+}
+
+function renderCandidateAiInterviewPanel(candidate, options = {}) {
+  const panel = document.getElementById('candidateAiInterviewPanel');
+  const contentEl = document.getElementById('candidateAiInterviewContent');
+  const actionsEl = document.getElementById('candidateAiInterviewActions');
+  if (!panel || !contentEl || !actionsEl) return;
+
+  const { data = null, loading = false, error = null } = options;
+  actionsEl.innerHTML = '';
+
+  if (!candidate) {
+    contentEl.textContent = 'Select a candidate to view AI interview details.';
+    return;
+  }
+
+  if (!candidate.applicationId) {
+    contentEl.textContent = 'This candidate is not linked to an application yet. AI interview is unavailable.';
+    return;
+  }
+
+  if (loading) {
+    contentEl.textContent = 'Loading AI interview details...';
+    return;
+  }
+
+  if (error) {
+    contentEl.innerHTML = `<p class="text-red-600 text-xs">${escapeHtml(error)}</p>`;
+    return;
+  }
+
+  const actions = [];
+
+  if (!data || data.hasSession === false) {
+    contentEl.innerHTML = '<p class="text-xs text-gray-700">AI Interview not sent yet.</p>';
+    actions.push(
+      `<button type="button" class="md-button md-button--filled md-button--small" data-action="ai-send-interview" data-application-id="${
+        candidate.applicationId
+      }" data-candidate-id="${candidate.id}">
+        <span class="material-symbols-rounded">smart_toy</span>
+        Send AI Interview
+      </button>`
+    );
+    actionsEl.innerHTML = actions.join('');
+    return;
+  }
+
+  const statusLabel = formatAiInterviewStatus(data);
+  const statusParts = [`Status: ${statusLabel}`];
+  if (data.result?.verdict) statusParts.push(`Verdict: ${escapeHtml(data.result.verdict)}`);
+
+  let html = `<div class="text-xs text-gray-700 mb-2">${statusParts.join(' \u00b7 ')}</div>`;
+
+  if (!data.result) {
+    html += '<p class="text-xs text-gray-700">AI Interview sent. Candidate has not completed yet, or analysis pending.</p>';
+  } else {
+    const { result } = data;
+    const scores = result.scores || {};
+    const scoreItems = [];
+    if (scores.overall != null) scoreItems.push(`Overall: ${scores.overall} / 5`);
+    if (scores.communication != null) scoreItems.push(`Communication: ${scores.communication}`);
+    if (scores.technical != null) scoreItems.push(`Technical: ${scores.technical}`);
+    if (scores.cultureFit != null) scoreItems.push(`Culture Fit: ${scores.cultureFit}`);
+    if (scoreItems.length) {
+      const scoreSpans = scoreItems.map(text => `<span>${escapeHtml(text)}</span>`).join('');
+      html += `<div class="flex flex-wrap gap-3 text-xs text-gray-700 mb-2">${scoreSpans}</div>`;
+    }
+
+    if (result.summary) {
+      html += `
+        <div class="mb-2">
+          <h4 class="text-xs font-semibold text-gray-700 mb-1">AI Summary</h4>
+          <p class="text-xs text-gray-700 whitespace-pre-line">${escapeHtml(result.summary)}</p>
+        </div>`;
+    }
+
+    const strengths = Array.isArray(result.strengths) ? result.strengths : [];
+    const risks = Array.isArray(result.risks) ? result.risks : [];
+    if (strengths.length || risks.length) {
+      const strengthsList = strengths.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+      const risksList = risks.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+      html += `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+          <div>
+            <h4 class="text-xs font-semibold text-green-700 mb-1">Strengths</h4>
+            <ul class="text-xs text-gray-700 list-disc list-inside">${strengthsList || '<li class="text-muted">None noted</li>'}</ul>
+          </div>
+          <div>
+            <h4 class="text-xs font-semibold text-red-700 mb-1">Risks</h4>
+            <ul class="text-xs text-gray-700 list-disc list-inside">${risksList || '<li class="text-muted">None noted</li>'}</ul>
+          </div>
+        </div>`;
+    }
+
+    const nextSteps = Array.isArray(result.recommendedNextSteps) ? result.recommendedNextSteps : [];
+    if (nextSteps.length) {
+      const stepsList = nextSteps.map(step => `<li>${escapeHtml(step)}</li>`).join('');
+      html += `
+        <div class="mt-2">
+          <h4 class="text-xs font-semibold text-gray-700 mb-1">Recommended Next Steps</h4>
+          <ul class="text-xs text-gray-700 list-disc list-inside">${stepsList}</ul>
+        </div>`;
+    }
+
+    if (candidate?.id != null) {
+      actions.push(
+        `<button type="button" class="md-button md-button--outlined md-button--small" data-action="ai-move-human" data-candidate-id="${candidate.id}">
+          <span class="material-symbols-rounded">groups</span>
+          Move to Human Interview
+        </button>`
+      );
+      actions.push(
+        `<button type="button" class="md-button md-button--text md-button--small" data-action="ai-reject" data-candidate-id="${candidate.id}">
+          <span class="material-symbols-rounded">block</span>
+          Reject Candidate
+        </button>`
+      );
+    }
+  }
+
+  contentEl.innerHTML = html;
+  actionsEl.innerHTML = actions.join('');
+}
+
+async function fetchAiInterviewInfo(applicationId, { force = false } = {}) {
+  if (!applicationId) return null;
+  if (!force && aiInterviewCache.has(applicationId)) {
+    return aiInterviewCache.get(applicationId);
+  }
+  const res = await apiFetch(`/api/hr/ai-interview/application/${applicationId}`);
+  if (!res.ok) throw new Error('Unable to load AI interview details.');
+  const data = await res.json();
+  aiInterviewCache.set(applicationId, data);
+  return data;
+}
+
+async function loadCandidateAiInterview(candidate, options = {}) {
+  const applicationId = candidate?.applicationId;
+  if (!applicationId) {
+    activeAiInterviewApplicationId = null;
+    if (candidate) {
+      renderCandidateAiInterviewPanel(candidate, { data: null });
+    }
+    return;
+  }
+
+  activeAiInterviewApplicationId = applicationId;
+  const cached = !options.force ? aiInterviewCache.get(applicationId) : null;
+  if (cached && !options.force) {
+    renderCandidateAiInterviewPanel(candidate, { data: cached });
+    return;
+  }
+  renderCandidateAiInterviewPanel(candidate, { data: cached || null, loading: true });
+  try {
+    const data = await fetchAiInterviewInfo(applicationId, { force: options.force });
+    if (activeAiInterviewApplicationId !== applicationId) return;
+    renderCandidateAiInterviewPanel(candidate, { data });
+  } catch (err) {
+    if (activeAiInterviewApplicationId !== applicationId) return;
+    renderCandidateAiInterviewPanel(candidate, { data: cached || null, error: err?.message || 'Unable to load AI interview.' });
+  }
 }
 
 function deriveHireInitialValues(candidate, fields = []) {
