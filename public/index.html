@@ -5,7 +5,7 @@
   <title>Leave Management | Brillar</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" />
   <link rel="stylesheet" href="material-theme.css">
   <style>
@@ -651,17 +651,43 @@
       </section>
 
       <!-- Leave Portal Panel -->
-      <section id="portalPanel" class="panel">
-        <div class="panel-header">
-          <h2 class="panel-title">
-            <span class="material-symbols-rounded">widgets</span>
-            Leave Portal
-          </h2>
-          <p class="panel-subtitle">Submit leave requests, review balances, and track recent activity at a glance.</p>
+      <section id="portalPanel" class="panel portal-panel">
+        <div class="portal-hero">
+          <div class="portal-hero__content">
+            <p class="hero-kicker">Leave Portal</p>
+            <h1 class="hero-heading">Welcome back</h1>
+            <p class="hero-subtitle">A refreshed 2025 experience to apply for leave, check balances, and plan with confidence.</p>
+            <div class="hero-actions">
+              <span class="hero-pill">
+                <span class="material-symbols-rounded">verified</span>
+                Real-time balances
+              </span>
+              <span class="hero-pill">
+                <span class="material-symbols-rounded">bolt</span>
+                Fast approvals
+              </span>
+            </div>
+          </div>
+          <div class="portal-hero__meta">
+            <div class="hero-meta-card">
+              <span class="material-symbols-rounded">calendar_month</span>
+              <div>
+                <p class="meta-label">Plan better</p>
+                <p class="meta-value">Stay ahead of holidays and balance changes.</p>
+              </div>
+            </div>
+            <div class="hero-meta-card">
+              <span class="material-symbols-rounded">shield_person</span>
+              <div>
+                <p class="meta-label">Personalized</p>
+                <p class="meta-value">Tailored to your role and team.</p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="card-grid">
-          <div class="md-card">
+        <div class="portal-grid">
+          <div class="md-card card-elevated selection-card">
             <div class="card-title">
               <span class="material-symbols-rounded">badge</span>
               Select Employee
@@ -676,80 +702,94 @@
             </div>
           </div>
 
-          <div class="md-card">
+          <div class="md-card card-elevated balances-card">
             <div class="card-title">
               <span class="material-symbols-rounded">account_balance_wallet</span>
-              Current Leave Balance
+              Leave Balances
             </div>
-            <div id="balanceDisplay" class="balance-chips">
-              <div class="balance-chip chip-annual">
-                <span class="material-symbols-rounded">beach_access</span>
-                <div>
-                  <span class="label">Annual</span>
-                  <strong id="balAnnual">-</strong><span class="unit">days</span>
+            <div id="balanceDisplay" class="metric-grid">
+              <div class="metric-card metric-annual">
+                <div class="metric-icon">
+                  <span class="material-symbols-rounded">beach_access</span>
+                </div>
+                <div class="metric-content">
+                  <p class="metric-label">Annual</p>
+                  <p class="metric-value"><span id="balAnnual">-</span><span class="metric-unit">days</span></p>
                 </div>
               </div>
-              <div class="balance-chip chip-casual">
-                <span class="material-symbols-rounded">sunny</span>
-                <div>
-                  <span class="label">Casual</span>
-                  <strong id="balCasual">-</strong><span class="unit">days</span>
+              <div class="metric-card metric-casual">
+                <div class="metric-icon">
+                  <span class="material-symbols-rounded">sunny</span>
+                </div>
+                <div class="metric-content">
+                  <p class="metric-label">Casual</p>
+                  <p class="metric-value"><span id="balCasual">-</span><span class="metric-unit">days</span></p>
                 </div>
               </div>
-              <div class="balance-chip chip-medical">
-                <span class="material-symbols-rounded">medical_information</span>
-                <div>
-                  <span class="label">Medical</span>
-                  <strong id="balMedical">-</strong><span class="unit">days</span>
+              <div class="metric-card metric-medical">
+                <div class="metric-icon">
+                  <span class="material-symbols-rounded">medical_information</span>
+                </div>
+                <div class="metric-content">
+                  <p class="metric-label">Medical</p>
+                  <p class="metric-value"><span id="balMedical">-</span><span class="metric-unit">days</span></p>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div class="md-card">
+        <div class="md-card card-elevated apply-card">
           <div class="card-title">
             <span class="material-symbols-rounded">calendar_month</span>
             Apply for Leave
           </div>
-          <form id="applyForm" class="form-grid">
-            <div class="md-field">
-              <label class="md-label" for="type">Leave Type</label>
-              <div class="md-input-wrapper">
-                <span class="material-symbols-rounded">category</span>
-                <select id="type" name="type" class="md-select"></select>
+          <form id="applyForm" class="modern-form">
+            <div class="form-row">
+              <div class="md-field modern-field">
+                <label class="md-label" for="type">Leave Type</label>
+                <div class="md-input-wrapper large-input">
+                  <span class="material-symbols-rounded">category</span>
+                  <select id="type" name="type" class="md-select"></select>
+                </div>
+              </div>
+              <div class="md-field modern-field">
+                <label class="md-label" for="from">From</label>
+                <div class="md-input-wrapper large-input">
+                  <span class="material-symbols-rounded">event</span>
+                  <input type="date" id="from" required class="md-input">
+                </div>
+              </div>
+              <div class="md-field modern-field">
+                <label class="md-label" for="to">To</label>
+                <div class="md-input-wrapper large-input">
+                  <span class="material-symbols-rounded">event</span>
+                  <input type="date" id="to" required class="md-input">
+                </div>
               </div>
             </div>
-            <div class="md-field">
-              <label class="md-label" for="from">From</label>
-              <div class="md-input-wrapper">
-                <span class="material-symbols-rounded">event</span>
-                <input type="date" id="from" required class="md-input">
+            <div class="form-row form-row--split">
+              <label class="toggle" for="halfDay">
+                <input type="checkbox" id="halfDay" onchange="toggleHalfDayPeriod()">
+                <span class="toggle-track"></span>
+                <span class="toggle-label">Half day</span>
+              </label>
+              <div class="md-input-wrapper large-input half-day-period hidden" id="halfDayPeriodWrapper">
+                <span class="material-symbols-rounded">schedule</span>
+                <select id="halfDayPeriod" class="md-select hidden">
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
               </div>
             </div>
-            <div class="md-field">
-              <label class="md-label" for="to">To</label>
-              <div class="md-input-wrapper">
-                <span class="material-symbols-rounded">event</span>
-                <input type="date" id="to" required class="md-input">
-              </div>
-            </div>
-            <div class="md-field checkbox-line">
-              <input type="checkbox" id="halfDay" onchange="toggleHalfDayPeriod()">
-              <label for="halfDay" class="md-label">Half Day</label>
-              <select id="halfDayPeriod" class="md-select hidden">
-                <option value="AM">AM</option>
-                <option value="PM">PM</option>
-              </select>
-            </div>
-            <button type="submit" class="md-button md-button--filled">
+            <button type="submit" class="primary-btn">
               <span class="material-symbols-rounded">send</span>
               Submit Application
             </button>
           </form>
         </div>
 
-        <div class="md-card">
+        <div class="md-card card-elevated">
           <div class="card-title">
             <span class="material-symbols-rounded">festival</span>
             Upcoming Holidays
@@ -819,7 +859,7 @@
           </div>
         </div>
 
-        <div class="md-card">
+        <div class="md-card card-elevated">
           <div class="card-title">
             <span class="material-symbols-rounded">history</span>
             Previous Leave Applications
@@ -1675,8 +1715,11 @@
     function toggleHalfDayPeriod() {
       const checkbox = document.getElementById('halfDay');
       const period = document.getElementById('halfDayPeriod');
+      const wrapper = document.getElementById('halfDayPeriodWrapper');
       if (checkbox && period) {
-        period.classList.toggle('hidden', !checkbox.checked);
+        const isChecked = checkbox.checked;
+        period.classList.toggle('hidden', !isChecked);
+        if (wrapper) wrapper.classList.toggle('hidden', !isChecked);
       }
     }
   </script>

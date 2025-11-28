@@ -4680,22 +4680,25 @@ function renderPreviousLeaves(apps, emp) {
     if (app.halfDay) {
       typeLabel += ` (Half Day${app.halfDayPeriod ? ' ' + app.halfDayPeriod : ''})`;
     }
-    const statusClass = app.status === 'approved' ? 'chip chip--approved' : app.status === 'rejected' ? 'chip chip--rejected' : 'chip chip--pending';
+    const status = (app.status || 'pending').toLowerCase();
+    const statusClass = status === 'approved' ? 'status-approved' : status === 'rejected' ? 'status-rejected' : 'status-pending';
     const icon = typeIcon[app.type] || 'event';
     return `
-      <article class="history-card">
-        <div class="history-header">
-          <span class="material-symbols-rounded">${icon}</span>
-          <span>${typeLabel}</span>
+      <article class="history-card ${statusClass}">
+        <div class="history-top-row">
+          <div class="history-header">
+            <span class="material-symbols-rounded">${icon}</span>
+            <span>${typeLabel}</span>
+          </div>
+          <span class="status-badge">${capitalize(app.status||'pending')}</span>
         </div>
-        <div class="text-muted"><strong>From:</strong> ${app.from}</div>
-        <div class="text-muted"><strong>To:</strong> ${app.to}</div>
-        <div class="text-muted"><strong>Days:</strong> ${daysText}</div>
-        <div class="text-muted"><strong>Reason:</strong> <span class="text-quiet">${app.reason||'-'}</span></div>
-        <div class="text-muted" style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
-          <span class="${statusClass}">${capitalize(app.status||'pending')}</span>
-          ${app.approvedBy ? `<span class="text-quiet">Approver: ${app.approvedBy}</span>` : ''}
-          ${app.approverRemark ? `<span class="text-quiet">Remark: ${app.approverRemark}</span>` : ''}
+        <div class="history-body">
+          <div class="text-muted"><strong>From:</strong> ${app.from}</div>
+          <div class="text-muted"><strong>To:</strong> ${app.to}</div>
+          <div class="text-muted"><strong>Days:</strong> ${daysText}</div>
+          <div class="text-muted"><strong>Reason:</strong> <span class="text-quiet">${app.reason||'-'}</span></div>
+          ${app.approvedBy ? `<div class="text-quiet">Approver: ${app.approvedBy}</div>` : ''}
+          ${app.approverRemark ? `<div class="text-quiet">Remark: ${app.approverRemark}</div>` : ''}
         </div>
       </article>
     `;
