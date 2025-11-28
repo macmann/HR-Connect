@@ -4,6 +4,8 @@ const fs = require('fs');
 const multer = require('multer');
 const { ObjectId } = require('mongodb');
 const { getDatabase, db } = require('../db');
+const { extractTextFromPdf } = require('../utils/cvParser');
+const { analyzeCvAgainstJd } = require('../openaiClient');
 
 const router = express.Router();
 
@@ -145,7 +147,7 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
     }
 
     const cvFilename = req.file.filename;
-    const cvFilePath = `/uploads/cv/${cvFilename}`;
+    const cvFilePath = req.file?.path || `uploads/cv/${cvFilename}`;
     const now = new Date();
 
     const existingCandidate = await candidatesCollection.findOne({ email: email.trim().toLowerCase() });
@@ -214,6 +216,38 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
     };
 
     const applicationResult = await applicationsCollection.insertOne(applicationDoc);
+
+    const savedApplication = {
+      ...applicationDoc,
+      _id: applicationResult.insertedId
+    };
+
+    const cvAbsolutePath = path.isAbsolute(savedApplication.cvFilePath)
+      ? savedApplication.cvFilePath
+      : path.join(__dirname, '..', savedApplication.cvFilePath);
+
+    const cvText = await extractTextFromPdf(cvAbsolutePath);
+    const positionForScreening = await db
+      .collection('positions')
+      .findOne({ _id: new ObjectId(positionObjectId) });
+
+    let aiScreeningResult = null;
+    try {
+      aiScreeningResult = await analyzeCvAgainstJd({ position: positionForScreening, cvText });
+    } catch (err) {
+      console.error('AI CV Screening failed:', err);
+    }
+
+    await db.collection('applications').updateOne(
+      { _id: savedApplication._id },
+      {
+        $set: {
+          aiScreeningResult,
+          aiScreeningAt: new Date()
+        }
+      }
+    );
+
     db.invalidateCache?.();
 
     return res.status(201).json({ applicationId: applicationResult.insertedId, status: 'received' });
