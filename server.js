@@ -2655,10 +2655,13 @@ init().then(async () => {
     });
   });
 
-  app.get('/recruitment/candidates/:id/cv', authRequired, managerOnly, async (req, res) => {
+  async function streamCandidateCv(req, res) {
+    const candidateId = req.params.id;
     await db.read();
     db.data.candidates = db.data.candidates || [];
-    const candidate = db.data.candidates.find(c => c.id == req.params.id);
+    const candidate = db.data.candidates.find(c =>
+      c.id == candidateId || (c._id && c._id.toString() === candidateId)
+    );
     const filePath = candidate?.cvFilePath
       ? path.join(__dirname, candidate.cvFilePath.replace(/^[/\\]+/, ''))
       : null;
@@ -2680,7 +2683,16 @@ init().then(async () => {
     res.setHeader('Content-Type', candidate.cv.contentType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buffer);
-  });
+  }
+
+  app.get('/recruitment/candidates/:id/cv', authRequired, managerOnly, streamCandidateCv);
+
+  app.get(
+    '/api/recruitment/candidates/:id/cv',
+    authRequired,
+    managerOnly,
+    streamCandidateCv
+  );
 
   app.get('/recruitment/candidates/search', authRequired, managerOnly, async (req, res) => {
     await db.read();

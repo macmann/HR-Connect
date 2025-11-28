@@ -3162,22 +3162,29 @@ async function loadCandidateSearchCvPreview(candidateId) {
   const iframe = document.getElementById('candidateCvModalIframe');
   const messageEl = document.getElementById('candidateCvModalMessage');
   if (!iframe || !messageEl) return;
+  const normalizedId = normalizeCandidateId(candidateId);
+  if (normalizedId == null) {
+    resetCandidateCvModal('Unable to load this CV.');
+    return;
+  }
   messageEl.textContent = 'Loading CV preview...';
   messageEl.classList.remove('hidden');
   iframe.classList.add('hidden');
   try {
-    const res = await apiFetch(`/recruitment/candidates/${candidateId}/cv`);
+    const res = await apiFetch(
+      `/api/recruitment/candidates/${encodeURIComponent(normalizedId)}/cv`
+    );
     if (!res.ok) throw new Error('Failed');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    if (candidateCvModalCandidateId !== candidateId) {
+    if (candidateCvModalCandidateId !== normalizedId) {
       URL.revokeObjectURL(url);
       return;
     }
-    candidateCvPreviewUrls.set(candidateId, url);
+    candidateCvPreviewUrls.set(normalizedId, url);
     setCandidateCvModalUrl(url);
   } catch (err) {
-    if (candidateCvModalCandidateId !== candidateId) return;
+    if (candidateCvModalCandidateId !== normalizedId) return;
     resetCandidateCvModal('Unable to load CV preview right now. Use the download button to access the CV.');
   }
 }
@@ -3187,7 +3194,8 @@ function openCandidateCvModal(candidateId) {
   if (!modal) return;
   const candidate = recruitmentCandidateSearchResults.find(c => String(c.id) === String(candidateId));
   if (!candidate) return;
-  candidateCvModalCandidateId = candidate.id;
+  const normalizedId = normalizeCandidateId(candidate.id);
+  candidateCvModalCandidateId = normalizedId;
   modal.classList.remove('hidden');
   const titleText = document.getElementById('candidateCvModalTitleText');
   if (titleText) {
@@ -3209,13 +3217,13 @@ function openCandidateCvModal(candidateId) {
     resetCandidateCvModal('CV preview is available only for PDF files. Use the download button to open this document.');
     return;
   }
-  const cachedUrl = candidateCvPreviewUrls.get(candidate.id);
+  const cachedUrl = candidateCvPreviewUrls.get(normalizedId);
   if (cachedUrl) {
     setCandidateCvModalUrl(cachedUrl);
     return;
   }
   resetCandidateCvModal('Loading CV preview...');
-  loadCandidateSearchCvPreview(candidate.id);
+  loadCandidateSearchCvPreview(normalizedId);
 }
 
 function closeCandidateCvModal() {
@@ -3412,11 +3420,12 @@ async function onCandidateAiPanelClick(ev) {
 }
 
 async function downloadCandidateCv(id) {
-  const res = await apiFetch(`/recruitment/candidates/${id}/cv`);
+  const normalizedId = normalizeCandidateId(id);
+  if (normalizedId == null) throw new Error('Invalid candidate id');
+  const res = await apiFetch(`/api/recruitment/candidates/${encodeURIComponent(normalizedId)}/cv`);
   if (!res.ok) throw new Error('Failed');
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
-  const normalizedId = normalizeCandidateId(id);
   const candidate = recruitmentCandidates.find(c => c.id == id) ||
     recruitmentCandidateSearchResults.find(c => String(c.id) === String(id)) ||
     (normalizedId != null ? candidateDetailsCache.get(normalizedId) : null);
@@ -3469,7 +3478,12 @@ async function loadCandidateCvPreview(candidate) {
   const messageEl = document.getElementById('candidateCvPreviewMessage');
   const iframe = document.getElementById('candidateCvIframe');
   if (!messageEl || !iframe) return;
-  const cachedUrl = candidateCvPreviewUrls.get(candidate.id);
+  const candidateId = normalizeCandidateId(candidate.id);
+  if (candidateId == null) {
+    resetCandidateCvPreview('Unable to load this CV.');
+    return;
+  }
+  const cachedUrl = candidateCvPreviewUrls.get(candidateId);
   if (cachedUrl) {
     setCandidateCvPreviewUrl(cachedUrl);
     return;
@@ -3478,11 +3492,13 @@ async function loadCandidateCvPreview(candidate) {
   messageEl.classList.remove('hidden');
   iframe.classList.add('hidden');
   try {
-    const res = await apiFetch(`/recruitment/candidates/${candidate.id}/cv`);
+    const res = await apiFetch(
+      `/api/recruitment/candidates/${encodeURIComponent(candidateId)}/cv`
+    );
     if (!res.ok) throw new Error('Failed');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
-    candidateCvPreviewUrls.set(candidate.id, url);
+    candidateCvPreviewUrls.set(candidateId, url);
     if (recruitmentActiveDetailsCandidateId !== candidate.id) return;
     setCandidateCvPreviewUrl(url);
   } catch (err) {
