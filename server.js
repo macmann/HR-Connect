@@ -23,6 +23,7 @@ const recruitmentOpenApiSpec = require('./api/recruitmentopenAI');
 const hrPositionsRoutes = require('./api/hrPositions');
 const hrAiInterviewRoutes = require('./api/hrAiInterview');
 const publicCareersRoutes = require('./api/publicCareers');
+const publicAiInterviewRoutes = require('./api/publicAiInterview');
 
 const app = express();
 
@@ -1528,9 +1529,14 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/hr', hrPositionsRoutes);
 app.use('/api/hr', hrAiInterviewRoutes);
 app.use('/api/public', publicCareersRoutes);
+app.use('/api/public', publicAiInterviewRoutes);
 
 app.get('/careers', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'careers.html'));
+});
+
+app.get('/ai-interview/:token', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'ai-interview.html'));
 });
 
 function resolveToken(req) {
