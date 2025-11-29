@@ -26,7 +26,7 @@ The questions should:
 `;
 
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5.1-mini',
     messages: [
       { role: 'system', content: 'You output strictly valid JSON only. Do NOT include markdown code fences. Do NOT include explanations.' },
       { role: 'user', content: prompt }
@@ -101,7 +101,7 @@ ${payload.questions.map(q => {
 `;
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5.1-mini",
     messages: [
       { role: "system", content: "You are an HR assistant. Output strictly valid JSON." },
       { role: "user", content: prompt }
@@ -162,7 +162,7 @@ ${cvText}
 `;
 
   const completion = await client.chat.completions.create({
-    model: process.env.OPENAI_CV_MODEL || "gpt-4o-mini",
+    model: process.env.OPENAI_CV_MODEL || "gpt-5.1-mini",
     messages: [
       {
         role: "system",
