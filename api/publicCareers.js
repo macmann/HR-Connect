@@ -239,7 +239,7 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
       savedApplication.cvFilePath ||
       savedApplication.cvPath
     );
-    const positionForScreening = await db
+    const positionForScreening = await database
       .collection('positions')
       .findOne({ _id: new ObjectId(positionId) });
 
@@ -250,7 +250,7 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
       console.error('AI CV Screening failed:', err);
     }
 
-    await db.collection('applications').updateOne(
+    await database.collection('applications').updateOne(
       { _id: savedApplication._id },
       {
         $set: {
