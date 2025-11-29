@@ -66,6 +66,18 @@ function buildPublishedQuery() {
   };
 }
 
+function buildJdText(position = {}) {
+  const parts = [];
+  if (position.title) parts.push(`Title: ${position.title}`);
+  if (position.department) parts.push(`Department: ${position.department}`);
+  if (position.location) parts.push(`Location: ${position.location}`);
+  if (position.employmentType) parts.push(`Employment Type: ${position.employmentType}`);
+  if (position.description) parts.push(`Description:\n${position.description}`);
+  if (position.requirements) parts.push(`Requirements:\n${position.requirements}`);
+
+  return parts.join('\n') || 'No job description provided.';
+}
+
 router.get('/positions', async (req, res) => {
   try {
     const database = getDatabase();
@@ -245,7 +257,12 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
 
     let aiScreeningResult = null;
     try {
-      aiScreeningResult = await analyzeCvAgainstJd({ position: positionForScreening, cvText });
+      aiScreeningResult = await analyzeCvAgainstJd({
+        cvText,
+        jdText: buildJdText(positionForScreening),
+        positionTitle: positionForScreening?.title,
+        candidateName: fullName
+      });
     } catch (err) {
       console.error('AI CV Screening failed:', err);
     }

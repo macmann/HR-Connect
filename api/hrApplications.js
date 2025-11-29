@@ -14,6 +14,18 @@ function resolveObjectId(id) {
   }
 }
 
+function buildJdText(position = {}) {
+  const parts = [];
+  if (position.title) parts.push(`Title: ${position.title}`);
+  if (position.department) parts.push(`Department: ${position.department}`);
+  if (position.location) parts.push(`Location: ${position.location}`);
+  if (position.employmentType) parts.push(`Employment Type: ${position.employmentType}`);
+  if (position.description) parts.push(`Description:\n${position.description}`);
+  if (position.requirements) parts.push(`Requirements:\n${position.requirements}`);
+
+  return parts.join('\n') || 'No job description provided.';
+}
+
 router.post('/applications/:applicationId/ai-screening/run', async (req, res) => {
   const { applicationId } = req.params;
   const appObjectId = resolveObjectId(applicationId);
@@ -75,7 +87,12 @@ router.post('/applications/:applicationId/ai-screening/run', async (req, res) =>
 
     let aiScreeningResult;
     try {
-      aiScreeningResult = await analyzeCvAgainstJd({ position, cvText });
+      aiScreeningResult = await analyzeCvAgainstJd({
+        cvText,
+        jdText: buildJdText(position),
+        positionTitle: position?.title,
+        candidateName: candidate?.fullName || candidate?.name
+      });
     } catch (err) {
       console.error('AI CV screening failed (manual trigger):', err);
       return res.status(500).json({ success: false, error: 'failed_to_analyze_cv' });
