@@ -37,8 +37,27 @@ function resolveCvPath(cvPath) {
     if (fs.existsSync(p)) {
       return p;
     }
-    console.error("CV absolute path does not exist:", p);
-    throw new Error("CV file not found at " + p);
+
+    // Fallback: older deployments may have used /src/uploads vs /uploads or vice versa
+    let fallbackCandidates = [];
+
+    if (p.includes("/src/uploads/")) {
+      const alt = p.replace("/src/uploads/", "/uploads/");
+      fallbackCandidates.push(alt);
+    } else if (p.includes("/uploads/") && !p.includes("/src/uploads/")) {
+      const alt = p.replace("/uploads/", "/src/uploads/");
+      fallbackCandidates.push(alt);
+    }
+
+    for (const candidate of fallbackCandidates) {
+      if (fs.existsSync(candidate)) {
+        console.warn("CV absolute path fallback used:", candidate);
+        return candidate;
+      }
+    }
+
+    console.error("CV absolute path does not exist, tried:", [p, ...fallbackCandidates]);
+    throw new Error("CV file not found at " + [p, ...fallbackCandidates].join(" OR "));
   }
 
   // CASE C: Relative path (e.g. "uploads/cv/xxx.pdf")
