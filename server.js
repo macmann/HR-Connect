@@ -895,6 +895,86 @@ function normalizeNullableDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function getCurrentCycleStart(now = new Date()) {
+  const year = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  return new Date(year, 6, 1);
+}
+
+function getFirstDayOfNextMonth(date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 1);
+}
+
+function getFirstUpcomingMonthStart(fromDate, now = new Date()) {
+  const todayMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  let candidate = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+
+  while (candidate < fromDate) {
+    candidate = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 1);
+  }
+
+  while (candidate < todayMonthStart) {
+    candidate = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 1);
+  }
+
+  return candidate;
+}
+
+function ensureAccrualSchedule(emp, options = {}) {
+  if (!emp || typeof emp !== 'object') return false;
+
+  const now = options.now instanceof Date ? options.now : new Date();
+  let updated = false;
+
+  const normalizedEffectiveStart = normalizeNullableDate(emp.effectiveStartDate);
+  const internshipStart = normalizeNullableDate(emp.internshipStartDate);
+  const startDate = normalizeNullableDate(emp.startDate);
+  const fallbackStartDate = getCurrentCycleStart(now);
+  const effectiveStartDate =
+    normalizedEffectiveStart || internshipStart || startDate || fallbackStartDate;
+
+  if (!normalizedEffectiveStart && effectiveStartDate) {
+    emp.effectiveStartDate = effectiveStartDate;
+    updated = true;
+  } else if (normalizedEffectiveStart && emp.effectiveStartDate !== normalizedEffectiveStart) {
+    emp.effectiveStartDate = normalizedEffectiveStart;
+    updated = true;
+  }
+
+  if (!emp.leaveBalances || typeof emp.leaveBalances !== 'object') {
+    emp.leaveBalances = cloneDefaultLeaveBalances();
+    updated = true;
+  }
+
+  const accrualStartDate =
+    options.accrualStartDate ?? normalizeNullableDate(emp.leaveBalances.accrualStartDate);
+  if (emp.leaveBalances.accrualStartDate !== accrualStartDate) {
+    emp.leaveBalances.accrualStartDate = accrualStartDate;
+    updated = true;
+  }
+
+  if (!accrualStartDate && effectiveStartDate) {
+    emp.leaveBalances.accrualStartDate = getFirstDayOfNextMonth(effectiveStartDate);
+    updated = true;
+  }
+
+  const nextAccrualMonth =
+    options.nextAccrualMonth ?? normalizeNullableDate(emp.leaveBalances.nextAccrualMonth);
+  if (emp.leaveBalances.nextAccrualMonth !== nextAccrualMonth) {
+    emp.leaveBalances.nextAccrualMonth = nextAccrualMonth;
+    updated = true;
+  }
+
+  if (!nextAccrualMonth && emp.leaveBalances.accrualStartDate) {
+    emp.leaveBalances.nextAccrualMonth = getFirstUpcomingMonthStart(
+      emp.leaveBalances.accrualStartDate,
+      now
+    );
+    updated = true;
+  }
+
+  return updated;
+}
+
 function getLeaveBalanceValue(leaveBalances, type) {
   if (!leaveBalances || typeof leaveBalances !== 'object') return 0;
   const entry = leaveBalances[type];
@@ -919,11 +999,12 @@ function setLeaveBalanceValue(leaveBalances, type, value) {
   leaveBalances[type] = { ...leaveBalances[type], ...normalized };
 }
 
-function ensureLeaveBalances(emp) {
+function ensureLeaveBalances(emp, options = {}) {
   if (!emp) return false;
   if (!emp.leaveBalances || typeof emp.leaveBalances !== 'object') {
     emp.leaveBalances = cloneDefaultLeaveBalances();
-    return true;
+    // Continue to populate derived dates for brand new leave balances.
+    return ensureAccrualSchedule(emp, options);
   }
 
   let updated = false;
@@ -954,7 +1035,13 @@ function ensureLeaveBalances(emp) {
     updated = true;
   }
 
-  return updated;
+  const accrualScheduleUpdated = ensureAccrualSchedule(emp, {
+    now: options.now,
+    accrualStartDate,
+    nextAccrualMonth
+  });
+
+  return updated || accrualScheduleUpdated;
 }
 
 function normalizeBooleanFlag(value, defaultValue = false) {
