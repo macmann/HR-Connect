@@ -1,26 +1,15 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const multer = require('multer');
 const { ObjectId } = require('mongodb');
 const { getDatabase, db } = require('../db');
 const { extractTextFromPdf } = require('../utils/cvParser');
-const { getCvUploadDir } = require('../utils/uploadPaths');
 const { analyzeCvAgainstJd } = require('../openaiClient');
 const { loadAiSettings } = require('../aiSettings');
 
 const router = express.Router();
 
-const uploadDir = getCvUploadDir();
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const unique = `cv_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    cb(null, `${unique}${ext}`);
-  }
-});
+const storage = multer.memoryStorage();
 
 const allowedExtensions = new Set(['.pdf', '.doc', '.docx']);
 const upload = multer({
@@ -161,13 +150,11 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
     }
 
     const file = req.file;
-    const diskPathAbsolute = file?.path;
-    const publicPath = file ? `/uploads/cv/${file.filename}` : null;
-
+    const cvBuffer = file?.buffer;
     const cvInfo = {
-      cvFilePath: publicPath,
-      cvFilePathAbsolute: diskPathAbsolute,
-      cvFilename: file?.originalname || file?.filename
+      filename: file?.originalname || file?.filename,
+      contentType: req.file?.mimetype || 'application/octet-stream',
+      data: cvBuffer ? cvBuffer.toString('base64') : null
     };
     const now = new Date();
 
@@ -185,10 +172,11 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
         positionId: position.id || existingCandidate.positionId,
         updatedAt: now,
         source: existingCandidate.source || 'careers_portal',
-        cvFilePath: cvInfo.cvFilePath,
-        cvFilePathAbsolute: cvInfo.cvFilePathAbsolute,
-        cvFilename: cvInfo.cvFilename,
-        cvContentType: req.file.mimetype || null
+        cv: cvInfo,
+        cvFilePath: null,
+        cvFilePathAbsolute: null,
+        cvFilename: cvInfo.filename,
+        cvContentType: cvInfo.contentType
       };
       if (!existingCandidate.id) {
         update.id = Date.now();
@@ -208,10 +196,11 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
         positionId: position.id || null,
         status: 'New',
         source: 'careers_portal',
-        cvFilePath: cvInfo.cvFilePath,
-        cvFilePathAbsolute: cvInfo.cvFilePathAbsolute,
-        cvFilename: cvInfo.cvFilename,
-        cvContentType: req.file.mimetype || null,
+        cv: cvInfo,
+        cvFilePath: null,
+        cvFilePathAbsolute: null,
+        cvFilename: cvInfo.filename,
+        cvContentType: cvInfo.contentType,
         createdAt: now,
         updatedAt: now,
         comments: []
@@ -229,9 +218,10 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
       type: 'recruitment',
       status: 'applied',
       source: 'careers_portal',
-      cvFilePath: cvInfo.cvFilePath,
-      cvFilePathAbsolute: cvInfo.cvFilePathAbsolute,
-      cvFilename: cvInfo.cvFilename,
+      cv: cvInfo,
+      cvFilePath: null,
+      cvFilePathAbsolute: null,
+      cvFilename: cvInfo.filename,
       coverLetterText: coverLetterText || null,
       createdAt: now,
       email: email.trim().toLowerCase(),
@@ -247,10 +237,7 @@ router.post('/positions/:id/apply', upload.single('cv'), async (req, res) => {
     };
 
     console.log('Application CV path from DB:', savedApplication.cvFilePathAbsolute, savedApplication.cvFilePath || savedApplication.cvPath);
-    const cvText = await extractTextFromPdf(
-      savedApplication.cvFilePathAbsolute ||
-      savedApplication.cvFilePath
-    );
+    const cvText = await extractTextFromPdf(savedApplication.cv || savedApplication.cvFilePathAbsolute || savedApplication.cvFilePath);
     const positionForScreening = await database
       .collection('positions')
       .findOne({ _id: new ObjectId(positionId) });

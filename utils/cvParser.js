@@ -79,10 +79,20 @@ function resolveCvPath(cvPath) {
   throw new Error("CV file not found at " + candidates.join(" OR "));
 }
 
-async function extractTextFromPdf(cvPath) {
-  const absolutePath = resolveCvPath(cvPath);
+async function extractTextFromPdf(cvSource) {
+  let buffer;
 
-  const buffer = fs.readFileSync(absolutePath);
+  if (Buffer.isBuffer(cvSource)) {
+    buffer = cvSource;
+  } else if (cvSource && typeof cvSource === "object" && cvSource.data) {
+    buffer = Buffer.isBuffer(cvSource.data)
+      ? cvSource.data
+      : Buffer.from(cvSource.data, "base64");
+  } else {
+    const absolutePath = resolveCvPath(cvSource);
+    buffer = fs.readFileSync(absolutePath);
+  }
+
   const parser = new PDFParse({ data: buffer });
 
   try {
