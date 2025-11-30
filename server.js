@@ -40,6 +40,13 @@ if (process.env.NODE_ENV !== 'production' || !global.__monthlyLeaveCronInitializ
   }
 }
 
+if (process.env.NODE_ENV !== 'production' || !global.__resetLeaveCycleCronInitialized) {
+  require('./cron/resetLeaveCycle');
+  if (process.env.NODE_ENV === 'production') {
+    global.__resetLeaveCycleCronInitialized = true;
+  }
+}
+
 const app = express();
 
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'session_token';
