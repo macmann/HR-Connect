@@ -21,7 +21,7 @@ Open http://localhost:3000 to access the HR portal. The built-in credentials and
 
 ## Migrating leave system data
 
-Run the migration script to backfill leave balance metadata for all employees:
+Run the migration script to backfill leave balance metadata for all employees. The migration no longer runs automatically when the server starts, so execute it manually whenever you need to normalize leave balances:
 
 ```bash
 node scripts/migrateLeaveSystem.js
