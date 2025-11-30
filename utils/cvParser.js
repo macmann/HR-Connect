@@ -1,6 +1,7 @@
 const { PDFParse } = require("pdf-parse");
 const fs = require("fs");
 const path = require("path");
+const { getUploadsRoot } = require("./uploadPaths");
 
 // __dirname is .../utils, so repo root is one level up
 const repoRoot = path.join(__dirname, "..");
@@ -20,6 +21,7 @@ function resolveCvPath(cvPath) {
     const candidates = [
       path.join(repoRoot, rel),               // <repoRoot>/uploads/...
       path.join(repoRoot, "public", rel),     // <repoRoot>/public/uploads/...
+      path.join(getUploadsRoot(), rel.replace(/^uploads\/?/, "")),
     ];
 
     for (const candidate of candidates) {
@@ -64,6 +66,7 @@ function resolveCvPath(cvPath) {
   const candidates = [
     path.join(repoRoot, p),
     path.join(repoRoot, "public", p),
+    path.join(getUploadsRoot(), p.replace(/^uploads\/?/, "")),
   ];
 
   for (const candidate of candidates) {

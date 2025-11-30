@@ -5,13 +5,13 @@ const multer = require('multer');
 const { ObjectId } = require('mongodb');
 const { getDatabase, db } = require('../db');
 const { extractTextFromPdf } = require('../utils/cvParser');
+const { getCvUploadDir } = require('../utils/uploadPaths');
 const { analyzeCvAgainstJd } = require('../openaiClient');
 const { loadAiSettings } = require('../aiSettings');
 
 const router = express.Router();
 
-const uploadDir = path.join(__dirname, '../uploads/cv');
-fs.mkdirSync(uploadDir, { recursive: true });
+const uploadDir = getCvUploadDir();
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
