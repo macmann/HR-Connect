@@ -33,6 +33,13 @@ const publicCareersRoutes = require('./api/publicCareers');
 const publicAiInterviewRoutes = require('./api/publicAiInterview');
 const { getUploadsRoot } = require('./utils/uploadPaths');
 
+if (process.env.NODE_ENV !== 'production' || !global.__monthlyLeaveCronInitialized) {
+  require('./cron/monthlyLeaveCron');
+  if (process.env.NODE_ENV === 'production') {
+    global.__monthlyLeaveCronInitialized = true;
+  }
+}
+
 const app = express();
 
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'session_token';
