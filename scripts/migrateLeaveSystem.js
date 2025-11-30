@@ -109,8 +109,10 @@ function migrateEmployee(emp, options = {}) {
   return updated;
 }
 
-async function migrateLeaveSystem() {
-  await db.read({ force: true });
+async function migrateLeaveSystem(options = {}) {
+  const { forceRead = true, now = new Date() } = options;
+
+  await db.read({ force: forceRead });
 
   db.data = db.data || {};
   db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
@@ -119,7 +121,7 @@ async function migrateLeaveSystem() {
   const { employees } = db.data;
 
   employees.forEach((emp, idx) => {
-    const changed = migrateEmployee(emp);
+    const changed = migrateEmployee(emp, { now });
     if (changed) {
       updatedCount += 1;
       console.log(`Updated employee at index ${idx}`);
@@ -130,15 +132,35 @@ async function migrateLeaveSystem() {
     await db.write();
   }
 
-  console.log(`Processed ${employees.length} employees; updated ${updatedCount}.`);
+  const summary = {
+    totalEmployees: employees.length,
+    updatedCount
+  };
+
+  console.log(`Processed ${summary.totalEmployees} employees; updated ${summary.updatedCount}.`);
+
+  return summary;
 }
 
-migrateLeaveSystem()
-  .then(() => {
-    console.log('Leave system migration complete.');
-    process.exit(0);
-  })
-  .catch(error => {
-    console.error('Leave system migration failed:', error);
-    process.exit(1);
-  });
+module.exports = {
+  migrateLeaveSystem,
+  migrateEmployee,
+  DEFAULT_LEAVE_BALANCES,
+  cloneDefaultLeaveBalances,
+  normalizeNullableDate,
+  getCurrentCycleStart,
+  getFirstDayOfNextMonth,
+  getFirstUpcomingMonthStart
+};
+
+if (require.main === module) {
+  migrateLeaveSystem()
+    .then(summary => {
+      console.log('Leave system migration complete.', summary);
+      process.exit(0);
+    })
+    .catch(error => {
+      console.error('Leave system migration failed:', error);
+      process.exit(1);
+    });
+}

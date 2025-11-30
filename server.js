@@ -32,6 +32,7 @@ const hrApplicationsRoutes = require('./api/hrApplications');
 const publicCareersRoutes = require('./api/publicCareers');
 const publicAiInterviewRoutes = require('./api/publicAiInterview');
 const { getUploadsRoot } = require('./utils/uploadPaths');
+const { migrateLeaveSystem } = require('./scripts/migrateLeaveSystem');
 
 if (process.env.NODE_ENV !== 'production' || !global.__monthlyLeaveCronInitialized) {
   require('./cron/monthlyLeaveCron');
@@ -1987,7 +1988,26 @@ async function ensureUsersForExistingEmployees() {
   }
 }
 
+async function migrateLeaveSystemOnStartup() {
+  try {
+    const { totalEmployees, updatedCount } = await migrateLeaveSystem({ forceRead: true });
+
+    if (updatedCount > 0) {
+      console.log(
+        `Startup leave migration updated ${updatedCount} of ${totalEmployees} employees.`
+      );
+    } else {
+      console.log(
+        `Startup leave migration: no updates required across ${totalEmployees} employees.`
+      );
+    }
+  } catch (error) {
+    console.error('Startup leave migration failed:', error);
+  }
+}
+
 init().then(async () => {
+  await migrateLeaveSystemOnStartup();
   await ensureUsersForExistingEmployees();
   await ensurePairingIndexes();
   // ========== MICROSOFT SSO ==========
