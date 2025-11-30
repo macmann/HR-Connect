@@ -5,6 +5,23 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+async function createChatCompletionWithFallback(params) {
+  try {
+    return await client.chat.completions.create(params);
+  } catch (err) {
+    if (err && err.code === 'unsupported_value' && err.param === 'temperature') {
+      const { temperature, ...retryParams } = params;
+      console.warn(
+        `Temperature ${temperature} unsupported for model ${params.model}; retrying with default temperature.`,
+      );
+
+      return await client.chat.completions.create(retryParams);
+    }
+
+    throw err;
+  }
+}
+
 function getCvAnalysisModel() {
   // Highest priority: explicit override
   if (process.env.OPENAI_CV_MODEL && process.env.OPENAI_CV_MODEL.trim()) {
@@ -26,7 +43,7 @@ Department: ${department || ''}
 Employment type: ${employmentType || ''}
 Description: ${description || ''}`;
 
-  const response = await client.chat.completions.create({
+  const response = await createChatCompletionWithFallback({
     model: options.model || 'gpt-5.1-mini',
     messages: [
       { role: 'system', content: 'You output strictly valid JSON only. Do NOT include markdown code fences. Do NOT include explanations.' },
@@ -101,7 +118,7 @@ ${payload.questions.map(q => {
 }).join('\n')}
 `;
 
-  const response = await client.chat.completions.create({
+  const response = await createChatCompletionWithFallback({
     model: "gpt-5.1-mini",
     messages: [
       { role: "system", content: "You are an HR assistant. Output strictly valid JSON." },
@@ -146,7 +163,7 @@ ${cvText}`;
   let completion;
 
   try {
-    completion = await client.chat.completions.create({
+    completion = await createChatCompletionWithFallback({
       model: primaryModel,
       messages: [
         {
@@ -168,7 +185,7 @@ ${cvText}`;
         "— retrying with fallback model gpt-4o-mini"
       );
 
-      completion = await client.chat.completions.create({
+      completion = await createChatCompletionWithFallback({
         model: "gpt-4o-mini",
         messages: [
           {
