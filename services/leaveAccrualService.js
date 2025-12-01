@@ -275,12 +275,13 @@ function buildEmployeeLeaveState(employee, applications, options = {}) {
     const defaults = DEFAULT_LEAVE_BALANCES[type];
     const accruedValue = accrued[type] || 0;
     const takenValue = taken[type] || 0;
-    const balance = roundToOneDecimal(accruedValue - takenValue);
+    const cappedAccrued = Math.min(accruedValue, defaults.yearlyAllocation);
+    const balance = roundToOneDecimal(cappedAccrued - takenValue);
     balances[type] = {
       ...normalizeLeaveBalanceEntry(employee?.leaveBalances?.[type], defaults),
       monthlyAccrual: defaults.monthlyAccrual,
       yearlyAllocation: defaults.yearlyAllocation,
-      accrued: roundToOneDecimal(accruedValue),
+      accrued: roundToOneDecimal(cappedAccrued),
       taken: roundToOneDecimal(takenValue),
       balance
     };

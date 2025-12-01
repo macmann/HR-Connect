@@ -92,3 +92,17 @@ test('Recalculation is idempotent for the same inputs', () => {
 
   assert.deepStrictEqual(balancesFirst, balancesSecond);
 });
+
+test('Accrued balances are capped at the yearly allocation', () => {
+  const asOfDate = new Date('2025-07-31');
+  const cycleRange = {
+    start: new Date('2024-07-01'),
+    end: new Date('2025-07-31')
+  };
+  const employee = createEmployee(new Date('2020-01-01'));
+  const { balances } = buildEmployeeLeaveState(employee, [], { cycleRange, asOfDate, holidays: [] });
+
+  assert.equal(balances.annual.balance, 10);
+  assert.equal(balances.casual.balance, 5);
+  assert.equal(balances.medical.balance, 14);
+});
