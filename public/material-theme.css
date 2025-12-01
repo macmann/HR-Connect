@@ -165,59 +165,6 @@ body {
   color: #0f7b32;
 }
 
-.welcome-metrics {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-}
-
-.metric-card {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 14px 16px;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
-  display: grid;
-  gap: 6px;
-}
-
-.metric-label {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: #64748b;
-  text-transform: uppercase;
-}
-
-.metric-value {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-  color: #0f172a;
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.metric-trend {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #16a34a;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(22, 163, 74, 0.12);
-}
-
-.metric-trend.down {
-  color: #b91c1c;
-  background: rgba(239, 68, 68, 0.12);
-}
-
 .feature-pills {
   position: relative;
   z-index: 1;
