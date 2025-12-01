@@ -89,7 +89,9 @@ function accrueEmployeeLeave(emp, monthStart) {
   SUPPORTED_LEAVE_TYPES.forEach(type => {
     const defaults = DEFAULT_LEAVE_BALANCES[type];
     const current = normalizeLeaveBalanceEntry(emp.leaveBalances[type], defaults);
-    const newBalance = roundToOneDecimal(current.balance + current.monthlyAccrual);
+    const uncappedBalance = roundToOneDecimal(current.balance + current.monthlyAccrual);
+    const cappedBalance = Math.min(uncappedBalance, current.yearlyAllocation || defaults.yearlyAllocation || 0);
+    const newBalance = roundToOneDecimal(cappedBalance);
 
     emp.leaveBalances[type] = { ...defaults, ...current, balance: newBalance };
     updated = true;

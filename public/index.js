@@ -70,6 +70,13 @@ function roundToOneDecimal(value) {
   return Math.round(numeric * 10) / 10;
 }
 
+const SUPPORTED_LEAVE_TYPES = ['annual', 'casual', 'medical'];
+const LEAVE_TYPE_DEFAULTS = {
+  annual: { yearlyAllocation: 10 },
+  casual: { yearlyAllocation: 5 },
+  medical: { yearlyAllocation: 14 }
+};
+
 function getLeaveBalanceValue(leaveBalances = {}, type) {
   if (!type) return 0;
   const entry = leaveBalances[type];
@@ -85,6 +92,64 @@ function normalizeLeaveBalanceMap(leaveBalances = {}) {
     casual: getLeaveBalanceValue(leaveBalances, 'casual'),
     medical: getLeaveBalanceValue(leaveBalances, 'medical')
   };
+}
+
+function getLeaveTypeAllocation(type, leaveBalances = {}) {
+  const entry = leaveBalances[type];
+  if (entry && typeof entry === 'object' && Number.isFinite(entry.yearlyAllocation)) {
+    return entry.yearlyAllocation;
+  }
+  return LEAVE_TYPE_DEFAULTS[type]?.yearlyAllocation || 0;
+}
+
+function getLeaveCycleStart(leaveBalances = {}) {
+  const raw = leaveBalances.accrualStartDate;
+  const parsed = raw ? new Date(raw) : null;
+  if (parsed && !Number.isNaN(parsed.getTime())) return parsed;
+
+  const now = new Date();
+  const julyStart = new Date(now.getFullYear(), 6, 1);
+  if (now < julyStart) julyStart.setFullYear(now.getFullYear() - 1);
+  return julyStart;
+}
+
+function calculateUsedLeaveByType(applications = [], cycleStartDate = null) {
+  const usage = { annual: 0, casual: 0, medical: 0 };
+  const hasCycleStart = cycleStartDate instanceof Date && !Number.isNaN(cycleStartDate?.getTime());
+  const cycleStartMs = hasCycleStart ? cycleStartDate.getTime() : null;
+
+  applications.forEach(app => {
+    const status = String(app.status || '').toLowerCase();
+    if (status !== 'approved') return;
+    if (!SUPPORTED_LEAVE_TYPES.includes(app.type)) return;
+
+    const toDate = new Date(app.to);
+    const fromDate = new Date(app.from);
+    if (Number.isNaN(toDate.getTime()) || Number.isNaN(fromDate.getTime())) return;
+    if (cycleStartMs && toDate.getTime() < cycleStartMs) return;
+
+    const days = calculateLeaveDays(app.from, app.to, app.halfDay);
+    const safeDays = Number.isFinite(days) ? days : 0;
+    usage[app.type] = roundToOneDecimal((usage[app.type] || 0) + safeDays);
+  });
+
+  return usage;
+}
+
+function buildAvailableLeaveState(leaveBalances = {}, applications = []) {
+  const cycleStart = getLeaveCycleStart(leaveBalances);
+  const usage = calculateUsedLeaveByType(applications, cycleStart);
+  const normalizedBalances = normalizeLeaveBalanceMap(leaveBalances);
+  const available = {};
+
+  SUPPORTED_LEAVE_TYPES.forEach(type => {
+    const used = usage[type] || 0;
+    const allocation = getLeaveTypeAllocation(type, leaveBalances) || normalizedBalances[type] + used;
+    const earned = roundToOneDecimal(Math.min(allocation, normalizedBalances[type] + used));
+    available[type] = roundToOneDecimal(Math.max(0, earned - used));
+  });
+
+  return { cycleStart, usage, available };
 }
 
 function setBalanceValue(elementId, value) {
@@ -1715,6 +1780,7 @@ function renderMyProfile() {
     email,
     summary = {},
     leaveBalances = {},
+    availableLeaveBalances = null,
     sections = [],
     message = '',
     messageType = 'success'
@@ -1727,7 +1793,8 @@ function renderMyProfile() {
   setProfileSummaryField('profileSummaryManager', summary.manager);
   setProfileSummaryField('profileSummaryStatus', summary.status);
 
-  const normalizedBalances = normalizeLeaveBalanceMap(leaveBalances);
+  const balancesForDisplay = availableLeaveBalances || leaveBalances;
+  const normalizedBalances = normalizeLeaveBalanceMap(balancesForDisplay);
   setBalanceValue('profileBalAnnual', normalizedBalances.annual);
   setBalanceValue('profileBalCasual', normalizedBalances.casual);
   setBalanceValue('profileBalMedical', normalizedBalances.medical);
@@ -1795,12 +1862,24 @@ async function loadMyProfile({ force = false } = {}) {
 
   const request = (async () => {
     try {
-      const res = await apiFetch('/api/my-profile');
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      const [profileRes, approvedApps] = await Promise.all([
+        apiFetch('/api/my-profile'),
+        getJSON('/applications?status=approved')
+      ]);
+
+      const data = await profileRes.json().catch(() => ({}));
+      if (!profileRes.ok) {
         throw new Error(data.error || 'Unable to load profile information.');
       }
-      profileData = data;
+      const { available, usage } = buildAvailableLeaveState(
+        data.leaveBalances,
+        Array.isArray(approvedApps) ? approvedApps : []
+      );
+      profileData = {
+        ...data,
+        availableLeaveBalances: available,
+        leaveUsage: usage
+      };
       renderMyProfile();
       return data;
     } catch (err) {
@@ -5211,8 +5290,8 @@ async function onEmployeeChange() {
   const emp = emps.find(e => e.id == empId);
   if (!emp) return;
 
-  // === NEW: Show current leave balances (no deduction here, backend handles it) ===
-  currentLeaveBalances = normalizeLeaveBalanceMap(emp.leaveBalances);
+  const { available } = buildAvailableLeaveState(emp.leaveBalances, apps);
+  currentLeaveBalances = available;
 
   setBalanceValue('balAnnual', currentLeaveBalances.annual);
   setBalanceValue('balCasual', currentLeaveBalances.casual);
