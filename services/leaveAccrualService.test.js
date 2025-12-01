@@ -4,7 +4,9 @@ const assert = require('assert');
 const {
   buildEmployeeLeaveState,
   getCurrentCycleRange,
-  roundToOneDecimal
+  normalizeLeaveBalanceEntry,
+  roundToOneDecimal,
+  DEFAULT_LEAVE_BALANCES
 } = require('./leaveAccrualService');
 
 function createEmployee(startDate, endDate) {
@@ -105,4 +107,12 @@ test('Accrued balances are capped at the yearly allocation', () => {
   assert.equal(balances.annual.balance, 10);
   assert.equal(balances.casual.balance, 5);
   assert.equal(balances.medical.balance, 14);
+});
+
+test('Normalization caps stored balances and accrued values at allocations', () => {
+  const defaults = DEFAULT_LEAVE_BALANCES.annual;
+  const normalized = normalizeLeaveBalanceEntry({ balance: 10.8, accrued: 10.8 }, defaults);
+
+  assert.equal(normalized.balance, defaults.yearlyAllocation);
+  assert.equal(normalized.accrued, defaults.yearlyAllocation);
 });

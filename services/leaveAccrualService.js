@@ -83,15 +83,24 @@ function normalizeLeaveBalanceEntry(entry, defaults) {
       : baseDefaults.taken
   );
 
+  const clampToAllocation = value => {
+    if (!Number.isFinite(value)) return value;
+    return Number.isFinite(yearlyAllocation) ? Math.min(value, yearlyAllocation) : value;
+  };
+
   return {
-    balance: roundToOneDecimal(Number.isFinite(balance) ? balance : baseDefaults.balance),
+    balance: roundToOneDecimal(
+      clampToAllocation(Number.isFinite(balance) ? balance : baseDefaults.balance)
+    ),
     yearlyAllocation: Number.isFinite(yearlyAllocation)
       ? yearlyAllocation
       : baseDefaults.yearlyAllocation,
     monthlyAccrual: Number.isFinite(monthlyAccrual)
       ? monthlyAccrual
       : baseDefaults.monthlyAccrual,
-    accrued: roundToOneDecimal(Number.isFinite(accrued) ? accrued : baseDefaults.accrued),
+    accrued: roundToOneDecimal(
+      clampToAllocation(Number.isFinite(accrued) ? accrued : baseDefaults.accrued)
+    ),
     taken: roundToOneDecimal(Number.isFinite(taken) ? taken : baseDefaults.taken)
   };
 }
@@ -352,5 +361,6 @@ module.exports = {
   DEFAULT_LEAVE_BALANCES,
   SUPPORTED_LEAVE_TYPES,
   roundToOneDecimal,
-  listAccrualMonths
+  listAccrualMonths,
+  normalizeLeaveBalanceEntry
 };
