@@ -1,12 +1,52 @@
-const { recalculateLeaveBalancesForCycle } = require('../services/leaveAccrualService');
+const { db } = require('../db');
+const {
+  computeAllLeaveBalances,
+  getCurrentLeaveCycle: getCurrentLeaveCycleInfo,
+  DEFAULT_ENTITLEMENTS
+} = require('../utils/leaveAccrual');
 
 async function migrateLeaveSystem(options = {}) {
-  const { now = new Date() } = options;
-  const result = await recalculateLeaveBalancesForCycle(now);
-  console.log(
-    `Processed ${result.processed} employees; updated ${result.updated}; cycle ${result.cycleStart?.toISOString()} - ${result.cycleEnd?.toISOString()}.`
-  );
-  return result;
+  const migrationRunAt = options.now instanceof Date ? options.now : new Date();
+  const { cycleStart, cycleEnd } = getCurrentLeaveCycleInfo(migrationRunAt);
+
+  await db.read();
+  db.data = db.data || {};
+  db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
+  db.data.applications = Array.isArray(db.data.applications) ? db.data.applications : [];
+  db.data.holidays = Array.isArray(db.data.holidays) ? db.data.holidays : [];
+
+  let processed = 0;
+
+  for (const employee of db.data.employees) {
+    if (!employee || typeof employee !== 'object') continue;
+    processed += 1;
+
+    ['annual', 'casual', 'medical'].forEach(type => {
+      const field = `${type}LeaveEntitlement`;
+      if (employee[field] === undefined || employee[field] === null) {
+        employee[field] = DEFAULT_ENTITLEMENTS[type];
+      }
+    });
+
+    const balances = await computeAllLeaveBalances(employee, {
+      dateNow: migrationRunAt,
+      applications: db.data.applications,
+      holidays: db.data.holidays
+    });
+
+    employee.leaveBalances = balances;
+    employee.leaveMigration = {
+      lastRunAt: migrationRunAt,
+      cycleStart,
+      cycleEnd
+    };
+  }
+
+  await db.write();
+
+  console.log(`Leave migration complete: ${processed} employees processed.`);
+
+  return { processed, cycleStart, cycleEnd };
 }
 
 module.exports = {
@@ -15,8 +55,7 @@ module.exports = {
 
 if (require.main === module) {
   migrateLeaveSystem()
-    .then(summary => {
-      console.log('Leave system migration complete.', summary);
+    .then(() => {
       process.exit(0);
     })
     .catch(error => {

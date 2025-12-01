@@ -41,6 +41,12 @@ const hrApplicationsRoutes = require('./api/hrApplications');
 const publicCareersRoutes = require('./api/publicCareers');
 const publicAiInterviewRoutes = require('./api/publicAiInterview');
 const { getUploadsRoot } = require('./utils/uploadPaths');
+const {
+  computeAllLeaveBalances,
+  getCurrentLeaveCycle: getCurrentLeaveCycleInfo,
+  DEFAULT_ENTITLEMENTS
+} = require('./utils/leaveAccrual');
+const { migrateLeaveSystem } = require('./scripts/migrateLeaveSystem');
 
 if (process.env.NODE_ENV !== 'production' || !global.__monthlyLeaveCronInitialized) {
   require('./cron/monthlyLeaveCron');
@@ -988,6 +994,37 @@ function refreshEmployeeLeaveBalances(employee, data, options = {}) {
   return { updated: hasChanged, balances: employee.leaveBalances };
 }
 
+function formatLeaveBalancesForResponse(balances, { dateNow = new Date() } = {}) {
+  const cycle = getCurrentLeaveCycleInfo(dateNow);
+  const toEntry = (entry = {}, defaultEntitlement = 0) => ({
+    entitlement: Number.isFinite(entry?.entitlement) ? entry.entitlement : defaultEntitlement,
+    earned: roundToOneDecimal(entry?.earned || 0),
+    taken: roundToOneDecimal(entry?.taken || 0),
+    balance: roundToOneDecimal(entry?.balance || 0)
+  });
+
+  return {
+    annual: toEntry(balances?.annual, DEFAULT_ENTITLEMENTS.annual),
+    casual: toEntry(balances?.casual, DEFAULT_ENTITLEMENTS.casual),
+    medical: toEntry(balances?.medical, DEFAULT_ENTITLEMENTS.medical),
+    cycleStart: cycle.cycleStart,
+    cycleEnd: cycle.cycleEnd,
+    yearLabel: cycle.yearLabel
+  };
+}
+
+async function getComputedLeaveBalances(employee, options = {}) {
+  if (!employee) return { raw: null, formatted: null };
+  const dateNow = options.dateNow instanceof Date ? options.dateNow : new Date();
+  const balances = await computeAllLeaveBalances(employee, {
+    dateNow,
+    applications: options.applications || (db.data && db.data.applications),
+    holidays: options.holidays || (db.data && db.data.holidays)
+  });
+
+  return { raw: balances, formatted: formatLeaveBalancesForResponse(balances, { dateNow }) };
+}
+
 function normalizeBooleanFlag(value, defaultValue = false) {
   if (value === undefined || value === null || value === '') return defaultValue;
   if (typeof value === 'string') {
@@ -1084,7 +1121,7 @@ function findValueByKeywords(employee, keywords = []) {
   }, '');
 }
 
-function buildEmployeeProfile(employee) {
+function buildEmployeeProfile(employee, options = {}) {
   const sectionMap = new Map(
     PROFILE_SECTIONS.map(section => [section.id, { id: section.id, title: section.title, editable: section.editable, fields: [] }])
   );
@@ -1114,16 +1151,21 @@ function buildEmployeeProfile(employee) {
     .filter(section => section.fields.length > 0)
     .map(section => ({ id: section.id, title: section.title, fields: section.fields }));
 
+  const providedLeaveBalances =
+    options.leaveBalances && typeof options.leaveBalances === 'object'
+      ? options.leaveBalances
+      : null;
+
   return {
     employeeId: employee?.id || null,
     name: employee?.name || '',
     email: getEmpEmail(employee),
     leaveBalances: (() => {
-      const leaveCopy =
-        employee?.leaveBalances && typeof employee.leaveBalances === 'object'
-          ? { ...employee.leaveBalances }
-          : cloneDefaultLeaveBalances();
-      const wrapper = { leaveBalances: leaveCopy };
+      if (providedLeaveBalances) return providedLeaveBalances;
+      if (employee?.leaveBalances && typeof employee.leaveBalances === 'object') {
+        return employee.leaveBalances;
+      }
+      const wrapper = { leaveBalances: cloneDefaultLeaveBalances() };
       ensureLeaveBalances(wrapper);
       return wrapper.leaveBalances;
     })(),
@@ -2306,11 +2348,8 @@ init().then(async () => {
     if (!employee) {
       return res.status(404).json({ error: 'Employee profile not found.' });
     }
-    const balancesUpdated = ensureLeaveBalances(employee);
-    if (balancesUpdated) {
-      await db.write();
-    }
-    res.json(buildEmployeeProfile(employee));
+    const { formatted } = await getComputedLeaveBalances(employee, { dateNow: new Date() });
+    res.json(buildEmployeeProfile(employee, { leaveBalances: formatted }));
   });
 
   app.put('/api/my-profile', authRequired, async (req, res) => {
@@ -2365,7 +2404,8 @@ init().then(async () => {
       await db.write();
     }
 
-    const response = buildEmployeeProfile(employee);
+    const { formatted } = await getComputedLeaveBalances(employee, { dateNow: new Date() });
+    const response = buildEmployeeProfile(employee, { leaveBalances: formatted });
     if (applied === 0) {
       response.message = 'No editable fields were updated.';
       response.messageType = 'info';
@@ -2395,7 +2435,18 @@ init().then(async () => {
     if (internFlagUpdated) {
       await db.write();
     }
-    res.json(emps);
+    const dateNow = new Date();
+    const enrichedEmployees = await Promise.all(
+      emps.map(async emp => {
+        const { formatted } = await getComputedLeaveBalances(emp, {
+          dateNow,
+          applications: db.data.applications,
+          holidays: db.data.holidays
+        });
+        return { ...emp, leaveBalances: formatted };
+      })
+    );
+    res.json(enrichedEmployees);
   });
 
   app.post('/employees', authRequired, managerOnly, async (req, res) => {
@@ -4171,14 +4222,11 @@ init().then(async () => {
       return { status: 403, error: 'Employee account is inactive' };
     }
 
-    const { balances: leaveBalances, updated } = refreshEmployeeLeaveBalances(
-      employee,
-      db.data,
-      { asOfDate: new Date() }
-    );
-    if (updated) {
-      await db.write();
-    }
+    const { raw: leaveBalances } = await getComputedLeaveBalances(employee, {
+      dateNow: new Date(),
+      applications: db.data.applications,
+      holidays: db.data.holidays
+    });
 
     const normalizedFrom =
       typeof from === 'string' ? from.trim() : fromDate.toISOString();
@@ -4202,14 +4250,11 @@ init().then(async () => {
     }
 
     const days = getLeaveDays(newApp);
-    const balance = getLeaveBalanceValue(leaveBalances, normalizedType);
+    const balance = leaveBalances?.[normalizedType]?.balance || 0;
     const validationError = validateLeaveBalance(balance, normalizedType, days);
     if (validationError) {
       return { status: 400, error: validationError };
     }
-
-    setLeaveBalanceValue(leaveBalances, normalizedType, balance - days);
-    employee.leaveBalances = leaveBalances;
 
     db.data.applications.push(newApp);
     await db.write();
@@ -4470,14 +4515,11 @@ init().then(async () => {
       return res.status(404).json({ error: 'Employee not found.' });
     }
 
-    const { updated, balances: leaveBalances } = refreshEmployeeLeaveBalances(
-      employee,
-      db.data,
-      { asOfDate: new Date() }
-    );
-    if (updated) {
-      await db.write();
-    }
+    const { formatted: leaveBalances } = await getComputedLeaveBalances(employee, {
+      dateNow: new Date(),
+      applications: db.data.applications,
+      holidays: db.data.holidays
+    });
 
     const now = new Date();
     const previousLeaveDays = db.data.applications
@@ -4621,11 +4663,11 @@ init().then(async () => {
       return res.status(404).json({ error: 'Employee not found.' });
     }
 
-    const leaveBalances =
-      employee.leaveBalances && typeof employee.leaveBalances === 'object'
-        ? { ...employee.leaveBalances }
-        : cloneDefaultLeaveBalances();
-    ensureLeaveBalances({ leaveBalances });
+    const { formatted: leaveBalances } = await getComputedLeaveBalances(employee, {
+      dateNow: new Date(),
+      applications: db.data.applications,
+      holidays: db.data.holidays
+    });
 
     res.json({
       employeeId: normalizeEmployeeId(employee.id) || scope.employeeId,
@@ -5382,15 +5424,34 @@ init().then(async () => {
     if (db.data.applications[appIdx].status !== 'pending')
       return res.status(400).json({ error: 'Already actioned' });
 
+    const app = db.data.applications[appIdx];
+    const employee = db.data.employees.find(e => e.id == app.employeeId);
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found for this leave request.' });
+    }
+
+    const { raw: leaveBalances } = await getComputedLeaveBalances(employee, {
+      dateNow: new Date(),
+      applications: db.data.applications,
+      holidays: db.data.holidays
+    });
+
+    const leaveType = String(app.type || '').toLowerCase();
+    const requestedDays = getLeaveDays(app);
+    const balance = leaveBalances?.[leaveType]?.balance || 0;
+    const validationError = validateLeaveBalance(balance, leaveType, requestedDays);
+    if (validationError) {
+      return res.status(400).json({ error: validationError });
+    }
+
     db.data.applications[appIdx].status = 'approved';
     db.data.applications[appIdx].approvedBy = approver || '';
     db.data.applications[appIdx].approverRemark = remark || '';
     db.data.applications[appIdx].approvedAt = new Date().toISOString();
     await db.write();
 
-    const emp = db.data.employees.find(e => e.id == db.data.applications[appIdx].employeeId);
-    const email = getEmpEmail(emp);
-    const name = emp?.name || email || `Employee ${db.data.applications[appIdx].employeeId}`;
+    const email = getEmpEmail(employee);
+    const name = employee?.name || email || `Employee ${db.data.applications[appIdx].employeeId}`;
     if (email) {
       const templates = (await loadEmailSettings())?.templates || DEFAULT_LEAVE_EMAIL_TEMPLATES;
       const templateVars = {
@@ -5517,7 +5578,28 @@ init().then(async () => {
     const appIdx = db.data.applications.findIndex(a => a.id == req.params.id);
     const app = db.data.applications[appIdx];
     if (!app) return res.status(404).json({ error: 'Not found' });
-    if (status === 'rejected') {
+    const normalizedStatus = typeof status === 'string' ? status.toLowerCase() : '';
+
+    if (normalizedStatus === 'approved') {
+      const employee = db.data.employees.find(e => e.id == app.employeeId);
+      if (!employee) {
+        return res.status(404).json({ error: 'Employee not found for this leave request.' });
+      }
+
+      const { raw: leaveBalances } = await getComputedLeaveBalances(employee, {
+        dateNow: new Date(),
+        applications: db.data.applications,
+        holidays: db.data.holidays
+      });
+
+      const leaveType = String(app.type || '').toLowerCase();
+      const requestedDays = getLeaveDays(app);
+      const balance = leaveBalances?.[leaveType]?.balance || 0;
+      const validationError = validateLeaveBalance(balance, leaveType, requestedDays);
+      if (validationError) {
+        return res.status(400).json({ error: validationError });
+      }
+    } else if (normalizedStatus === 'rejected') {
       // Credit back leave
       const emp = db.data.employees.find(e => e.id == app.employeeId);
       if (emp) {
@@ -5527,7 +5609,7 @@ init().then(async () => {
         setLeaveBalanceValue(emp.leaveBalances, app.type, current + days);
       }
     }
-    app.status = status;
+    app.status = normalizedStatus || status;
     await db.write();
     res.json(app);
   });
@@ -5537,6 +5619,16 @@ init().then(async () => {
     console.error(err);
     res.status(500).json({ error: err.message || 'Server error' });
   });
+
+  (async () => {
+    try {
+      console.log('[leave-migration] Starting migration on server startup...');
+      await migrateLeaveSystem();
+      console.log('[leave-migration] Migration complete.');
+    } catch (err) {
+      console.error('[leave-migration] Migration failed:', err);
+    }
+  })();
 
   // ========== START SERVER ==========
   const PORT = process.env.PORT || 3000;
