@@ -70,7 +70,6 @@ function roundToOneDecimal(value) {
   return Math.round(numeric * 10) / 10;
 }
 
-const SUPPORTED_LEAVE_TYPES = ['annual', 'casual', 'medical'];
 const LEAVE_TYPE_DEFAULTS = {
   annual: { yearlyAllocation: 10 },
   casual: { yearlyAllocation: 5 },
