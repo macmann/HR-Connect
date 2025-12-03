@@ -23,7 +23,7 @@ function renderPositions(positions = []) {
       const metaParts = [];
       if (position.department) metaParts.push(position.department);
       if (position.location) metaParts.push(position.location);
-      const meta = metaParts.length ? metaParts.join(' • ') : 'Brillar';
+      const meta = metaParts.length ? metaParts.join(' • ') : 'HR Connect';
       return `
         <div class="bg-white rounded-xl shadow p-5 flex items-start sm:items-center justify-between gap-4">
           <div>
@@ -48,7 +48,7 @@ function renderDetail(position) {
     <div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
       <div>
         <h3 class="text-3xl font-bold text-gray-900">${position.title}</h3>
-        <div class="text-gray-600 mt-1">${meta || 'Brillar'}</div>
+        <div class="text-gray-600 mt-1">${meta || 'HR Connect'}</div>
         ${position.employmentType ? `<div class="text-sm text-gray-500">${position.employmentType}</div>` : ''}
       </div>
       <div class="text-sm text-gray-500">${new Date(position.createdAt || Date.now()).toLocaleDateString()}</div>

@@ -1,6 +1,6 @@
 # Atenxion Post-Login Sync Integration
 
-This project now triggers Atenxion's background synchronization as part of the existing Brillar HR Portal login flow. After a user authenticates successfully, the browser immediately queues a non-blocking POST request to Atenxion QA so that the portal can stay responsive while downstream systems synchronize.
+This project now triggers Atenxion's background synchronization as part of the HR Connect login flow. After a user authenticates successfully, the browser immediately queues a non-blocking POST request to Atenxion QA so that the portal can stay responsive while downstream systems synchronize.
 
 ## How it works
 

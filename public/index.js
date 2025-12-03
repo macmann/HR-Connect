@@ -35,6 +35,14 @@ const DEFAULT_LEAVE_BALANCE_CONFIG = {
   medical: { yearlyAllocation: 14, monthlyAccrual: 14 / 12 }
 };
 const LOCATION_COLORS = ['#6366f1', '#22c55e', '#06b6d4', '#f97316', '#a855f7', '#f43f5e', '#10b981', '#a3e635'];
+const DEFAULT_BRANDING = {
+  name: 'HR Connect',
+  tagline: 'Modern, people-first HR experiences',
+  logoPath: ''
+};
+let brandingSettings = { ...DEFAULT_BRANDING };
+let brandingLoaded = false;
+let brandingLoading = null;
 
 function normalizeRole(role) {
   return typeof role === 'string' ? role.trim().toLowerCase() : '';
@@ -672,22 +680,23 @@ function adaptSearchResultToCandidate(result) {
 
 document.addEventListener('DOMContentLoaded', () => {
   setupTabGroupMenus();
+  loadBranding();
   const params = new URLSearchParams(window.location.search);
   const aiScreeningPanel = document.getElementById('ai-cv-screening');
   if (aiScreeningPanel) {
     aiCvScreeningTemplate = aiScreeningPanel.innerHTML;
   }
   if (params.get('token')) {
-    localStorage.setItem('brillar_token', params.get('token'));
+    localStorage.setItem('hrconnect_token', params.get('token'));
     try {
       currentUser = JSON.parse(decodeURIComponent(params.get('user')));
-      localStorage.setItem('brillar_user', JSON.stringify(currentUser));
+      localStorage.setItem('hrconnect_user', JSON.stringify(currentUser));
       queuePostLoginSync(currentUser?.employeeId);
       updateChatWidgetUser(currentUser?.employeeId);
     } catch {}
     window.history.replaceState({}, document.title, '/');
   }
-  if (!localStorage.getItem('brillar_token')) {
+  if (!localStorage.getItem('hrconnect_token')) {
     document.getElementById('loginPage').classList.remove('hidden');
     document.getElementById('logoutBtn').classList.add('hidden');
     document.getElementById('changePassBtn').classList.add('hidden');
@@ -699,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('changePassBtn').classList.remove('hidden');
     document.getElementById('mainApp').classList.remove('hidden');
     try {
-      currentUser = JSON.parse(localStorage.getItem('brillar_user'));
+      currentUser = JSON.parse(localStorage.getItem('hrconnect_user'));
     } catch {}
     updateChatWidgetUser(currentUser?.employeeId);
     toggleTabsByRole();
@@ -720,9 +729,9 @@ document.getElementById('loginForm').onsubmit = async function(ev) {
     });
     if (!res.ok) throw new Error('Login failed');
     const data = await res.json();
-    localStorage.setItem('brillar_token', data.token);
+    localStorage.setItem('hrconnect_token', data.token);
     currentUser = data.user;
-    localStorage.setItem('brillar_user', JSON.stringify(currentUser));
+    localStorage.setItem('hrconnect_user', JSON.stringify(currentUser));
     queuePostLoginSync(currentUser?.employeeId);
     updateChatWidgetUser(currentUser?.employeeId);
     document.getElementById('loginPage').classList.add('hidden');
@@ -745,8 +754,8 @@ if (msBtn) msBtn.onclick = () => {
 
 // Logout logic
 function logout() {
-  localStorage.removeItem('brillar_token');
-  localStorage.removeItem('brillar_user');
+  localStorage.removeItem('hrconnect_token');
+  localStorage.removeItem('hrconnect_user');
   document.getElementById('loginPage').classList.remove('hidden');
   document.getElementById('logoutBtn').classList.add('hidden');
   document.getElementById('changePassBtn').classList.add('hidden');
@@ -775,7 +784,7 @@ const PROFILE_SECTION_ICONS = {
 };
 
 function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('brillar_token');
+  const token = localStorage.getItem('hrconnect_token');
   options.headers = options.headers || {};
   if (token) options.headers['Authorization'] = 'Bearer ' + token;
   return fetch(API + path, options);
@@ -974,6 +983,7 @@ function showPanel(name) {
     settingsPanel.classList.remove('hidden');
     if (settingsBtn) settingsBtn.classList.add('active-tab');
     if (isManagerRole(currentUser?.role)) {
+      loadBrandingSettingsConfig();
       loadHolidays();
       loadEmailSettingsConfig();
       loadAiSettingsConfig();
@@ -3286,6 +3296,180 @@ async function onEmailSettingsSubmit(ev) {
   }
 }
 
+function getBrandingLogoUrl(settings = brandingSettings) {
+  const logo = settings.logoPath && typeof settings.logoPath === 'string' ? settings.logoPath.trim() : '';
+  if (!logo) return 'branding-default.svg';
+  return logo.startsWith('/') ? logo : `/${logo}`;
+}
+
+function applyBranding(settings = brandingSettings) {
+  const merged = { ...DEFAULT_BRANDING, ...(settings || {}) };
+  brandingSettings = merged;
+  const logoUrl = getBrandingLogoUrl(merged);
+  const titleText = merged.name || DEFAULT_BRANDING.name;
+  const taglineText = merged.tagline || DEFAULT_BRANDING.tagline;
+
+  document.title = titleText;
+  document.querySelectorAll('[data-branding-title]').forEach(el => {
+    el.textContent = titleText;
+  });
+  document.querySelectorAll('[data-branding-tagline]').forEach(el => {
+    el.textContent = taglineText;
+  });
+  document.querySelectorAll('[data-branding-logo]').forEach(img => {
+    if (img && img.tagName === 'IMG') {
+      img.src = logoUrl;
+      img.alt = `${titleText} logo`;
+    }
+  });
+
+  const preview = document.getElementById('brandingPreview');
+  if (preview) {
+    preview.src = logoUrl;
+    preview.alt = `${titleText} logo preview`;
+  }
+}
+
+function setBrandingStatus(message, type = 'info') {
+  const statusEl = document.getElementById('brandingStatus');
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('settings-status--error', 'settings-status--success');
+  if (!message) {
+    statusEl.classList.add('text-muted');
+    return;
+  }
+  statusEl.classList.remove('text-muted');
+  if (type === 'error') {
+    statusEl.classList.add('settings-status--error');
+  } else if (type === 'success') {
+    statusEl.classList.add('settings-status--success');
+  }
+}
+
+function renderBrandingForm() {
+  const nameInput = document.getElementById('brandingName');
+  if (nameInput) {
+    nameInput.value = brandingSettings.name || DEFAULT_BRANDING.name;
+  }
+  const taglineInput = document.getElementById('brandingTagline');
+  if (taglineInput) {
+    taglineInput.value = brandingSettings.tagline || DEFAULT_BRANDING.tagline;
+  }
+  const removeToggle = document.getElementById('brandingRemoveLogo');
+  if (removeToggle) {
+    removeToggle.checked = false;
+  }
+  const logoInput = document.getElementById('brandingLogo');
+  if (logoInput) {
+    logoInput.value = '';
+  }
+  const help = document.getElementById('brandingHelp');
+  if (help) {
+    help.textContent = brandingSettings.logoPath
+      ? 'A logo is currently in use. Upload a new file to replace it or check remove to clear it.'
+      : 'PNG, JPG, SVG, or WebP up to 2 MB.';
+  }
+  applyBranding(brandingSettings);
+}
+
+async function fetchBranding({ force = false, authenticated = false } = {}) {
+  if (!force && brandingLoaded && !brandingLoading) {
+    return brandingSettings;
+  }
+  if (!force && brandingLoading) {
+    return brandingLoading;
+  }
+
+  const request = (async () => {
+    const endpoint = authenticated ? '/settings/branding' : '/branding';
+    const res = authenticated ? await apiFetch(endpoint) : await fetch(endpoint);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to load branding.');
+    }
+    return data.branding || DEFAULT_BRANDING;
+  })();
+
+  brandingLoading = request;
+  try {
+    const result = await request;
+    brandingSettings = { ...DEFAULT_BRANDING, ...(result || {}) };
+    brandingLoaded = true;
+    return brandingSettings;
+  } finally {
+    brandingLoading = null;
+  }
+}
+
+async function loadBranding({ force = false } = {}) {
+  try {
+    await fetchBranding({ force });
+    applyBranding(brandingSettings);
+  } catch (err) {
+    console.error('Unable to load branding', err);
+    brandingSettings = { ...DEFAULT_BRANDING };
+    applyBranding(brandingSettings);
+  }
+}
+
+async function loadBrandingSettingsConfig({ force = false } = {}) {
+  if (!currentUser || !isManagerRole(currentUser)) return;
+  setBrandingStatus('Loading branding...');
+  try {
+    await fetchBranding({ force, authenticated: true });
+    renderBrandingForm();
+    setBrandingStatus('Branding loaded.');
+  } catch (err) {
+    console.error('Unable to load branding settings', err);
+    setBrandingStatus(err.message || 'Unable to load branding.', 'error');
+  }
+}
+
+async function onBrandingSubmit(ev) {
+  ev.preventDefault();
+  if (!currentUser || !isManagerRole(currentUser)) return;
+  const form = ev.currentTarget;
+  const submitBtn = form?.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  setBrandingStatus('Saving branding...');
+  try {
+    const formData = new FormData();
+    const name = document.getElementById('brandingName')?.value || '';
+    const tagline = document.getElementById('brandingTagline')?.value || '';
+    const removeLogo = document.getElementById('brandingRemoveLogo')?.checked;
+    const logoInput = document.getElementById('brandingLogo');
+
+    formData.append('name', name);
+    formData.append('tagline', tagline);
+    if (removeLogo) {
+      formData.append('removeLogo', 'true');
+    }
+    if (logoInput?.files?.[0]) {
+      formData.append('logo', logoInput.files[0]);
+    }
+
+    const res = await apiFetch('/settings/branding', {
+      method: 'PUT',
+      body: formData
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to save branding.');
+    }
+    brandingSettings = { ...DEFAULT_BRANDING, ...(data.branding || {}) };
+    brandingLoaded = true;
+    renderBrandingForm();
+    setBrandingStatus('Branding saved successfully.', 'success');
+  } catch (err) {
+    console.error('Failed to save branding', err);
+    setBrandingStatus(err.message || 'Unable to save branding.', 'error');
+  } finally {
+    applyBranding(brandingSettings);
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
 function setAiSettingsStatus(message, type = 'info') {
   const statusEl = document.getElementById('aiSettingsStatus');
   if (!statusEl) return;
@@ -5520,6 +5704,26 @@ async function init() {
   if (emailForm) emailForm.addEventListener('submit', onEmailSettingsSubmit);
   const aiForm = document.getElementById('aiSettingsForm');
   if (aiForm) aiForm.addEventListener('submit', onAiSettingsSubmit);
+  const brandingForm = document.getElementById('brandingForm');
+  if (brandingForm) brandingForm.addEventListener('submit', onBrandingSubmit);
+  const brandingLogoInput = document.getElementById('brandingLogo');
+  if (brandingLogoInput) {
+    brandingLogoInput.addEventListener('change', () => {
+      if (brandingLogoInput.files?.length) {
+        setBrandingStatus('Logo ready to upload.');
+      }
+    });
+  }
+  const brandingRemoveToggle = document.getElementById('brandingRemoveLogo');
+  if (brandingRemoveToggle) {
+    brandingRemoveToggle.addEventListener('change', () => {
+      if (brandingRemoveToggle.checked) {
+        setBrandingStatus('The current logo will be removed when you save.');
+      } else {
+        setBrandingStatus('');
+      }
+    });
+  }
   const emailProviderSelect = document.getElementById('emailProvider');
   if (emailProviderSelect) {
     emailProviderSelect.addEventListener('change', onEmailProviderChange);

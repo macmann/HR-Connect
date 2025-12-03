@@ -3,7 +3,7 @@ const { MongoClient } = require('mongodb');
 const { performance } = require('perf_hooks');
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
-const DB_NAME = process.env.MONGODB_DB || 'brillarhrportal';
+const DB_NAME = process.env.MONGODB_DB || 'hrconnect';
 
 const client = new MongoClient(MONGODB_URI);
 let database;

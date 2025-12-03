@@ -26,4 +26,13 @@ function getCvUploadDir() {
   return cvDir;
 }
 
-module.exports = { getUploadsRoot, getCvUploadDir };
+/**
+ * Returns the directory for branding uploads (inside the uploads root).
+ */
+function getBrandingUploadDir() {
+  const brandingDir = path.join(getUploadsRoot(), 'branding');
+  fs.mkdirSync(brandingDir, { recursive: true });
+  return brandingDir;
+}
+
+module.exports = { getUploadsRoot, getCvUploadDir, getBrandingUploadDir };

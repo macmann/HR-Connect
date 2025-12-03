@@ -75,7 +75,7 @@
 
     const greeting = `Hi ${session.candidateName || 'there'}, welcome to your written interview for ${
       session.positionTitle || 'this role'
-    } at Brillar.`;
+    } at HR Connect.`;
 
     root.innerHTML = `
       <div class="space-y-8">

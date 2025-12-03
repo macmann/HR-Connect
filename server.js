@@ -10,6 +10,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
+const multer = require('multer');
 const { db, init, getDatabase } = require('./db');
 const {
   DEFAULT_LEAVE_BALANCES,
@@ -34,13 +35,19 @@ const {
   loadAiSettings,
   saveAiSettings
 } = require('./aiSettings');
+const {
+  DEFAULT_BRANDING,
+  loadBrandingSettings,
+  saveBrandingSettings,
+  removeLogoFile
+} = require('./brandingSettings');
 const recruitmentOpenApiSpec = require('./api/recruitmentopenAI');
 const hrPositionsRoutes = require('./api/hrPositions');
 const hrAiInterviewRoutes = require('./api/hrAiInterview');
 const hrApplicationsRoutes = require('./api/hrApplications');
 const publicCareersRoutes = require('./api/publicCareers');
 const publicAiInterviewRoutes = require('./api/publicAiInterview');
-const { getUploadsRoot } = require('./utils/uploadPaths');
+const { getUploadsRoot, getBrandingUploadDir } = require('./utils/uploadPaths');
 const {
   computeAllLeaveBalances,
   getCurrentLeaveCycle: getCurrentLeaveCycleInfo,
@@ -117,7 +124,7 @@ app.options(
 const BODY_LIMIT = process.env.BODY_LIMIT || '3mb';
 
 // Default admin credentials (can be overridden with env vars)
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@brillar.io';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@hrconnect.io';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
 
 const MANAGER_ROLES = new Set(['manager', 'superadmin']);
@@ -215,7 +222,7 @@ const PAIR_AGENT_REPLAY_WINDOW_MS = Number(
   process.env.PAIR_AGENT_REPLAY_WINDOW_MS || 5 * 60 * 1000
 );
 const PAIR_TOKEN_SCOPE = process.env.PAIR_TOKEN_SCOPE || 'pair:connect';
-const PAIR_TOKEN_ISSUER = process.env.PAIR_TOKEN_ISSUER || 'brillar-hr-portal';
+const PAIR_TOKEN_ISSUER = process.env.PAIR_TOKEN_ISSUER || 'hr-connect-portal';
 const PAIR_TOKEN_AUDIENCE = process.env.PAIR_TOKEN_AUDIENCE || 'agent-clients';
 const PAIR_TOKEN_SECRET = process.env.PAIR_TOKEN_SECRET || '';
 const PAIR_TOKEN_TTL_SECONDS = Math.max(
@@ -1569,7 +1576,7 @@ function upsertUserForEmployee(emp) {
       changed = true;
     }
     if (!existing.password) {
-      existing.password = 'brillar';
+      existing.password = 'hrconnect';
       changed = true;
     }
     return changed;
@@ -1578,7 +1585,7 @@ function upsertUserForEmployee(emp) {
   db.data.users.push({
     id: emp.id,
     email,
-    password: 'brillar',
+    password: 'hrconnect',
     role,
     employeeId: emp.id
   });
@@ -1586,7 +1593,7 @@ function upsertUserForEmployee(emp) {
 }
 
 const SESSION_TOKENS = {}; // token: userId
-const WIDGET_JWT_SECRET = process.env.WIDGET_JWT_SECRET || process.env.JWT_SECRET || 'brillar-widget-secret';
+const WIDGET_JWT_SECRET = process.env.WIDGET_JWT_SECRET || process.env.JWT_SECRET || 'hrconnect-widget-secret';
 const WIDGET_JWT_EXPIRES_IN = Number(process.env.WIDGET_JWT_EXPIRES_IN || 300);
 
 function genToken() {
@@ -1855,6 +1862,25 @@ const rawBodySaver = (req, res, buf) => {
   req.rawBody = buf && buf.length ? buf.toString('utf8') : '';
 };
 
+const brandingStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, getBrandingUploadDir()),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '') || '.png';
+    const base = path.basename(file.originalname || 'logo', ext).replace(/[^a-z0-9-_]/gi, '-');
+    cb(null, `${base || 'logo'}-${Date.now()}${ext}`);
+  }
+});
+
+const brandingUpload = multer({
+  storage: brandingStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = new Set(['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']);
+    if (!allowed.has(file.mimetype)) return cb(new Error('invalid_file_type'));
+    cb(null, true);
+  }
+});
+
 app.use(bodyParser.json({ limit: BODY_LIMIT, verify: rawBodySaver }));
 app.use(bodyParser.urlencoded({ limit: BODY_LIMIT, extended: true, verify: rawBodySaver }));
 app.use((req, res, next) => {
@@ -1957,7 +1983,7 @@ async function authRequired(req, res, next) {
 
   req.user = {
     id: 'public-admin',
-    email: ADMIN_EMAIL || 'public@brillar.io',
+    email: ADMIN_EMAIL || 'public@hrconnect.io',
     role: 'manager',
     employeeId: null
   };
@@ -2351,8 +2377,8 @@ init().then(async () => {
       role: user.role,
       email: user.email,
       employeeId: user.employeeId ?? null,
-      aud: 'brillar-widget',
-      iss: 'brillar-hr-portal'
+      aud: 'hrconnect-widget',
+      iss: 'hr-connect-portal'
     };
     const token = jwt.sign(payload, WIDGET_JWT_SECRET, { expiresIn });
     res.set('Cache-Control', 'no-store');
@@ -3536,6 +3562,72 @@ init().then(async () => {
       }
     }
   );
+
+  // ---- EMAIL SETTINGS ----
+  app.get('/branding', async (_req, res) => {
+    try {
+      const branding = await loadBrandingSettings({ force: true });
+      res.json({ branding, defaults: DEFAULT_BRANDING });
+    } catch (err) {
+      console.error('Failed to load branding settings', err);
+      res.status(500).json({ error: 'Unable to load branding.' });
+    }
+  });
+
+  app.get('/settings/branding', authRequired, managerOnly, async (_req, res) => {
+    try {
+      const branding = await loadBrandingSettings({ force: true });
+      res.json({ branding, defaults: DEFAULT_BRANDING });
+    } catch (err) {
+      console.error('Failed to load branding settings', err);
+      res.status(500).json({ error: 'Unable to load branding.' });
+    }
+  });
+
+  app.put('/settings/branding', authRequired, managerOnly, (req, res, next) => {
+    brandingUpload.single('logo')(req, res, async err => {
+      if (err) {
+        if (err.message === 'invalid_file_type') {
+          return res.status(400).json({ error: 'Only PNG, JPEG, SVG, or WebP files are allowed.' });
+        }
+        console.error('Failed to upload branding logo', err);
+        return res.status(400).json({ error: 'Invalid logo upload.' });
+      }
+
+      try {
+        const payload = req.body || {};
+        const existing = await loadBrandingSettings({ force: true });
+        const normalizedName = typeof payload.name === 'string' && payload.name.trim()
+          ? payload.name.trim()
+          : DEFAULT_BRANDING.name;
+        const normalizedTagline = typeof payload.tagline === 'string' && payload.tagline.trim()
+          ? payload.tagline.trim()
+          : DEFAULT_BRANDING.tagline;
+        const shouldRemoveLogo = payload.removeLogo === 'true' || payload.removeLogo === true;
+
+        let logoPath = existing.logoPath || '';
+        if (req.file) {
+          logoPath = `/uploads/branding/${req.file.filename}`;
+        } else if (shouldRemoveLogo) {
+          logoPath = '';
+        }
+
+        const saved = await saveBrandingSettings({ name: normalizedName, tagline: normalizedTagline, logoPath });
+
+        if (req.file && existing.logoPath && existing.logoPath !== saved.logoPath) {
+          removeLogoFile(existing.logoPath);
+        }
+        if (!req.file && shouldRemoveLogo && existing.logoPath) {
+          removeLogoFile(existing.logoPath);
+        }
+
+        res.json({ branding: saved });
+      } catch (saveErr) {
+        console.error('Failed to save branding settings', saveErr);
+        res.status(500).json({ error: 'Unable to save branding.' });
+      }
+    });
+  });
 
   // ---- EMAIL SETTINGS ----
   app.get('/settings/email', authRequired, managerOnly, async (req, res) => {
@@ -5142,7 +5234,7 @@ init().then(async () => {
     const managementOpenApi = {
       openapi: '3.0.0',
       info: {
-        title: 'Brillar HR Management APIs',
+        title: 'HR Connect Management APIs',
         version: '1.0.0',
         description:
           'Unauthenticated endpoints that provide aggregated employee and leave information for manager accounts.'
@@ -5331,7 +5423,7 @@ init().then(async () => {
     const openApiSpec = {
       openapi: '3.0.0',
       info: {
-        title: 'Brillar HR Portal Leave APIs',
+        title: 'HR Connect Leave APIs',
         version: '1.0.0',
         description:
           'API specification for leave management helper endpoints.'
