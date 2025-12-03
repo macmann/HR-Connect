@@ -7438,7 +7438,8 @@ async function onEmpDrawerSubmit(ev) {
 
 async function getDynamicEmployeeFields() {
   const emps = await getJSON('/employees');
-  let sample = emps[0] || {};
+  const hasSample = Array.isArray(emps) && emps.length > 0;
+  let sample = hasSample ? emps[0] : {};
   let leaveFields = [];
   if (sample.leaveBalances) {
     SUPPORTED_LEAVE_TYPES.forEach(key => {
@@ -7467,6 +7468,31 @@ async function getDynamicEmployeeFields() {
         .filter(Boolean)
     : [];
   const requiredFields = ['name', 'title', 'country/city'];
+  if (!hasSample) {
+    const fallbackFields = [
+      { key: 'name', label: 'Name', type: 'text', required: true },
+      { key: 'email', label: 'Email', type: 'email', required: true },
+      { key: 'employeeId', label: 'Employee ID', type: 'text', required: false },
+      { key: 'title', label: 'Job Title', type: 'text', required: true },
+      { key: 'department', label: 'Department', type: 'text', required: false },
+      managerSelectOptions.length
+        ? { key: 'manager', label: 'Supervisor / Appraiser', type: 'select', options: managerSelectOptions, required: false }
+        : { key: 'manager', label: 'Supervisor / Appraiser', type: 'text', required: false },
+      { key: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive'], required: true },
+      { key: 'location', label: 'Location', type: 'text', required: false },
+      { key: 'startDate', label: 'Start Date', type: 'date', required: false }
+    ];
+    if (!leaveFields.length) {
+      leaveFields = SUPPORTED_LEAVE_TYPES.map(key => ({
+        key,
+        label: key.charAt(0).toUpperCase() + key.slice(1) + ' Leave',
+        type: 'number',
+        required: false,
+        isLeaveBalance: true
+      }));
+    }
+    return [...fallbackFields, ...leaveFields];
+  }
   let normalFields = Object.keys(sample)
     .filter(k => k !== 'id' && k !== 'leaveBalances' && !(typeof k === 'string' && k.startsWith('_')))
     .map(k=>{
