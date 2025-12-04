@@ -43,6 +43,11 @@ const {
   saveBrandingSettings,
   removeLogoFile
 } = require('./brandingSettings');
+const {
+  DEFAULT_CHAT_WIDGET_SETTINGS,
+  loadChatWidgetSettings,
+  saveChatWidgetSettings
+} = require('./widgetSettings');
 const recruitmentOpenApiSpec = require('./api/recruitmentopenAI');
 const hrPositionsRoutes = require('./api/hrPositions');
 const hrAiInterviewRoutes = require('./api/hrAiInterview');
@@ -4055,6 +4060,40 @@ init().then(async () => {
     } catch (err) {
       console.error('Failed to save AI settings', err);
       res.status(500).json({ error: 'Unable to save AI settings.' });
+    }
+  });
+
+  // ---- CHAT WIDGET SETTINGS ----
+  app.get('/widget-settings', async (_req, res) => {
+    try {
+      const settings = await loadChatWidgetSettings({ force: true });
+      res.json({ settings, defaults: DEFAULT_CHAT_WIDGET_SETTINGS });
+    } catch (err) {
+      console.error('Failed to load chat widget settings', err);
+      res.status(500).json({ error: 'Unable to load chat widget settings.' });
+    }
+  });
+
+  app.get('/settings/chat-widget', authRequired, managerOnly, async (_req, res) => {
+    try {
+      const settings = await loadChatWidgetSettings({ force: true });
+      res.json({ settings, defaults: DEFAULT_CHAT_WIDGET_SETTINGS });
+    } catch (err) {
+      console.error('Failed to load chat widget settings', err);
+      res.status(500).json({ error: 'Unable to load chat widget settings.' });
+    }
+  });
+
+  app.put('/settings/chat-widget', authRequired, managerOnly, async (req, res) => {
+    try {
+      const payload = req.body || {};
+      const enabled = Boolean(payload.enabled);
+      const url = typeof payload.url === 'string' ? payload.url.trim() : '';
+      const saved = await saveChatWidgetSettings({ enabled, url });
+      res.json({ settings: saved, defaults: DEFAULT_CHAT_WIDGET_SETTINGS });
+    } catch (err) {
+      console.error('Failed to save chat widget settings', err);
+      res.status(500).json({ error: 'Unable to save chat widget settings.' });
     }
   });
 

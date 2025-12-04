@@ -25,8 +25,10 @@ const POST_LOGIN_PATH = '/api/post-login/user-login';
 const POST_LOGIN_AUTH =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiNjkwMDcxMjAzN2MwZWQwMzY4MjFiMzM0IiwidHlwZSI6Im11bHRpYWdlbnQiLCJpYXQiOjE3NjE2MzY2NDB9.-reLuknFL4cc26r2BGms92CZnSHj-J3riIgo7XM4ZcI';
 const POST_LOGIN_TIMEOUT_MS = 5000;
-const CHAT_WIDGET_URL =
-  'https://qa.atenxion.ai/chat-widget?agentchainId=6900712037c0ed036821b334';
+const DEFAULT_CHAT_WIDGET_SETTINGS = {
+  enabled: true,
+  url: 'https://qa.atenxion.ai/chat-widget?agentchainId=6900712037c0ed036821b334'
+};
 const INACTIVE_EMPLOYEE_STATUSES = new Set(['inactive', 'deactivated', 'disabled', 'terminated']);
 const SUPPORTED_LEAVE_TYPES = ['annual', 'casual', 'medical'];
 const DEFAULT_LEAVE_BALANCE_CONFIG = {
@@ -46,6 +48,9 @@ const DEFAULT_BRANDING = {
 let brandingSettings = { ...DEFAULT_BRANDING };
 let brandingLoaded = false;
 let brandingLoading = null;
+let chatWidgetSettings = { ...DEFAULT_CHAT_WIDGET_SETTINGS };
+let chatWidgetSettingsLoaded = false;
+let chatWidgetSettingsLoading = null;
 
 function normalizeRole(role) {
   return typeof role === 'string' ? role.trim().toLowerCase() : '';
@@ -233,19 +238,245 @@ function normalizePositionStatus(value) {
 }
 
 function updateChatWidgetUser(employeeId) {
-  const iframe = document.getElementById('chatWidgetIframe');
-  if (!iframe || typeof URL !== 'function') return;
-
-  const widgetUrl = new URL(CHAT_WIDGET_URL);
-  widgetUrl.searchParams.delete('employeeId');
-
-  if (employeeId) {
-    widgetUrl.searchParams.set('userId', String(employeeId));
-  } else {
-    widgetUrl.searchParams.delete('userId');
+  if (!chatWidgetSettings?.enabled) {
+    teardownChatWidgetIframe();
+    return;
   }
 
-  iframe.src = widgetUrl.toString();
+  const widgetUrl = buildChatWidgetUrl(chatWidgetSettings?.url, employeeId);
+  if (!widgetUrl) {
+    teardownChatWidgetIframe();
+    return;
+  }
+
+  const iframe = ensureChatWidgetIframe();
+  if (!iframe) return;
+
+  iframe.src = widgetUrl;
+}
+
+function buildChatWidgetUrl(baseUrl, employeeId) {
+  if (!baseUrl || typeof URL !== 'function') return '';
+  try {
+    const widgetUrl = new URL(baseUrl);
+    widgetUrl.searchParams.delete('employeeId');
+    if (employeeId) {
+      widgetUrl.searchParams.set('userId', String(employeeId));
+    } else {
+      widgetUrl.searchParams.delete('userId');
+    }
+    return widgetUrl.toString();
+  } catch (err) {
+    return '';
+  }
+}
+
+function ensureChatWidgetIframe() {
+  const mount = document.getElementById('chatWidgetMount');
+  if (!mount) return null;
+
+  let iframe = document.getElementById('chatWidgetIframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = 'chatWidgetIframe';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '16px';
+    iframe.style.bottom = '16px';
+    iframe.style.width = '360px';
+    iframe.style.height = '720px';
+    iframe.style.zIndex = '9999';
+    iframe.style.border = '0';
+    iframe.style.borderRadius = '12px';
+    iframe.allow = 'microphone; camera; geolocation; display-capture; encrypted-media';
+    iframe.title = 'Atenxion Chat';
+    mount.appendChild(iframe);
+  }
+
+  return iframe;
+}
+
+function teardownChatWidgetIframe() {
+  const iframe = document.getElementById('chatWidgetIframe');
+  if (iframe) {
+    iframe.remove();
+  }
+}
+
+function normalizeChatWidgetSettings(raw = {}) {
+  const enabled = typeof raw.enabled === 'boolean' ? raw.enabled : Boolean(raw.enabled);
+  let url = typeof raw.url === 'string' ? raw.url.trim() : '';
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        url = '';
+      }
+    } catch (err) {
+      url = '';
+    }
+  }
+  if (!url) {
+    url = DEFAULT_CHAT_WIDGET_SETTINGS.url;
+  }
+  return { enabled, url };
+}
+
+function setChatWidgetStatus(message, type = 'info') {
+  const statusEl = document.getElementById('chatWidgetStatus');
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('settings-status--error', 'settings-status--success');
+  if (!message) {
+    statusEl.classList.add('text-muted');
+    return;
+  }
+  statusEl.classList.remove('text-muted');
+  if (type === 'error') {
+    statusEl.classList.add('settings-status--error');
+  } else if (type === 'success') {
+    statusEl.classList.add('settings-status--success');
+  }
+}
+
+function renderChatWidgetSettingsForm(settings = chatWidgetSettings) {
+  const normalized = normalizeChatWidgetSettings(settings);
+  const enabledToggle = document.getElementById('chatWidgetEnabled');
+  if (enabledToggle) {
+    enabledToggle.checked = Boolean(normalized.enabled);
+  }
+  const urlInput = document.getElementById('chatWidgetUrl');
+  if (urlInput) {
+    urlInput.value = normalized.url || '';
+  }
+  const toggleText = document.getElementById('chatWidgetToggleText');
+  if (toggleText) {
+    toggleText.textContent = normalized.enabled ? 'Turn off widget' : 'Turn on widget';
+  }
+}
+
+function applyChatWidgetSettings(settings = chatWidgetSettings) {
+  chatWidgetSettings = normalizeChatWidgetSettings(settings || {});
+  renderChatWidgetSettingsForm(chatWidgetSettings);
+
+  if (chatWidgetSettings.enabled) {
+    updateChatWidgetUser(currentUser?.employeeId);
+  } else {
+    teardownChatWidgetIframe();
+  }
+}
+
+async function fetchChatWidgetSettings({ force = false } = {}) {
+  if (!force && chatWidgetSettingsLoaded && !chatWidgetSettingsLoading) {
+    return chatWidgetSettings;
+  }
+  if (!force && chatWidgetSettingsLoading) {
+    return chatWidgetSettingsLoading;
+  }
+
+  const request = (async () => {
+    const res = await fetch('/widget-settings');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to load chat widget settings.');
+    }
+    return normalizeChatWidgetSettings(data.settings || DEFAULT_CHAT_WIDGET_SETTINGS);
+  })();
+
+  chatWidgetSettingsLoading = request;
+
+  try {
+    const settings = await request;
+    chatWidgetSettings = settings;
+    chatWidgetSettingsLoaded = true;
+    applyChatWidgetSettings(settings);
+    return settings;
+  } finally {
+    chatWidgetSettingsLoading = null;
+  }
+}
+
+async function loadChatWidgetSettings({ force = false, withStatus = false } = {}) {
+  if (withStatus) {
+    setChatWidgetStatus('Loading widget settings...');
+  }
+  try {
+    const settings = await fetchChatWidgetSettings({ force });
+    if (withStatus) {
+      setChatWidgetStatus('Chat widget settings loaded.');
+    }
+    return settings;
+  } catch (err) {
+    if (withStatus) {
+      setChatWidgetStatus(err.message || 'Unable to load chat widget settings.', 'error');
+    }
+    console.error('Unable to load chat widget settings', err);
+    throw err;
+  }
+}
+
+async function persistChatWidgetSettings(payload, { successMessage = 'Widget settings saved successfully.' } = {}) {
+  setChatWidgetStatus('Saving widget settings...');
+  try {
+    const res = await apiFetch('/settings/chat-widget', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to save chat widget settings.');
+    }
+    chatWidgetSettings = normalizeChatWidgetSettings(data.settings || payload);
+    chatWidgetSettingsLoaded = true;
+    applyChatWidgetSettings(chatWidgetSettings);
+    setChatWidgetStatus(successMessage, 'success');
+    return chatWidgetSettings;
+  } catch (err) {
+    console.error('Failed to save chat widget settings', err);
+    setChatWidgetStatus(err.message || 'Unable to save chat widget settings.', 'error');
+    throw err;
+  }
+}
+
+async function onChatWidgetSettingsSubmit(ev) {
+  ev.preventDefault();
+  if (!currentUser || !isManagerRole(currentUser)) return;
+  const form = ev.currentTarget;
+  const submitBtn = form?.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  const payload = {
+    enabled: document.getElementById('chatWidgetEnabled')?.checked,
+    url: document.getElementById('chatWidgetUrl')?.value || ''
+  };
+  try {
+    await persistChatWidgetSettings(payload);
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+async function toggleChatWidgetEnabled(ev) {
+  if (ev) ev.preventDefault();
+  if (!currentUser || !isManagerRole(currentUser)) return;
+  const enabledToggle = document.getElementById('chatWidgetEnabled');
+  const urlInput = document.getElementById('chatWidgetUrl');
+  const desiredEnabled = enabledToggle ? !enabledToggle.checked : !chatWidgetSettings.enabled;
+  if (enabledToggle) {
+    enabledToggle.checked = desiredEnabled;
+  }
+  const payload = {
+    enabled: desiredEnabled,
+    url: urlInput?.value || chatWidgetSettings.url
+  };
+  try {
+    await persistChatWidgetSettings(payload, {
+      successMessage: desiredEnabled ? 'Atenxion widget enabled.' : 'Atenxion widget disabled.'
+    });
+  } catch (err) {
+    if (enabledToggle) {
+      enabledToggle.checked = !desiredEnabled;
+    }
+  }
 }
 
 function buildPostLoginUrl() {
@@ -687,6 +918,7 @@ function adaptSearchResultToCandidate(result) {
 document.addEventListener('DOMContentLoaded', () => {
   setupTabGroupMenus();
   loadBranding();
+  loadChatWidgetSettings().catch(err => console.error('Unable to load chat widget settings', err));
   const params = new URLSearchParams(window.location.search);
   const aiScreeningPanel = document.getElementById('ai-cv-screening');
   if (aiScreeningPanel) {
@@ -1077,6 +1309,7 @@ function showPanel(name) {
       loadHolidays();
       loadEmailSettingsConfig();
       loadAiSettingsConfig();
+      loadChatWidgetSettings({ force: true, withStatus: true });
     }
   }
   if (name === 'finance' && financePanel) {
@@ -5992,6 +6225,10 @@ async function init() {
   if (emailForm) emailForm.addEventListener('submit', onEmailSettingsSubmit);
   const aiForm = document.getElementById('aiSettingsForm');
   if (aiForm) aiForm.addEventListener('submit', onAiSettingsSubmit);
+  const chatWidgetForm = document.getElementById('chatWidgetForm');
+  if (chatWidgetForm) chatWidgetForm.addEventListener('submit', onChatWidgetSettingsSubmit);
+  const chatWidgetToggleBtn = document.getElementById('chatWidgetToggleBtn');
+  if (chatWidgetToggleBtn) chatWidgetToggleBtn.addEventListener('click', toggleChatWidgetEnabled);
   const brandingForm = document.getElementById('brandingForm');
   if (brandingForm) brandingForm.addEventListener('submit', onBrandingSubmit);
   const twoFaEnableBtn = document.getElementById('twoFactorEnableBtn');
