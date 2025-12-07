@@ -10,6 +10,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
+const PDFDocument = require('pdfkit');
 const { db, init, getDatabase } = require('./db');
 const {
   DEFAULT_LEAVE_BALANCES,
@@ -2385,12 +2386,60 @@ init().then(async () => {
     db.data.employees = Array.isArray(db.data.employees)
       ? db.data.employees
       : [];
+    db.data.salaries = Array.isArray(db.data.salaries)
+      ? db.data.salaries
+      : [];
     const employee = db.data.employees.find(emp => emp.id == req.user.employeeId);
     if (!employee) {
       return res.status(404).json({ error: 'Employee profile not found.' });
     }
     const { formatted } = await getComputedLeaveBalances(employee, { dateNow: new Date() });
-    res.json(buildEmployeeProfile(employee, { leaveBalances: formatted }));
+    const employeeId = normalizeEmployeeId(employee.id);
+    const payrollMonth = currentPayrollMonth();
+    const salaryRecords = db.data.salaries
+      .filter(entry => normalizeEmployeeId(entry.employeeId) === employeeId)
+      .map(entry => ({
+        employeeId,
+        month: normalizePayrollMonth(entry.month) || payrollMonth,
+        amount: Number(entry.amount),
+        currency: entry.currency || null,
+        updatedAt: entry.updatedAt || null
+      }))
+      .filter(entry => Number.isFinite(entry.amount));
+
+    const salaryRecord = pickSalaryRecord(salaryRecords, payrollMonth);
+
+    const salary = salaryRecord
+      ? {
+          employeeId,
+          amount: Number.isFinite(salaryRecord.amount) ? salaryRecord.amount : null,
+          currency: salaryRecord.currency || null,
+          month: normalizePayrollMonth(salaryRecord.month) || payrollMonth,
+          updatedAt: salaryRecord.updatedAt || null
+        }
+      : null;
+
+    const employeeSummary = {
+      employeeId,
+      name: employee?.name || '',
+      email: getEmpEmail(employee) || '',
+      title: findValueByKeywords(employee, ['title', 'position']) || '',
+      department: findValueByKeywords(employee, ['department', 'project']) || '',
+      status: employee?.status || '',
+      bankAccountName: findValueByKeywords(employee, ['bank account name', 'account name', 'account holder']) || '',
+      bankAccountNumber: findValueByKeywords(employee, ['bank account number', 'account number', 'bank account']) || ''
+    };
+
+    const payroll = salaryRecord
+      ? buildPayrollSummaryEntry(employee, employeeSummary, salaryRecord, salary?.month)
+      : null;
+
+    res.json(
+      Object.assign(buildEmployeeProfile(employee, { leaveBalances: formatted }), {
+        salary,
+        payroll
+      })
+    );
   });
 
   app.put('/api/my-profile', authRequired, async (req, res) => {
@@ -2458,6 +2507,128 @@ init().then(async () => {
       response.messageType = 'success';
     }
     res.json(response);
+  });
+
+  function formatPayrollMonthLabel(monthValue) {
+    const normalized = normalizePayrollMonth(monthValue);
+    if (!normalized) return 'Current Payroll Month';
+    const [yearStr, monthStr] = normalized.split('-');
+    const year = Number(yearStr);
+    const monthIndex = Number(monthStr) - 1;
+    const monthName = Number.isInteger(monthIndex)
+      ? new Date(year, monthIndex, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+      : normalized;
+    return monthName || normalized;
+  }
+
+  function formatCurrencyValue(amount, currency = 'MMK') {
+    if (!Number.isFinite(amount)) return '0';
+    const upperCurrency = currency ? String(currency).toUpperCase() : 'MMK';
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: upperCurrency,
+        maximumFractionDigits: 2
+      }).format(amount);
+    } catch (err) {
+      return `${upperCurrency} ${amount.toLocaleString()}`;
+    }
+  }
+
+  app.get('/api/my-payslip', authRequired, async (req, res) => {
+    if (!req.user.employeeId) {
+      return res.status(404).json({ error: 'Employee profile not linked to this account.' });
+    }
+
+    await db.read();
+    db.data.employees = Array.isArray(db.data.employees)
+      ? db.data.employees
+      : [];
+    db.data.salaries = Array.isArray(db.data.salaries)
+      ? db.data.salaries
+      : [];
+
+    const employee = db.data.employees.find(emp => normalizeEmployeeId(emp.id) === normalizeEmployeeId(req.user.employeeId));
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee profile not found.' });
+    }
+
+    const requestedMonth = normalizePayrollMonth(req.query?.month);
+    const fallbackMonth = currentPayrollMonth();
+    const payrollMonth = requestedMonth || fallbackMonth;
+    const normalizedEmployeeId = normalizeEmployeeId(employee.id);
+    const salaryRecords = db.data.salaries
+      .filter(entry => normalizeEmployeeId(entry.employeeId) === normalizedEmployeeId)
+      .map(entry => ({
+        employeeId: normalizedEmployeeId,
+        month: normalizePayrollMonth(entry.month) || payrollMonth,
+        amount: Number(entry.amount),
+        currency: entry.currency || null,
+        updatedAt: entry.updatedAt || null
+      }))
+      .filter(entry => Number.isFinite(entry.amount));
+
+    const salaryRecord = pickSalaryRecord(salaryRecords, payrollMonth);
+
+    if (!salaryRecord || !Number.isFinite(salaryRecord.amount) || salaryRecord.amount <= 0) {
+      return res.status(400).json({
+        error: 'Salary must be configured and greater than zero to generate a payslip.'
+      });
+    }
+
+    const resolvedMonth = normalizePayrollMonth(salaryRecord.month) || payrollMonth;
+    const employeeSummary = {
+      employeeId: normalizedEmployeeId,
+      name: employee?.name || '',
+      email: getEmpEmail(employee) || '',
+      title: findValueByKeywords(employee, ['title', 'position']) || '',
+      department: findValueByKeywords(employee, ['department', 'project']) || '',
+      status: employee?.status || '',
+      bankAccountName: findValueByKeywords(employee, ['bank account name', 'account name', 'account holder']) || '',
+      bankAccountNumber: findValueByKeywords(employee, ['bank account number', 'account number', 'bank account']) || ''
+    };
+
+    const payrollEntry = buildPayrollSummaryEntry(employee, employeeSummary, salaryRecord, resolvedMonth);
+
+    const doc = new PDFDocument({ margin: 50 });
+    const filename = `payslip-${resolvedMonth || 'latest'}.pdf`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/pdf');
+
+    doc.pipe(res);
+    doc.fontSize(20).text('Payslip', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(12).text(`Payroll Month: ${formatPayrollMonthLabel(resolvedMonth)}`);
+    doc.text(`Generated On: ${new Date().toLocaleString()}`);
+    doc.moveDown();
+
+    doc.fontSize(14).text('Employee Details', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(12).text(`Name: ${employeeSummary.name || '-'}`);
+    doc.text(`Email: ${employeeSummary.email || '-'}`);
+    doc.text(`Department: ${employeeSummary.department || '-'}`);
+    doc.text(`Title: ${employeeSummary.title || '-'}`);
+    doc.text(`Status: ${employeeSummary.status || '-'}`);
+    doc.moveDown();
+
+    const currency = salaryRecord.currency || 'MMK';
+    doc.fontSize(14).text('Salary Summary', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(12).text(`Base Salary: ${formatCurrencyValue(salaryRecord.amount, currency)}`);
+    doc.text(`Gross Pay This Period: ${formatCurrencyValue(payrollEntry?.grossPay ?? salaryRecord.amount, currency)}`);
+    doc.text(
+      `Bank Account: ${employeeSummary.bankAccountName || 'N/A'}${employeeSummary.bankAccountNumber
+        ? ` • ${employeeSummary.bankAccountNumber}`
+        : ''}`
+    );
+    doc.moveDown();
+
+    doc.fontSize(10).fillColor('#4b5563').text(
+      'This is a computer-generated payslip. Please contact HR for any discrepancies.',
+      { align: 'left' }
+    );
+
+    doc.end();
   });
 
   // ========== EMPLOYEES ==========

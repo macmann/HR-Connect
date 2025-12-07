@@ -1691,9 +1691,19 @@ function formatFinanceUpdatedAt(value) {
   return `Updated: ${datePart} ${timePart}`;
 }
 
-function formatSalaryAmount(amount) {
+function formatSalaryAmount(amount, currency = null) {
   if (typeof amount !== 'number' || !Number.isFinite(amount)) return '—';
-  return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const options = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  if (currency) {
+    options.style = 'currency';
+    options.currency = currency;
+  }
+  try {
+    return amount.toLocaleString(undefined, options);
+  } catch (err) {
+    const fallback = amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return currency ? `${currency} ${fallback}` : fallback;
+  }
 }
 
 function getPayrollSalaryAmount(summary) {
@@ -2364,6 +2374,96 @@ function renderProfileSection(section) {
   `;
 }
 
+function getProfileSalaryDetails() {
+  const payrollSalary = profileData?.payroll?.grossPay;
+  const baseSalary = profileData?.salary?.amount;
+
+  const amount = Number.isFinite(payrollSalary)
+    ? payrollSalary
+    : Number.isFinite(baseSalary)
+      ? baseSalary
+      : null;
+  const currency = profileData?.salary?.currency || 'MMK';
+  const month = profileData?.salary?.month || profileData?.payroll?.month || null;
+
+  return { amount, currency, month };
+}
+
+function setPayslipFeedback(message, type = 'success') {
+  const feedback = document.getElementById('profilePayslipFeedback');
+  if (!feedback) return;
+  feedback.textContent = message || '';
+  feedback.classList.toggle('hidden', !message);
+  feedback.classList.toggle('error', type === 'error');
+}
+
+function renderProfilePayslipCard() {
+  const statusEl = document.getElementById('profilePayslipStatus');
+  const button = document.getElementById('profilePayslipButton');
+  if (!statusEl || !button) return;
+
+  const { amount, currency, month } = getProfileSalaryDetails();
+  const hasSalary = Number.isFinite(amount) && amount > 0;
+
+  if (hasSalary) {
+    const formattedAmount = formatSalaryAmount(amount, currency);
+    const monthLabel = month ? ` for ${month}` : '';
+    statusEl.textContent = `Salary detected${monthLabel}: ${formattedAmount}.`;
+    button.disabled = false;
+    button.title = 'Generate a PDF payslip using your salary data.';
+  } else {
+    statusEl.textContent = 'Payslip generation is unavailable until a salary above 0 is set.';
+    button.disabled = true;
+    button.title = 'Salary details are required to generate a payslip.';
+  }
+
+  setPayslipFeedback('');
+}
+
+function getPayslipFilename(disposition, fallback = 'payslip.pdf') {
+  if (typeof disposition !== 'string') return fallback;
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  return match?.[1] || fallback;
+}
+
+async function onGeneratePayslipClick() {
+  const button = document.getElementById('profilePayslipButton');
+  const { month } = getProfileSalaryDetails();
+  const query = month ? `?month=${encodeURIComponent(month)}` : '';
+  setPayslipFeedback('');
+  if (button) button.disabled = true;
+
+  try {
+    const res = await apiFetch(`/api/my-payslip${query}`);
+    const contentType = res.headers.get('Content-Type') || '';
+    if (!res.ok) {
+      let errorMessage = 'Unable to generate payslip right now.';
+      if (contentType.includes('application/json')) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.error) errorMessage = data.error;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const filename = getPayslipFilename(res.headers.get('Content-Disposition'), month ? `payslip-${month}.pdf` : 'payslip.pdf');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    setPayslipFeedback('Payslip generated and downloaded.');
+  } catch (err) {
+    setPayslipFeedback(err.message || 'Unable to download payslip.', 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 function renderMyProfile() {
   if (!profileData) return;
   const {
@@ -2409,6 +2509,8 @@ function renderMyProfile() {
       });
     }
   }
+
+  renderProfilePayslipCard();
 
   const feedback = document.getElementById('profileGlobalFeedback');
   if (feedback) {
@@ -5499,6 +5601,8 @@ async function init() {
   const financeTab = document.getElementById('tabFinance');
   if (financeTab) financeTab.onclick = () => showPanel('finance');
   const primaryTabSelect = document.getElementById('primaryTabSelect');
+  const payslipBtn = document.getElementById('profilePayslipButton');
+  if (payslipBtn) payslipBtn.addEventListener('click', onGeneratePayslipClick);
   if (primaryTabSelect) {
     primaryTabSelect.addEventListener('change', event => {
       showPanel(event.target.value);
