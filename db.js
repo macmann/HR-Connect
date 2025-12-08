@@ -14,7 +14,6 @@ const mongoClientOptions = {
 const forceTls = process.env.MONGODB_FORCE_TLS === 'true';
 if (forceTls || MONGODB_URI.startsWith('mongodb+srv://')) {
   mongoClientOptions.tls = true;
-  mongoClientOptions.minVersion = process.env.MONGODB_TLS_MIN_VERSION || 'TLSv1.2';
 }
 
 if (process.env.MONGODB_TLS_ALLOW_INVALID_CERTS === 'true') {
@@ -59,7 +58,6 @@ async function init() {
       uri: sanitizeMongoUri(MONGODB_URI),
       db: DB_NAME,
       tls: Boolean(mongoClientOptions.tls),
-      tlsMinVersion: mongoClientOptions.minVersion,
       tlsAllowInvalidCertificates: mongoClientOptions.tlsAllowInvalidCertificates
     });
     const start = performance.now();
