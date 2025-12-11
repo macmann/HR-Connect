@@ -4649,7 +4649,9 @@ init().then(async () => {
 
     const days = getLeaveDays(newApp);
     const balance = leaveBalances?.[normalizedType]?.balance || 0;
-    const validationError = validateLeaveBalance(balance, normalizedType, days);
+    const validationError = validateLeaveBalance(balance, normalizedType, days, {
+      allowNegative: isManagerRole(currentUser?.role)
+    });
     if (validationError) {
       return { status: 400, error: validationError };
     }
@@ -4706,7 +4708,10 @@ init().then(async () => {
     return { status: 201, application: newApp };
   }
 
-  function validateLeaveBalance(balance, leaveType, requestedDays) {
+  function validateLeaveBalance(balance, leaveType, requestedDays, options = {}) {
+    const { allowNegative = false } = options;
+    if (allowNegative) return null;
+
     const days = Number.isFinite(requestedDays) ? requestedDays : 0;
     const projected = roundToOneDecimal((Number(balance) || 0) - days);
     if (projected < 0) {
@@ -5837,7 +5842,9 @@ init().then(async () => {
     const leaveType = String(app.type || '').toLowerCase();
     const requestedDays = getLeaveDays(app);
     const balance = leaveBalances?.[leaveType]?.balance || 0;
-    const validationError = validateLeaveBalance(balance, leaveType, requestedDays);
+    const validationError = validateLeaveBalance(balance, leaveType, requestedDays, {
+      allowNegative: isManagerRole(req.user?.role)
+    });
     if (validationError) {
       return res.status(400).json({ error: validationError });
     }
@@ -5995,7 +6002,9 @@ init().then(async () => {
       const leaveType = String(app.type || '').toLowerCase();
       const requestedDays = getLeaveDays(app);
       const balance = leaveBalances?.[leaveType]?.balance || 0;
-      const validationError = validateLeaveBalance(balance, leaveType, requestedDays);
+      const validationError = validateLeaveBalance(balance, leaveType, requestedDays, {
+        allowNegative: isManagerRole(req.user?.role)
+      });
       if (validationError) {
         return res.status(400).json({ error: validationError });
       }
