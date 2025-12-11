@@ -1267,6 +1267,7 @@ function buildLeaveApplicationSchemas() {
         halfDay: { type: 'boolean' },
         halfDayType: { type: ['string', 'null'] },
         days: { type: 'number', format: 'float' },
+        allowNegativeBalance: { type: 'boolean' },
         approvedBy: { type: 'string' },
         approverRemark: { type: 'string' },
         approvedAt: { type: 'string', format: 'date-time' },
@@ -4151,7 +4152,8 @@ init().then(async () => {
       reason: app.reason || '',
       halfDay: Boolean(app.halfDay),
       halfDayType: app.halfDayType || null,
-      days: getLeaveDays(app)
+      days: getLeaveDays(app),
+      allowNegativeBalance: Boolean(app.allowNegativeBalance)
     };
 
     if (app.approvedBy) summary.approvedBy = app.approvedBy;
@@ -4231,6 +4233,8 @@ init().then(async () => {
       typeof from === 'string' ? from.trim() : fromDate.toISOString();
     const normalizedTo = typeof to === 'string' ? to.trim() : toDate.toISOString();
 
+    const allowsNegativeBalance = isManagerRole(currentUser?.role);
+
     const newApp = {
       id: Date.now(),
       employeeId,
@@ -4238,7 +4242,8 @@ init().then(async () => {
       from: normalizedFrom,
       to: normalizedTo,
       reason: reason || '',
-      status: 'pending'
+      status: 'pending',
+      allowNegativeBalance: allowsNegativeBalance
     };
 
     if (halfDay) {
@@ -4250,7 +4255,9 @@ init().then(async () => {
 
     const days = getLeaveDays(newApp);
     const balance = leaveBalances?.[normalizedType]?.balance || 0;
-    const validationError = validateLeaveBalance(balance, normalizedType, days);
+    const validationError = validateLeaveBalance(balance, normalizedType, days, {
+      allowNegativeBalance: allowsNegativeBalance
+    });
     if (validationError) {
       return { status: 400, error: validationError };
     }
@@ -4307,10 +4314,11 @@ init().then(async () => {
     return { status: 201, application: newApp };
   }
 
-  function validateLeaveBalance(balance, leaveType, requestedDays) {
+  function validateLeaveBalance(balance, leaveType, requestedDays, options = {}) {
+    const { allowNegativeBalance = false } = options || {};
     const days = Number.isFinite(requestedDays) ? requestedDays : 0;
     const projected = roundToOneDecimal((Number(balance) || 0) - days);
-    if (projected < 0) {
+    if (!allowNegativeBalance && projected < 0) {
       return `Insufficient ${leaveType} balance. Current balance: ${roundToOneDecimal(balance)} days. You cannot apply for more of this leave type until your balance is non-negative.`;
     }
     return null;
@@ -5438,7 +5446,9 @@ init().then(async () => {
     const leaveType = String(app.type || '').toLowerCase();
     const requestedDays = getLeaveDays(app);
     const balance = leaveBalances?.[leaveType]?.balance || 0;
-    const validationError = validateLeaveBalance(balance, leaveType, requestedDays);
+    const validationError = validateLeaveBalance(balance, leaveType, requestedDays, {
+      allowNegativeBalance: Boolean(app.allowNegativeBalance)
+    });
     if (validationError) {
       return res.status(400).json({ error: validationError });
     }
@@ -5594,7 +5604,9 @@ init().then(async () => {
       const leaveType = String(app.type || '').toLowerCase();
       const requestedDays = getLeaveDays(app);
       const balance = leaveBalances?.[leaveType]?.balance || 0;
-      const validationError = validateLeaveBalance(balance, leaveType, requestedDays);
+      const validationError = validateLeaveBalance(balance, leaveType, requestedDays, {
+        allowNegativeBalance: Boolean(app.allowNegativeBalance)
+      });
       if (validationError) {
         return res.status(400).json({ error: validationError });
       }
