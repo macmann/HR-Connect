@@ -1761,6 +1761,51 @@ function buildPositionTitleMap(positions = []) {
   );
 }
 
+function buildRoleIdentifierSet(role) {
+  const ids = new Set();
+  if (role?.id !== undefined && role?.id !== null) {
+    ids.add(String(role.id));
+  }
+  if (role?._id) {
+    ids.add(role._id.toString());
+  }
+  return ids;
+}
+
+function resolveRoleById(positions = [], roleId) {
+  return positions.find(
+    position => position?.id == roleId || position?._id?.toString?.() === String(roleId)
+  );
+}
+
+function resolveRoleByTitle(positions = [], roleTitle) {
+  if (!roleTitle) return null;
+  const query = roleTitle.trim().toLowerCase();
+  if (!query) return null;
+  return positions.find(position => (position?.title || '').trim().toLowerCase() === query);
+}
+
+function candidateMatchesRole(candidate, roleIds = new Set()) {
+  if (!candidate || roleIds.size === 0) return false;
+  const keys = [
+    candidate.positionId,
+    candidate.positionLegacyId,
+    candidate.positionObjectId,
+    candidate.positionObjectId?.toString?.()
+  ];
+  return keys.some(key => key != null && roleIds.has(String(key)));
+}
+
+function applicationMatchesRole(application, roleIds = new Set()) {
+  if (!application || roleIds.size === 0) return false;
+  const keys = [
+    application.positionLegacyId,
+    application.positionId,
+    application.positionId?.toString?.()
+  ];
+  return keys.some(key => key != null && roleIds.has(String(key)));
+}
+
 function resolveCandidateId(candidate) {
   if (!candidate) return null;
   if (candidate.id !== undefined && candidate.id !== null) {
@@ -3038,19 +3083,37 @@ init().then(async () => {
       await db.read();
       db.data.positions = db.data.positions || [];
       db.data.candidates = db.data.candidates || [];
-      const roleId = Number(req.query.roleId || req.query.positionId);
-      if (!roleId || Number.isNaN(roleId)) {
+      const rawRoleId = req.query.roleId || req.query.positionId;
+      const roleTitle = (req.query.roleTitle || '').toString().trim();
+      const roleId = rawRoleId !== undefined && rawRoleId !== null ? Number(rawRoleId) : null;
+      const hasRoleId = roleId !== null && !Number.isNaN(roleId);
+      if (!hasRoleId && !roleTitle) {
         return res.status(400).json({ error: 'Role identifier is required' });
       }
-      const roleExists = db.data.positions.some(position => position.id == roleId);
-      if (!roleExists) {
+
+      let role = null;
+      if (hasRoleId) {
+        role = resolveRoleById(db.data.positions, roleId);
+      } else {
+        role = resolveRoleByTitle(db.data.positions, roleTitle);
+      }
+
+      if (!role) {
         return res.status(404).json({ error: 'Role not found' });
       }
+
+      const roleIds = buildRoleIdentifierSet(role);
       const positionMap = buildPositionTitleMap(db.data.positions);
-      const result = db.data.candidates
-        .filter(candidate => candidate.positionId == roleId)
+      const candidates = db.data.candidates
+        .filter(candidate => candidateMatchesRole(candidate, roleIds))
         .map(candidate => buildCandidateSummary(candidate, positionMap));
-      res.json(result);
+
+      res.json({
+        roleId: role.id ?? null,
+        roleTitle: role.title || null,
+        count: candidates.length,
+        candidates
+      });
     }
   );
 
@@ -3078,6 +3141,134 @@ init().then(async () => {
         .slice(0, 50)
         .map(candidate => buildCandidateSummary(candidate, positionMap));
       res.json(matches);
+    }
+  );
+
+  app.get(
+    '/api/recruitment/candidates/summary',
+    authRequired,
+    managerOnly,
+    async (req, res) => {
+      await db.read();
+      db.data.positions = db.data.positions || [];
+      db.data.candidates = db.data.candidates || [];
+      const rawQuery = (req.query.name || req.query.q || '').toString().trim();
+      if (!rawQuery) {
+        return res.status(400).json({ error: 'Name query is required' });
+      }
+      const query = rawQuery.toLowerCase();
+      const positionMap = buildPositionTitleMap(db.data.positions);
+      const candidates = db.data.candidates
+        .filter(candidate => (candidate.name || '').toLowerCase().includes(query))
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt || b.createdAt || 0) -
+            new Date(a.updatedAt || a.createdAt || 0)
+        )
+        .slice(0, 50)
+        .map(candidate => buildCandidateSummary(candidate, positionMap));
+
+      res.json({
+        query: rawQuery,
+        count: candidates.length,
+        candidates
+      });
+    }
+  );
+
+  app.get(
+    '/api/recruitment/roles/:id/applications/count',
+    authRequired,
+    managerOnly,
+    async (req, res) => {
+      await db.read();
+      normalizePositionsData(db);
+      const roleId = Number(req.params.id);
+      if (!roleId || Number.isNaN(roleId)) {
+        return res.status(400).json({ error: 'Role identifier is required' });
+      }
+      const role = resolveRoleById(db.data.positions, roleId);
+      if (!role) {
+        return res.status(404).json({ error: 'Role not found' });
+      }
+      const roleIds = buildRoleIdentifierSet(role);
+      const recruitmentApplications = Array.isArray(db.data.recruitmentApplications)
+        ? db.data.recruitmentApplications
+        : [];
+      const count = recruitmentApplications.filter(app => applicationMatchesRole(app, roleIds)).length;
+
+      res.json({
+        roleId: role.id ?? null,
+        roleTitle: role.title || null,
+        count
+      });
+    }
+  );
+
+  app.get(
+    '/api/recruitment/roles/:id/hired',
+    authRequired,
+    managerOnly,
+    async (req, res) => {
+      await db.read();
+      normalizePositionsData(db);
+      db.data.candidates = db.data.candidates || [];
+      const roleId = Number(req.params.id);
+      if (!roleId || Number.isNaN(roleId)) {
+        return res.status(400).json({ error: 'Role identifier is required' });
+      }
+      const role = resolveRoleById(db.data.positions, roleId);
+      if (!role) {
+        return res.status(404).json({ error: 'Role not found' });
+      }
+      const roleIds = buildRoleIdentifierSet(role);
+      const positionMap = buildPositionTitleMap(db.data.positions);
+      const hiredCandidates = db.data.candidates
+        .filter(candidate => candidateMatchesRole(candidate, roleIds))
+        .filter(candidate => (candidate.status || '').toLowerCase() === 'hired')
+        .map(candidate => buildCandidateSummary(candidate, positionMap));
+
+      res.json({
+        roleId: role.id ?? null,
+        roleTitle: role.title || null,
+        hired: hiredCandidates.length > 0,
+        count: hiredCandidates.length,
+        candidates: hiredCandidates
+      });
+    }
+  );
+
+  app.get(
+    '/api/recruitment/roles/:id/interviews',
+    authRequired,
+    managerOnly,
+    async (req, res) => {
+      await db.read();
+      normalizePositionsData(db);
+      db.data.candidates = db.data.candidates || [];
+      const roleId = Number(req.params.id);
+      if (!roleId || Number.isNaN(roleId)) {
+        return res.status(400).json({ error: 'Role identifier is required' });
+      }
+      const role = resolveRoleById(db.data.positions, roleId);
+      if (!role) {
+        return res.status(404).json({ error: 'Role not found' });
+      }
+      const roleIds = buildRoleIdentifierSet(role);
+      const positionMap = buildPositionTitleMap(db.data.positions);
+      const candidates = db.data.candidates
+        .filter(candidate => candidateMatchesRole(candidate, roleIds))
+        .filter(
+          candidate => (candidate.status || '').toLowerCase() === 'selected for interview'
+        )
+        .map(candidate => buildCandidateSummary(candidate, positionMap));
+
+      res.json({
+        roleId: role.id ?? null,
+        roleTitle: role.title || null,
+        count: candidates.length,
+        candidates
+      });
     }
   );
 

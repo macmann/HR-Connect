@@ -71,9 +71,16 @@ const recruitmentOpenApiSpec = {
           {
             in: 'query',
             name: 'roleId',
-            required: true,
+            required: false,
             schema: { type: 'integer' },
             description: 'Role identifier returned by the role creation endpoint.'
+          },
+          {
+            in: 'query',
+            name: 'roleTitle',
+            required: false,
+            schema: { type: 'string' },
+            description: 'Role title to match when the identifier is unknown.'
           }
         ],
         responses: {
@@ -81,15 +88,39 @@ const recruitmentOpenApiSpec = {
             description: 'Matching candidates',
             content: {
               'application/json': {
-                schema: {
-                  type: 'array',
-                  items: { $ref: '#/components/schemas/RecruitmentCandidate' }
-                }
+                schema: { $ref: '#/components/schemas/RecruitmentRoleCandidateSummary' }
               }
             }
           },
           400: { description: 'Missing or invalid role identifier' },
           404: { description: 'Role not found' }
+        }
+      }
+    },
+    '/api/recruitment/candidates/summary': {
+      get: {
+        summary: 'Get candidate summary by name',
+        description: 'Returns candidate summaries for a name query.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'query',
+            name: 'name',
+            required: true,
+            schema: { type: 'string' },
+            description: 'Full or partial candidate name to search for.'
+          }
+        ],
+        responses: {
+          200: {
+            description: 'Candidate summary results',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RecruitmentCandidateSummaryResponse' }
+              }
+            }
+          },
+          400: { description: 'Name query missing' }
         }
       }
     },
@@ -121,6 +152,90 @@ const recruitmentOpenApiSpec = {
             }
           },
           400: { description: 'Name query missing' }
+        }
+      }
+    },
+    '/api/recruitment/roles/{id}/applications/count': {
+      get: {
+        summary: 'Count applications for a role',
+        description: 'Returns how many applications have been submitted for a role.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' },
+            description: 'Role identifier.'
+          }
+        ],
+        responses: {
+          200: {
+            description: 'Application count result',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RecruitmentRoleCountResponse' }
+              }
+            }
+          },
+          400: { description: 'Missing or invalid role identifier' },
+          404: { description: 'Role not found' }
+        }
+      }
+    },
+    '/api/recruitment/roles/{id}/hired': {
+      get: {
+        summary: 'Check if a role has hired candidates',
+        description: 'Indicates whether any candidate has been hired for a role.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' },
+            description: 'Role identifier.'
+          }
+        ],
+        responses: {
+          200: {
+            description: 'Hired candidate summary',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RecruitmentRoleHiredResponse' }
+              }
+            }
+          },
+          400: { description: 'Missing or invalid role identifier' },
+          404: { description: 'Role not found' }
+        }
+      }
+    },
+    '/api/recruitment/roles/{id}/interviews': {
+      get: {
+        summary: 'List interview selections for a role',
+        description: 'Returns candidates selected for interviews for a role.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'integer' },
+            description: 'Role identifier.'
+          }
+        ],
+        responses: {
+          200: {
+            description: 'Interview candidate summary',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RecruitmentRoleCandidateSummary' }
+              }
+            }
+          },
+          400: { description: 'Missing or invalid role identifier' },
+          404: { description: 'Role not found' }
         }
       }
     }
@@ -205,6 +320,50 @@ const recruitmentOpenApiSpec = {
           hasCv: { type: 'boolean' },
           cvFilename: { type: ['string', 'null'] },
           cvContentType: { type: ['string', 'null'] }
+        }
+      },
+      RecruitmentRoleCandidateSummary: {
+        type: 'object',
+        properties: {
+          roleId: { type: ['integer', 'null'] },
+          roleTitle: { type: ['string', 'null'] },
+          count: { type: 'integer' },
+          candidates: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/RecruitmentCandidate' }
+          }
+        }
+      },
+      RecruitmentCandidateSummaryResponse: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+          count: { type: 'integer' },
+          candidates: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/RecruitmentCandidate' }
+          }
+        }
+      },
+      RecruitmentRoleCountResponse: {
+        type: 'object',
+        properties: {
+          roleId: { type: ['integer', 'null'] },
+          roleTitle: { type: ['string', 'null'] },
+          count: { type: 'integer' }
+        }
+      },
+      RecruitmentRoleHiredResponse: {
+        type: 'object',
+        properties: {
+          roleId: { type: ['integer', 'null'] },
+          roleTitle: { type: ['string', 'null'] },
+          hired: { type: 'boolean' },
+          count: { type: 'integer' },
+          candidates: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/RecruitmentCandidate' }
+          }
         }
       }
     }
