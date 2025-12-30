@@ -5919,6 +5919,10 @@ init().then(async () => {
     res.type('application/json').send(recruitmentOpenApiSpec);
   });
 
+  app.get('/api/docs/recruitment.json', authRequired, managerOnly, (req, res) => {
+    res.type('application/json').send(recruitmentOpenApiSpec);
+  });
+
   app.get('/api/openapi', authRequired, (req, res) => {
     const userInfoSchemas = buildUserInfoOpenApiSchemas();
     const leaveApplicationSchemas = buildLeaveApplicationSchemas();
