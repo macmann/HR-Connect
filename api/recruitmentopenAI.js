@@ -53,7 +53,7 @@ const recruitmentOpenApiSpec = {
             description: 'Candidate created',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/RecruitmentCandidate' }
+                schema: { $ref: '#/components/schemas/CandidateSummary' }
               }
             }
           },
@@ -65,7 +65,8 @@ const recruitmentOpenApiSpec = {
     '/api/recruitment/candidates/by-role': {
       get: {
         summary: 'Browse candidates by role',
-        description: 'Lists candidates associated with a specific role identifier.',
+        description:
+          'Lists candidates associated with a specific role identifier or title. Provide roleId or roleTitle.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -88,7 +89,7 @@ const recruitmentOpenApiSpec = {
             description: 'Matching candidates',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/RecruitmentRoleCandidateSummary' }
+                schema: { $ref: '#/components/schemas/RoleCandidateList' }
               }
             }
           },
@@ -116,7 +117,7 @@ const recruitmentOpenApiSpec = {
             description: 'Candidate summary results',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/RecruitmentCandidateSummaryResponse' }
+                schema: { $ref: '#/components/schemas/CandidateSummarySearchResponse' }
               }
             }
           },
@@ -146,7 +147,7 @@ const recruitmentOpenApiSpec = {
               'application/json': {
                 schema: {
                   type: 'array',
-                  items: { $ref: '#/components/schemas/RecruitmentCandidate' }
+                  items: { $ref: '#/components/schemas/CandidateSummary' }
                 }
               }
             }
@@ -174,7 +175,7 @@ const recruitmentOpenApiSpec = {
             description: 'Application count result',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/RecruitmentRoleCountResponse' }
+                schema: { $ref: '#/components/schemas/RoleApplicationCount' }
               }
             }
           },
@@ -202,7 +203,7 @@ const recruitmentOpenApiSpec = {
             description: 'Hired candidate summary',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/RecruitmentRoleHiredResponse' }
+                schema: { $ref: '#/components/schemas/RoleHiringStatus' }
               }
             }
           },
@@ -230,12 +231,39 @@ const recruitmentOpenApiSpec = {
             description: 'Interview candidate summary',
             content: {
               'application/json': {
-                schema: { $ref: '#/components/schemas/RecruitmentRoleCandidateSummary' }
+                schema: { $ref: '#/components/schemas/InterviewSelectionList' }
               }
             }
           },
           400: { description: 'Missing or invalid role identifier' },
           404: { description: 'Role not found' }
+        }
+      }
+    },
+    '/api/recruitment/candidates/{id}/cv': {
+      get: {
+        summary: 'Download a candidate CV',
+        description: 'Streams the latest uploaded CV document for a candidate.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: ['integer', 'string'] },
+            description: 'Candidate identifier.'
+          }
+        ],
+        responses: {
+          200: {
+            description: 'Candidate CV file stream',
+            content: {
+              'application/octet-stream': {
+                schema: { type: 'string', format: 'binary' }
+              }
+            }
+          },
+          404: { description: 'CV not found' }
         }
       }
     }
@@ -303,26 +331,36 @@ const recruitmentOpenApiSpec = {
           cv: { $ref: '#/components/schemas/CvUpload' }
         }
       },
-      RecruitmentCandidate: {
+      CandidateCvSummary: {
         type: 'object',
         properties: {
-          id: { type: 'integer' },
-          positionId: { type: 'integer' },
-          positionTitle: { type: ['string', 'null'] },
+          filename: { type: 'string' },
+          contentType: { type: 'string' },
+          filePath: { type: ['string', 'null'] }
+        }
+      },
+      CandidateSummary: {
+        type: 'object',
+        properties: {
+          id: { type: ['integer', 'string'] },
           name: { type: 'string' },
           contact: { type: 'string' },
           email: { type: ['string', 'null'], format: 'email' },
-          notes: { type: ['string', 'null'] },
+          source: { type: ['string', 'null'] },
           status: { type: ['string', 'null'] },
+          notes: { type: ['string', 'null'] },
+          positionId: { type: ['integer', 'string', 'null'] },
+          positionTitle: { type: ['string', 'null'] },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
           commentCount: { type: 'integer' },
           hasCv: { type: 'boolean' },
           cvFilename: { type: ['string', 'null'] },
-          cvContentType: { type: ['string', 'null'] }
+          cvContentType: { type: ['string', 'null'] },
+          cv: { $ref: '#/components/schemas/CandidateCvSummary', nullable: true }
         }
       },
-      RecruitmentRoleCandidateSummary: {
+      RoleCandidateList: {
         type: 'object',
         properties: {
           roleId: { type: ['integer', 'null'] },
@@ -330,22 +368,22 @@ const recruitmentOpenApiSpec = {
           count: { type: 'integer' },
           candidates: {
             type: 'array',
-            items: { $ref: '#/components/schemas/RecruitmentCandidate' }
+            items: { $ref: '#/components/schemas/CandidateSummary' }
           }
         }
       },
-      RecruitmentCandidateSummaryResponse: {
+      CandidateSummarySearchResponse: {
         type: 'object',
         properties: {
           query: { type: 'string' },
           count: { type: 'integer' },
           candidates: {
             type: 'array',
-            items: { $ref: '#/components/schemas/RecruitmentCandidate' }
+            items: { $ref: '#/components/schemas/CandidateSummary' }
           }
         }
       },
-      RecruitmentRoleCountResponse: {
+      RoleApplicationCount: {
         type: 'object',
         properties: {
           roleId: { type: ['integer', 'null'] },
@@ -353,7 +391,7 @@ const recruitmentOpenApiSpec = {
           count: { type: 'integer' }
         }
       },
-      RecruitmentRoleHiredResponse: {
+      RoleHiringStatus: {
         type: 'object',
         properties: {
           roleId: { type: ['integer', 'null'] },
@@ -362,7 +400,19 @@ const recruitmentOpenApiSpec = {
           count: { type: 'integer' },
           candidates: {
             type: 'array',
-            items: { $ref: '#/components/schemas/RecruitmentCandidate' }
+            items: { $ref: '#/components/schemas/CandidateSummary' }
+          }
+        }
+      },
+      InterviewSelectionList: {
+        type: 'object',
+        properties: {
+          roleId: { type: ['integer', 'null'] },
+          roleTitle: { type: ['string', 'null'] },
+          count: { type: 'integer' },
+          candidates: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/CandidateSummary' }
           }
         }
       }
