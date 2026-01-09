@@ -69,6 +69,15 @@ function requireAuthenticatedUser(req, res, next) {
   return next();
 }
 
+function getAuthenticatedEmployeeId(req, res) {
+  const employeeId = String(req.user?.id || '');
+  if (!employeeId) {
+    res.status(400).json({ error: 'employee_id_required' });
+    return null;
+  }
+  return employeeId;
+}
+
 function findValueByKeywords(source, keywords = []) {
   if (!source || typeof source !== 'object') return '';
   const normalizedKeywords = keywords.map(keyword => normalizeString(keyword).toLowerCase());
@@ -216,6 +225,54 @@ function toObjectId(id) {
   } catch (error) {
     return null;
   }
+}
+
+async function resolveLessonHierarchy(database, lessonId) {
+  const lessonObjectId = toObjectId(lessonId);
+  if (!lessonObjectId) {
+    return { error: 'invalid_lesson_id', status: 400 };
+  }
+  const lesson = await database.collection('learningLessons').findOne({ _id: lessonObjectId });
+  if (!lesson) {
+    return { error: 'lesson_not_found', status: 404 };
+  }
+  const moduleObjectId = toObjectId(lesson.moduleId);
+  if (!moduleObjectId) {
+    return { error: 'invalid_module_id', status: 400 };
+  }
+  const moduleDoc = await database.collection('learningModules').findOne({ _id: moduleObjectId });
+  if (!moduleDoc) {
+    return { error: 'module_not_found', status: 404 };
+  }
+  const courseObjectId = toObjectId(moduleDoc.courseId);
+  if (!courseObjectId) {
+    return { error: 'invalid_course_id', status: 400 };
+  }
+  const courseDoc = await database.collection('learningCourses').findOne({ _id: courseObjectId });
+  if (!courseDoc) {
+    return { error: 'course_not_found', status: 404 };
+  }
+  return { lesson, moduleDoc, courseDoc };
+}
+
+async function resolveModuleHierarchy(database, moduleId) {
+  const moduleObjectId = toObjectId(moduleId);
+  if (!moduleObjectId) {
+    return { error: 'invalid_module_id', status: 400 };
+  }
+  const moduleDoc = await database.collection('learningModules').findOne({ _id: moduleObjectId });
+  if (!moduleDoc) {
+    return { error: 'module_not_found', status: 404 };
+  }
+  const courseObjectId = toObjectId(moduleDoc.courseId);
+  if (!courseObjectId) {
+    return { error: 'invalid_course_id', status: 400 };
+  }
+  const courseDoc = await database.collection('learningCourses').findOne({ _id: courseObjectId });
+  if (!courseDoc) {
+    return { error: 'course_not_found', status: 404 };
+  }
+  return { moduleDoc, courseDoc };
 }
 
 function normalizeDocument(document) {
@@ -906,6 +963,202 @@ router.post('/progress', async (req, res) => {
     return res.json({ progress });
   } catch (error) {
     console.error('Failed to record progress', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/progress/lessons/:lessonId/completion', async (req, res) => {
+  try {
+    const employeeId = getAuthenticatedEmployeeId(req, res);
+    if (!employeeId) return;
+
+    const lessonId = req.params.lessonId ? String(req.params.lessonId) : '';
+    if (!lessonId) {
+      return res.status(400).json({ error: 'lesson_id_required' });
+    }
+
+    const database = getDatabase();
+    const { lesson, moduleDoc, courseDoc, error, status } = await resolveLessonHierarchy(
+      database,
+      lessonId
+    );
+    if (error) {
+      return res.status(status).json({ error });
+    }
+
+    const { progress, error: progressError } = buildProgressEntry({
+      progressType: 'lesson',
+      employeeId,
+      courseId: courseDoc._id.toString(),
+      moduleId: moduleDoc._id.toString(),
+      lessonId: lesson._id.toString(),
+      completed: true,
+      completionPercent: 100
+    });
+
+    if (progressError) {
+      return res.status(400).json({ error: progressError });
+    }
+
+    await database.collection('learningProgress').updateOne(
+      {
+        employeeId: progress.employeeId,
+        courseId: progress.courseId,
+        moduleId: progress.moduleId || null,
+        lessonId: progress.lessonId || null,
+        progressType: progress.progressType
+      },
+      { $set: progress },
+      { upsert: true }
+    );
+
+    const moduleRollup = await computeModuleRollup(database, {
+      employeeId,
+      moduleId: progress.moduleId,
+      courseId: progress.courseId
+    });
+    const courseRollup = await computeCourseRollup(database, {
+      employeeId,
+      courseId: progress.courseId
+    });
+
+    return res.json({ progress, moduleRollup, courseRollup });
+  } catch (error) {
+    console.error('Failed to record lesson completion', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/progress/lessons/:lessonId/watch', async (req, res) => {
+  try {
+    const employeeId = getAuthenticatedEmployeeId(req, res);
+    if (!employeeId) return;
+
+    const lessonId = req.params.lessonId ? String(req.params.lessonId) : '';
+    if (!lessonId) {
+      return res.status(400).json({ error: 'lesson_id_required' });
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(req.body, 'videoWatchPercent')) {
+      return res.status(400).json({ error: 'video_watch_percent_required' });
+    }
+
+    const database = getDatabase();
+    const { lesson, moduleDoc, courseDoc, error, status } = await resolveLessonHierarchy(
+      database,
+      lessonId
+    );
+    if (error) {
+      return res.status(status).json({ error });
+    }
+
+    const { progress, error: progressError } = buildProgressEntry({
+      progressType: 'lesson',
+      employeeId,
+      courseId: courseDoc._id.toString(),
+      moduleId: moduleDoc._id.toString(),
+      lessonId: lesson._id.toString(),
+      videoWatchPercent: req.body.videoWatchPercent
+    });
+
+    if (progressError) {
+      return res.status(400).json({ error: progressError });
+    }
+
+    await database.collection('learningProgress').updateOne(
+      {
+        employeeId: progress.employeeId,
+        courseId: progress.courseId,
+        moduleId: progress.moduleId || null,
+        lessonId: progress.lessonId || null,
+        progressType: progress.progressType
+      },
+      { $set: progress },
+      { upsert: true }
+    );
+
+    const moduleRollup = await computeModuleRollup(database, {
+      employeeId,
+      moduleId: progress.moduleId,
+      courseId: progress.courseId
+    });
+    const courseRollup = await computeCourseRollup(database, {
+      employeeId,
+      courseId: progress.courseId
+    });
+
+    return res.json({ progress, moduleRollup, courseRollup });
+  } catch (error) {
+    console.error('Failed to record lesson watch progress', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/progress/modules/:moduleId/rollup', async (req, res) => {
+  try {
+    const employeeId = getAuthenticatedEmployeeId(req, res);
+    if (!employeeId) return;
+
+    const moduleId = req.params.moduleId ? String(req.params.moduleId) : '';
+    if (!moduleId) {
+      return res.status(400).json({ error: 'module_id_required' });
+    }
+
+    const database = getDatabase();
+    const { moduleDoc, courseDoc, error, status } = await resolveModuleHierarchy(
+      database,
+      moduleId
+    );
+    if (error) {
+      return res.status(status).json({ error });
+    }
+
+    const moduleRollup = await computeModuleRollup(database, {
+      employeeId,
+      moduleId: moduleDoc._id.toString(),
+      courseId: courseDoc._id.toString()
+    });
+    const courseRollup = await computeCourseRollup(database, {
+      employeeId,
+      courseId: courseDoc._id.toString()
+    });
+
+    return res.json({ moduleRollup, courseRollup });
+  } catch (error) {
+    console.error('Failed to record module rollup', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/progress/courses/:courseId/rollup', async (req, res) => {
+  try {
+    const employeeId = getAuthenticatedEmployeeId(req, res);
+    if (!employeeId) return;
+
+    const courseId = req.params.courseId ? String(req.params.courseId) : '';
+    if (!courseId) {
+      return res.status(400).json({ error: 'course_id_required' });
+    }
+
+    const courseObjectId = toObjectId(courseId);
+    if (!courseObjectId) {
+      return res.status(400).json({ error: 'invalid_course_id' });
+    }
+
+    const database = getDatabase();
+    const courseDoc = await database.collection('learningCourses').findOne({ _id: courseObjectId });
+    if (!courseDoc) {
+      return res.status(404).json({ error: 'course_not_found' });
+    }
+
+    const courseRollup = await computeCourseRollup(database, {
+      employeeId,
+      courseId: courseDoc._id.toString()
+    });
+
+    return res.json({ courseRollup });
+  } catch (error) {
+    console.error('Failed to record course rollup', error);
     return res.status(500).json({ error: 'internal_error' });
   }
 });
