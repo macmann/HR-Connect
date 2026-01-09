@@ -1,5 +1,7 @@
 const COURSE_STATUSES = new Set(['draft', 'published', 'archived']);
 const EXTERNAL_ASSET_PROVIDERS = new Set(['onedrive', 'youtube']);
+const PROGRESS_TYPES = new Set(['lesson', 'module', 'course']);
+const PROGRESS_STATUSES = new Set(['not_started', 'in_progress', 'completed']);
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -11,6 +13,19 @@ function normalizeProvider(value) {
 
 function normalizeBoolean(value) {
   return value === true || value === 'true';
+}
+
+function normalizePercent(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  const clamped = Math.max(0, Math.min(100, parsed));
+  return Math.round(clamped * 100) / 100;
+}
+
+function normalizeProgressStatus(value) {
+  const normalized = normalizeString(value).toLowerCase();
+  return PROGRESS_STATUSES.has(normalized) ? normalized : '';
 }
 
 function normalizeCourseStatus(value) {
@@ -271,22 +286,225 @@ function buildProgressEntry(payload = {}) {
   }
 
   const progressType = normalizeString(payload.progressType) || 'course';
-  const status = normalizeString(payload.status) || 'not_started';
+  if (!PROGRESS_TYPES.has(progressType)) {
+    return { error: 'invalid_progress_type' };
+  }
+
+  const moduleId = normalizeString(payload.moduleId);
+  const lessonId = normalizeString(payload.lessonId);
+  if (progressType !== 'course' && !moduleId) {
+    return { error: 'module_id_required' };
+  }
+  if (progressType === 'lesson' && !lessonId) {
+    return { error: 'lesson_id_required' };
+  }
+
+  const statusInput = normalizeProgressStatus(payload.status);
+  if (payload.status && !statusInput) {
+    return { error: 'invalid_status' };
+  }
+
+  const completionPercent = normalizePercent(payload.completionPercent);
+  if (Object.prototype.hasOwnProperty.call(payload, 'completionPercent')
+    && completionPercent === null) {
+    return { error: 'invalid_completion_percent' };
+  }
+
+  const videoWatchPercent = normalizePercent(payload.videoWatchPercent);
+  if (Object.prototype.hasOwnProperty.call(payload, 'videoWatchPercent')
+    && videoWatchPercent === null) {
+    return { error: 'invalid_video_watch_percent' };
+  }
+
+  const completedFlag = normalizeBoolean(payload.completed);
+  let status = statusInput;
+  if (completedFlag || completionPercent === 100 || videoWatchPercent === 100) {
+    status = 'completed';
+  }
+  if (!status) {
+    if ((completionPercent && completionPercent > 0) || (videoWatchPercent && videoWatchPercent > 0)) {
+      status = 'in_progress';
+    } else {
+      status = 'not_started';
+    }
+  }
+
   const now = new Date();
+  const startedAt = payload.startedAt ? new Date(payload.startedAt) : null;
+  const completedAt = payload.completedAt ? new Date(payload.completedAt) : null;
+  const normalizedStartedAt = status === 'not_started' ? startedAt : startedAt || now;
+  const normalizedCompletedAt = status === 'completed' ? completedAt || now : completedAt;
 
   return {
     progress: {
       employeeId: String(payload.employeeId),
       courseId: String(payload.courseId),
-      moduleId: payload.moduleId ? String(payload.moduleId) : null,
-      lessonId: payload.lessonId ? String(payload.lessonId) : null,
+      moduleId: moduleId || null,
+      lessonId: lessonId || null,
       progressType,
       status,
-      startedAt: payload.startedAt ? new Date(payload.startedAt) : null,
-      completedAt: payload.completedAt ? new Date(payload.completedAt) : null,
+      completionPercent,
+      videoWatchPercent,
+      startedAt: normalizedStartedAt,
+      completedAt: normalizedCompletedAt,
       updatedAt: now
     }
   };
+}
+
+function calculateRollupStatus({ totalCount, completedCount, hasStarted }) {
+  if (totalCount === 0) {
+    return 'completed';
+  }
+  if (completedCount >= totalCount) {
+    return 'completed';
+  }
+  if (completedCount > 0 || hasStarted) {
+    return 'in_progress';
+  }
+  return 'not_started';
+}
+
+function calculateCompletionPercent(totalCount, completedCount) {
+  if (!totalCount) return 100;
+  return Math.round((completedCount / totalCount) * 10000) / 100;
+}
+
+async function computeModuleRollup(database, { employeeId, moduleId, courseId }) {
+  const lessons = await database
+    .collection('learningLessons')
+    .find({ moduleId: String(moduleId) })
+    .toArray();
+  const requiredLessons = lessons.filter(lesson => lesson.required);
+  const lessonList = requiredLessons.length ? requiredLessons : lessons;
+  const lessonIds = lessonList.map(lesson => lesson._id.toString());
+
+  const lessonProgress = lessonIds.length
+    ? await database.collection('learningProgress').find({
+        employeeId: String(employeeId),
+        progressType: 'lesson',
+        lessonId: { $in: lessonIds }
+      }).toArray()
+    : [];
+
+  const completedLessonIds = new Set(
+    lessonProgress.filter(progress => progress.status === 'completed').map(progress => progress.lessonId)
+  );
+
+  const completedCount = lessonIds.filter(id => completedLessonIds.has(id)).length;
+  const hasStarted = lessonProgress.some(progress => progress.status === 'in_progress');
+  const status = calculateRollupStatus({
+    totalCount: lessonIds.length,
+    completedCount,
+    hasStarted
+  });
+  const completionPercent = calculateCompletionPercent(lessonIds.length, completedCount);
+  const startedAtValues = lessonProgress
+    .map(progress => progress.startedAt)
+    .filter(date => date instanceof Date && !Number.isNaN(date.valueOf()));
+  const completedAtValues = lessonProgress
+    .map(progress => progress.completedAt)
+    .filter(date => date instanceof Date && !Number.isNaN(date.valueOf()));
+  const startedAt = startedAtValues.length ? new Date(Math.min(...startedAtValues.map(date => date.valueOf()))) : null;
+  const completedAt = status === 'completed' && completedAtValues.length
+    ? new Date(Math.max(...completedAtValues.map(date => date.valueOf())))
+    : null;
+
+  const now = new Date();
+  const progress = {
+    employeeId: String(employeeId),
+    courseId: String(courseId),
+    moduleId: String(moduleId),
+    lessonId: null,
+    progressType: 'module',
+    status,
+    completionPercent,
+    startedAt: status === 'not_started' ? startedAt : startedAt || now,
+    completedAt: status === 'completed' ? completedAt || now : completedAt,
+    updatedAt: now
+  };
+
+  await database.collection('learningProgress').updateOne(
+    {
+      employeeId: progress.employeeId,
+      courseId: progress.courseId,
+      moduleId: progress.moduleId,
+      lessonId: null,
+      progressType: 'module'
+    },
+    { $set: progress },
+    { upsert: true }
+  );
+
+  return progress;
+}
+
+async function computeCourseRollup(database, { employeeId, courseId }) {
+  const modules = await database
+    .collection('learningModules')
+    .find({ courseId: String(courseId) })
+    .toArray();
+  const requiredModules = modules.filter(module => module.required);
+  const moduleList = requiredModules.length ? requiredModules : modules;
+  const moduleIds = moduleList.map(module => module._id.toString());
+
+  const moduleProgress = moduleIds.length
+    ? await database.collection('learningProgress').find({
+        employeeId: String(employeeId),
+        progressType: 'module',
+        moduleId: { $in: moduleIds }
+      }).toArray()
+    : [];
+
+  const completedModuleIds = new Set(
+    moduleProgress.filter(progress => progress.status === 'completed').map(progress => progress.moduleId)
+  );
+  const completedCount = moduleIds.filter(id => completedModuleIds.has(id)).length;
+  const hasStarted = moduleProgress.some(progress => progress.status === 'in_progress');
+  const status = calculateRollupStatus({
+    totalCount: moduleIds.length,
+    completedCount,
+    hasStarted
+  });
+  const completionPercent = calculateCompletionPercent(moduleIds.length, completedCount);
+  const startedAtValues = moduleProgress
+    .map(progress => progress.startedAt)
+    .filter(date => date instanceof Date && !Number.isNaN(date.valueOf()));
+  const completedAtValues = moduleProgress
+    .map(progress => progress.completedAt)
+    .filter(date => date instanceof Date && !Number.isNaN(date.valueOf()));
+  const startedAt = startedAtValues.length ? new Date(Math.min(...startedAtValues.map(date => date.valueOf()))) : null;
+  const completedAt = status === 'completed' && completedAtValues.length
+    ? new Date(Math.max(...completedAtValues.map(date => date.valueOf())))
+    : null;
+
+  const now = new Date();
+  const progress = {
+    employeeId: String(employeeId),
+    courseId: String(courseId),
+    moduleId: null,
+    lessonId: null,
+    progressType: 'course',
+    status,
+    completionPercent,
+    startedAt: status === 'not_started' ? startedAt : startedAt || now,
+    completedAt: status === 'completed' ? completedAt || now : completedAt,
+    updatedAt: now
+  };
+
+  await database.collection('learningProgress').updateOne(
+    {
+      employeeId: progress.employeeId,
+      courseId: progress.courseId,
+      moduleId: null,
+      lessonId: null,
+      progressType: 'course'
+    },
+    { $set: progress },
+    { upsert: true }
+  );
+
+  return progress;
 }
 
 function applyCourseUpdates(payload = {}) {
@@ -460,6 +678,8 @@ module.exports = {
   buildLessonAsset,
   buildCourseAssignments,
   buildProgressEntry,
+  computeModuleRollup,
+  computeCourseRollup,
   applyCourseUpdates,
   applyModuleUpdates,
   applyLessonUpdates,

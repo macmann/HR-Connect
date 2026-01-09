@@ -8,6 +8,9 @@ const {
   buildLesson,
   buildLessonAsset,
   buildCourseAssignments,
+  buildProgressEntry,
+  computeModuleRollup,
+  computeCourseRollup,
   applyCourseUpdates,
   applyModuleUpdates,
   applyLessonUpdates,
@@ -76,6 +79,10 @@ function requireProgressReadAccess(req, res, next) {
     return res.status(403).json({ error: 'learning_hub_progress_forbidden' });
   }
   return next();
+}
+
+function hasProgressOverrideAccess(user) {
+  return hasAnyRole(user, HR_LEARNING_ROLES) || hasAnyRole(user, MANAGER_ROLES);
 }
 
 // Access policy:
@@ -531,6 +538,146 @@ router.get('/lessons/:lessonId/playback', async (req, res) => {
     });
   } catch (error) {
     console.error('Failed to load lesson playback', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/progress', async (req, res) => {
+  try {
+    const requestedEmployeeId = req.body.employeeId ? String(req.body.employeeId) : '';
+    const employeeId = requestedEmployeeId || String(req.user?.id || '');
+
+    if (!employeeId) {
+      return res.status(400).json({ error: 'employee_id_required' });
+    }
+
+    if (requestedEmployeeId && employeeId !== String(req.user?.id || '')) {
+      if (!hasProgressOverrideAccess(req.user)) {
+        return res.status(403).json({ error: 'learning_hub_progress_forbidden' });
+      }
+    }
+
+    const progressType = typeof req.body.progressType === 'string'
+      ? req.body.progressType.trim().toLowerCase()
+      : 'lesson';
+    let courseId = req.body.courseId ? String(req.body.courseId) : '';
+    let moduleId = req.body.moduleId ? String(req.body.moduleId) : '';
+    let lessonId = req.body.lessonId ? String(req.body.lessonId) : '';
+
+    const database = getDatabase();
+
+    if (progressType === 'lesson' || lessonId) {
+      if (!lessonId) {
+        return res.status(400).json({ error: 'lesson_id_required' });
+      }
+      const lessonObjectId = toObjectId(lessonId);
+      if (!lessonObjectId) {
+        return res.status(400).json({ error: 'invalid_lesson_id' });
+      }
+      const lesson = await database.collection('learningLessons').findOne({ _id: lessonObjectId });
+      if (!lesson) {
+        return res.status(404).json({ error: 'lesson_not_found' });
+      }
+      if (moduleId && moduleId !== lesson.moduleId) {
+        return res.status(400).json({ error: 'lesson_module_mismatch' });
+      }
+      moduleId = lesson.moduleId;
+    }
+
+    if (progressType === 'lesson' || progressType === 'module') {
+      if (!moduleId) {
+        return res.status(400).json({ error: 'module_id_required' });
+      }
+      const moduleObjectId = toObjectId(moduleId);
+      if (!moduleObjectId) {
+        return res.status(400).json({ error: 'invalid_module_id' });
+      }
+      const moduleDoc = await database.collection('learningModules').findOne({ _id: moduleObjectId });
+      if (!moduleDoc) {
+        return res.status(404).json({ error: 'module_not_found' });
+      }
+      if (courseId && courseId !== moduleDoc.courseId) {
+        return res.status(400).json({ error: 'module_course_mismatch' });
+      }
+      courseId = moduleDoc.courseId;
+    }
+
+    if (progressType === 'course') {
+      if (!courseId) {
+        return res.status(400).json({ error: 'course_id_required' });
+      }
+      const courseObjectId = toObjectId(courseId);
+      if (!courseObjectId) {
+        return res.status(400).json({ error: 'invalid_course_id' });
+      }
+      const courseDoc = await database.collection('learningCourses').findOne({ _id: courseObjectId });
+      if (!courseDoc) {
+        return res.status(404).json({ error: 'course_not_found' });
+      }
+      moduleId = '';
+      lessonId = '';
+    }
+
+    if (progressType === 'module') {
+      lessonId = '';
+    }
+
+    const { progress, error } = buildProgressEntry({
+      ...req.body,
+      progressType,
+      employeeId,
+      courseId,
+      moduleId,
+      lessonId
+    });
+
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
+    await database.collection('learningProgress').updateOne(
+      {
+        employeeId: progress.employeeId,
+        courseId: progress.courseId,
+        moduleId: progress.moduleId || null,
+        lessonId: progress.lessonId || null,
+        progressType: progress.progressType
+      },
+      { $set: progress },
+      { upsert: true }
+    );
+
+    if (progress.progressType === 'lesson') {
+      const moduleRollup = await computeModuleRollup(database, {
+        employeeId,
+        moduleId: progress.moduleId,
+        courseId: progress.courseId
+      });
+      const courseRollup = await computeCourseRollup(database, {
+        employeeId,
+        courseId: progress.courseId
+      });
+      return res.json({
+        progress,
+        moduleRollup,
+        courseRollup
+      });
+    }
+
+    if (progress.progressType === 'module') {
+      const courseRollup = await computeCourseRollup(database, {
+        employeeId,
+        courseId: progress.courseId
+      });
+      return res.json({
+        progress,
+        courseRollup
+      });
+    }
+
+    return res.json({ progress });
+  } catch (error) {
+    console.error('Failed to record progress', error);
     return res.status(500).json({ error: 'internal_error' });
   }
 });
