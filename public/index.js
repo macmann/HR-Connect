@@ -1897,7 +1897,8 @@ const learningAdminState = {
     courses: false,
     modules: false,
     lessons: false,
-    employees: false
+    employees: false,
+    assets: false
   }
 };
 
@@ -2074,13 +2075,19 @@ function renderLearningAdminAssets() {
   assets.forEach(asset => {
     const item = document.createElement('div');
     item.className = 'learning-admin-asset-item';
-    const label = escapeHtml(asset.label || asset.name || 'Untitled asset');
-    const type = escapeHtml(asset.type || 'asset');
-    const url = escapeHtml(asset.url || asset.link || '#');
+    const label = escapeHtml(asset.title || asset.label || asset.name || 'Untitled asset');
+    const type = escapeHtml(asset.provider || asset.type || 'asset');
+    const link = asset.url
+      || asset.link
+      || asset.playback?.embedUrl
+      || asset.playback?.streamUrl
+      || asset.playback?.url
+      || '';
+    const url = escapeHtml(link || '#');
     item.innerHTML = `
       <strong>${label}</strong>
       <span class="learning-admin-meta">${type}</span>
-      <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>
+      ${link ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>` : '<span class="learning-admin-meta">Link pending</span>'}
     `;
     list.appendChild(item);
   });
@@ -2217,12 +2224,39 @@ async function loadLearningAdminLessons(moduleId) {
     learningAdminState.lessonsByModule.set(String(moduleId), lessons);
     learningAdminState.selectedLessonId = lessons[0]?.id || null;
     renderLearningAdminLessons();
-    renderLearningAdminAssets();
+    if (learningAdminState.selectedLessonId) {
+      await loadLearningAdminAssets(learningAdminState.selectedLessonId);
+    } else {
+      renderLearningAdminAssets();
+    }
   } catch (error) {
     console.error('Failed to load learning admin lessons', error);
     setLearningAdminStatus('Unable to load lessons. Please try again.');
   } finally {
     learningAdminState.loading.lessons = false;
+  }
+}
+
+async function loadLearningAdminAssets(lessonId) {
+  if (!lessonId || learningAdminState.loading.assets) return;
+  learningAdminState.loading.assets = true;
+  try {
+    const res = await learningAdminFetch(`/api/learning-hub/lessons/${lessonId}/playback`);
+    if (res.status === 401 || res.status === 403) {
+      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
+      return;
+    }
+    const data = await res.json();
+    const lesson = resolveLearningAdminLesson();
+    if (lesson && Array.isArray(data.assets)) {
+      lesson.assets = data.assets;
+    }
+    renderLearningAdminAssets();
+  } catch (error) {
+    console.error('Failed to load lesson assets', error);
+    setLearningAdminStatus('Unable to load lesson assets.');
+  } finally {
+    learningAdminState.loading.assets = false;
   }
 }
 
@@ -2274,7 +2308,11 @@ function selectLearningAdminLesson(lessonId) {
     populateLearningAdminLessonForm(lesson);
   }
   renderLearningAdminLessons();
-  renderLearningAdminAssets();
+  if (lessonId) {
+    loadLearningAdminAssets(lessonId);
+  } else {
+    renderLearningAdminAssets();
+  }
 }
 
 function syncLearningAdminOrder(listEl, type) {
@@ -2300,21 +2338,17 @@ async function persistLearningAdminModuleOrder() {
   const modules = learningAdminState.modulesByCourse.get(String(courseId)) || [];
   if (!modules.length) return;
   try {
-    const responses = await Promise.all(modules.map((module, index) =>
-      learningAdminFetch('/api/learning-hub/modules', {
-        method: 'PUT',
-        body: JSON.stringify({
-          id: module.id,
-          courseId,
-          order: index + 1
-        })
+    const res = await learningAdminFetch(`/api/learning-hub/courses/${courseId}/modules/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({
+        orderedModuleIds: modules.map(module => module.id)
       })
-    ));
-    if (responses.some(res => res.status === 401 || res.status === 403)) {
+    });
+    if (res.status === 401 || res.status === 403) {
       setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
       return;
     }
-    if (responses.some(res => !res.ok)) {
+    if (!res.ok) {
       setLearningAdminStatus('Unable to save module ordering.');
     }
   } catch (error) {
@@ -2328,21 +2362,17 @@ async function persistLearningAdminLessonOrder() {
   const lessons = learningAdminState.lessonsByModule.get(String(moduleId)) || [];
   if (!lessons.length) return;
   try {
-    const responses = await Promise.all(lessons.map((lesson, index) =>
-      learningAdminFetch('/api/learning-hub/lessons', {
-        method: 'PUT',
-        body: JSON.stringify({
-          id: lesson.id,
-          moduleId,
-          order: index + 1
-        })
+    const res = await learningAdminFetch(`/api/learning-hub/modules/${moduleId}/lessons/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({
+        orderedLessonIds: lessons.map(lesson => lesson.id)
       })
-    ));
-    if (responses.some(res => res.status === 401 || res.status === 403)) {
+    });
+    if (res.status === 401 || res.status === 403) {
       setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
       return;
     }
-    if (responses.some(res => !res.ok)) {
+    if (!res.ok) {
       setLearningAdminStatus('Unable to save lesson ordering.');
     }
   } catch (error) {
@@ -2410,7 +2440,7 @@ async function onLearningAdminCourseSubmit(event) {
     return;
   }
   try {
-    const res = await learningAdminFetch('/api/learning-hub/courses', {
+    const res = await learningAdminFetch(id ? `/api/learning-hub/courses/${id}` : '/api/learning-hub/courses', {
       method: id ? 'PUT' : 'POST',
       body: JSON.stringify(payload)
     });
@@ -2468,10 +2498,13 @@ async function onLearningAdminModuleSubmit(event) {
     return;
   }
   try {
-    const res = await learningAdminFetch('/api/learning-hub/modules', {
-      method: id ? 'PUT' : 'POST',
-      body: JSON.stringify(payload)
-    });
+    const res = await learningAdminFetch(
+      id ? `/api/learning-hub/modules/${id}` : `/api/learning-hub/courses/${learningAdminState.selectedCourseId}/modules`,
+      {
+        method: id ? 'PUT' : 'POST',
+        body: JSON.stringify(payload)
+      }
+    );
     if (res.status === 401 || res.status === 403) {
       setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
       return;
@@ -2504,10 +2537,13 @@ async function onLearningAdminLessonSubmit(event) {
     return;
   }
   try {
-    const res = await learningAdminFetch('/api/learning-hub/lessons', {
-      method: id ? 'PUT' : 'POST',
-      body: JSON.stringify(payload)
-    });
+    const res = await learningAdminFetch(
+      id ? `/api/learning-hub/lessons/${id}` : `/api/learning-hub/modules/${learningAdminState.selectedModuleId}/lessons`,
+      {
+        method: id ? 'PUT' : 'POST',
+        body: JSON.stringify(payload)
+      }
+    );
     if (res.status === 401 || res.status === 403) {
       setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
       return;
@@ -2528,8 +2564,8 @@ async function onLearningAdminAssetSubmit(event) {
   }
   const payload = {
     lessonId: learningAdminState.selectedLessonId,
-    label: document.getElementById('learningAdminAssetLabel').value.trim(),
-    type: document.getElementById('learningAdminAssetType').value,
+    title: document.getElementById('learningAdminAssetLabel').value.trim(),
+    provider: document.getElementById('learningAdminAssetType').value,
     url: document.getElementById('learningAdminAssetUrl').value.trim()
   };
   if (!payload.url) {
@@ -2537,7 +2573,7 @@ async function onLearningAdminAssetSubmit(event) {
     return;
   }
   try {
-    const res = await learningAdminFetch('/api/learning-hub/assets', {
+    const res = await learningAdminFetch(`/api/learning-hub/lessons/${learningAdminState.selectedLessonId}/assets`, {
       method: 'POST',
       body: JSON.stringify(payload)
     });
@@ -2548,7 +2584,7 @@ async function onLearningAdminAssetSubmit(event) {
     const lesson = resolveLearningAdminLesson();
     if (lesson) {
       if (!Array.isArray(lesson.assets)) lesson.assets = [];
-      lesson.assets.push(payload);
+      lesson.assets.push({ ...payload });
     }
     document.getElementById('learningAdminAssetForm').reset();
     renderLearningAdminAssets();
@@ -2576,7 +2612,7 @@ async function onLearningAdminAssignmentSubmit(event) {
   const payload = {
     courseId,
     roles: roleValue ? [roleValue] : [],
-    employees: employeeIds
+    employeeIds
   };
   try {
     const res = await learningAdminFetch('/api/learning-hub/assignments', {
