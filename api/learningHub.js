@@ -1201,9 +1201,9 @@ router.post('/progress/courses/:courseId/rollup', async (req, res) => {
 router.get('/reports/completion-by-role', requireProgressReadAccess, async (req, res) => {
   try {
     const database = getDatabase();
-    const { employeeIds } = await resolveReportEmployeeScope(database, req.user);
+    const { employeeIds, employees } = await resolveReportEmployeeScope(database, req.user);
     const assignmentQuery = {
-      assignmentType: 'role_auto',
+      assignmentType: { $in: ['employee', 'role_auto'] },
       employeeId: { $ne: null }
     };
     if (employeeIds) {
@@ -1215,6 +1215,13 @@ router.get('/reports/completion-by-role', requireProgressReadAccess, async (req,
       database.collection('learningProgress').find({ progressType: 'course' }).toArray()
     ]);
 
+    const employeeRoles = new Map();
+    (employees || []).forEach(employee => {
+      const role = normalizeString(getEmployeeRole(employee)).toLowerCase();
+      if (!role) return;
+      employeeRoles.set(String(employee.id), role);
+    });
+
     const progressByKey = new Map();
     progress.forEach(entry => {
       if (!entry?.employeeId || !entry?.courseId) return;
@@ -1222,14 +1229,14 @@ router.get('/reports/completion-by-role', requireProgressReadAccess, async (req,
     });
 
     const roleTotals = new Map();
-    assignments.forEach(assignment => {
-      const role = normalizeString(assignment?.role).toLowerCase();
-      if (!role) return;
+    selectUniqueAssignments(assignments).forEach(assignment => {
+      const employeeRole = employeeRoles.get(String(assignment.employeeId));
+      if (!employeeRole) return;
       const key = buildProgressKey(assignment.employeeId, assignment.courseId);
       const progressEntry = progressByKey.get(key);
       const status = progressEntry?.status || 'not_started';
-      const current = roleTotals.get(role) || {
-        role,
+      const current = roleTotals.get(employeeRole) || {
+        role: employeeRole,
         totalAssignments: 0,
         completed: 0,
         inProgress: 0,
@@ -1243,7 +1250,7 @@ router.get('/reports/completion-by-role', requireProgressReadAccess, async (req,
       } else {
         current.notStarted += 1;
       }
-      roleTotals.set(role, current);
+      roleTotals.set(employeeRole, current);
     });
 
     const roles = Array.from(roleTotals.values()).map(entry => {
