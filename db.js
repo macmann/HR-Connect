@@ -246,6 +246,7 @@ const db = {
         learningLessons,
         learningLessonAssets,
         learningCourseAssignments,
+        learningRoleAssignments,
         learningProgress
       ] = await Promise.all([
         fetchCollection('employees'),
@@ -262,6 +263,7 @@ const db = {
         fetchCollection('learningLessons'),
         fetchCollection('learningLessonAssets'),
         fetchCollection('learningCourseAssignments'),
+        fetchCollection('learningRoleAssignments'),
         fetchCollection('learningProgress')
       ]);
       const recruitmentApplications = Array.isArray(applications)
@@ -292,6 +294,7 @@ const db = {
         learningLessons,
         learningLessonAssets,
         learningCourseAssignments,
+        learningRoleAssignments,
         learningProgress
       };
       lastLoadedAt = Date.now();
@@ -325,6 +328,7 @@ const db = {
       learningLessons = [],
       learningLessonAssets = [],
       learningCourseAssignments = [],
+      learningRoleAssignments = [],
       learningProgress = []
     } = this.data;
 
@@ -348,6 +352,7 @@ const db = {
       syncCollection('learningLessons', learningLessons),
       syncCollection('learningLessonAssets', learningLessonAssets),
       syncCollection('learningCourseAssignments', learningCourseAssignments),
+      syncCollection('learningRoleAssignments', learningRoleAssignments),
       syncCollection('learningProgress', learningProgress)
     ]);
     lastLoadedAt = Date.now();

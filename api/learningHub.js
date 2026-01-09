@@ -17,6 +17,11 @@ const {
   applyAssetUpdates
 } = require('../services/learningHubService');
 const {
+  buildRoleAssignment,
+  applyRoleAssignmentUpdates,
+  reconcileLearningRoleAssignments
+} = require('../services/learningRoleAssignmentService');
+const {
   normalizeLessonAssetForPlayback
 } = require('../services/learningAssetPlayback');
 
@@ -119,6 +124,116 @@ router.post('/courses', requireLearningHubWriteAccess, async (req, res) => {
     return res.status(201).json({ id: result.insertedId });
   } catch (error) {
     console.error('Failed to create course', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.get('/role-assignments', requireLearningHubWriteAccess, async (req, res) => {
+  try {
+    const database = getDatabase();
+    const filters = {};
+    if (typeof req.query.role === 'string' && req.query.role.trim()) {
+      filters.role = req.query.role.trim().toLowerCase();
+    }
+    if (typeof req.query.courseId === 'string' && req.query.courseId.trim()) {
+      filters.courseId = req.query.courseId.trim();
+    }
+    const roleAssignments = await database
+      .collection('learningRoleAssignments')
+      .find(filters)
+      .sort({ updatedAt: -1 })
+      .toArray();
+    return res.json({
+      roleAssignments: roleAssignments.map(normalizeDocument)
+    });
+  } catch (error) {
+    console.error('Failed to load role assignments', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/role-assignments', requireLearningHubWriteAccess, async (req, res) => {
+  const { roleAssignment, error } = buildRoleAssignment(req.body, {
+    userId: req.user?.id
+  });
+  if (error) {
+    return res.status(400).json({ error });
+  }
+
+  try {
+    const database = getDatabase();
+    const result = await database
+      .collection('learningRoleAssignments')
+      .insertOne(roleAssignment);
+    db.invalidateCache?.();
+    return res.status(201).json({ id: result.insertedId });
+  } catch (error) {
+    console.error('Failed to create role assignment', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.put('/role-assignments/:id', requireLearningHubWriteAccess, async (req, res) => {
+  const assignmentId = toObjectId(req.params.id);
+  if (!assignmentId) {
+    return res.status(400).json({ error: 'invalid_role_assignment_id' });
+  }
+
+  const { updates, error } = applyRoleAssignmentUpdates(req.body, {
+    userId: req.user?.id
+  });
+  if (error) {
+    return res.status(400).json({ error });
+  }
+
+  try {
+    const database = getDatabase();
+    const result = await database
+      .collection('learningRoleAssignments')
+      .updateOne({ _id: assignmentId }, { $set: updates });
+
+    if (!result.matchedCount) {
+      return res.status(404).json({ error: 'role_assignment_not_found' });
+    }
+
+    db.invalidateCache?.();
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to update role assignment', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.delete('/role-assignments/:id', requireLearningHubWriteAccess, async (req, res) => {
+  const assignmentId = toObjectId(req.params.id);
+  if (!assignmentId) {
+    return res.status(400).json({ error: 'invalid_role_assignment_id' });
+  }
+
+  try {
+    const database = getDatabase();
+    const result = await database
+      .collection('learningRoleAssignments')
+      .deleteOne({ _id: assignmentId });
+
+    if (!result.deletedCount) {
+      return res.status(404).json({ error: 'role_assignment_not_found' });
+    }
+
+    db.invalidateCache?.();
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete role assignment', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.post('/role-assignments/reconcile', requireLearningHubWriteAccess, async (_req, res) => {
+  try {
+    const result = await reconcileLearningRoleAssignments();
+    return res.json(result);
+  } catch (error) {
+    console.error('Failed to reconcile role assignments', error);
     return res.status(500).json({ error: 'internal_error' });
   }
 });

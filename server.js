@@ -63,6 +63,13 @@ if (process.env.NODE_ENV !== 'production' || !global.__resetLeaveCycleCronInitia
   }
 }
 
+if (process.env.NODE_ENV !== 'production' || !global.__learningRoleAssignmentCronInitialized) {
+  require('./cron/learningRoleAssignmentSync');
+  if (process.env.NODE_ENV === 'production') {
+    global.__learningRoleAssignmentCronInitialized = true;
+  }
+}
+
 const app = express();
 
 const SESSION_COOKIE_NAME = process.env.SESSION_COOKIE_NAME || 'session_token';
