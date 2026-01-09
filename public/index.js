@@ -1202,6 +1202,69 @@ function normalizeLearningItems(items, idKeys) {
   }).filter(Boolean);
 }
 
+function normalizePlaybackAssets(playback) {
+  const assets = Array.isArray(playback?.assets) ? playback.assets : [];
+  const legacyAssets = [];
+  const legacyMaterials = Array.isArray(playback?.readingMaterials) ? playback.readingMaterials : [];
+  const legacyDocuments = Array.isArray(playback?.documents) ? playback.documents : [];
+
+  [...legacyMaterials, ...legacyDocuments].forEach(material => {
+    if (!material || typeof material !== 'object') return;
+    legacyAssets.push({
+      title: material.title || material.name || material.label,
+      url: material.url || material.link,
+      metadata: {
+        mimeType: material.mimeType
+      },
+      playback: {
+        type: 'direct',
+        url: material.url || material.link
+      }
+    });
+  });
+
+  return [...assets, ...legacyAssets];
+}
+
+function resolveAssetUrl(asset) {
+  return (
+    asset?.playback?.streamUrl ||
+    asset?.playback?.url ||
+    asset?.playback?.embedUrl ||
+    asset?.url ||
+    ''
+  );
+}
+
+function resolveAssetLabel(asset) {
+  return asset?.title || asset?.name || asset?.label || asset?.description || 'Lesson asset';
+}
+
+function resolveAssetTypeLabel(asset) {
+  const playbackType = asset?.playback?.type;
+  if (playbackType === 'youtube') return 'YouTube';
+  if (playbackType === 'onedrive') return 'OneDrive';
+  if (playbackType === 'direct') return 'Link';
+  if (asset?.metadata?.mimeType) return asset.metadata.mimeType;
+  return '';
+}
+
+function looksLikeVideoUrl(url = '') {
+  return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/.test(url);
+}
+
+function isVideoAsset(asset) {
+  const playbackType = asset?.playback?.type;
+  if (playbackType === 'youtube') return true;
+  const mime = asset?.metadata?.mimeType || '';
+  if (mime.startsWith('video/')) return true;
+  const url = resolveAssetUrl(asset);
+  if (playbackType === 'direct' || playbackType === 'onedrive') {
+    return looksLikeVideoUrl(url);
+  }
+  return false;
+}
+
 function toPercent(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === 'number') {
@@ -1466,15 +1529,31 @@ function renderLessonPlayer() {
 
   const playback = lesson ? learningHubState.playbackByLesson.get(String(lesson.id)) : null;
   const video = document.getElementById('learningVideo');
+  const embed = document.getElementById('learningVideoEmbed');
   const placeholder = document.getElementById('learningVideoPlaceholder');
-  if (video && placeholder) {
-    if (playback?.videoUrl || playback?.video?.url) {
-      video.src = playback.videoUrl || playback.video?.url;
+  const assets = normalizePlaybackAssets(playback);
+  const videoAsset = assets.find(isVideoAsset);
+  const videoSrc = videoAsset ? resolveAssetUrl(videoAsset) : '';
+  const isYouTube = videoAsset?.playback?.type === 'youtube';
+
+  if (video && embed && placeholder) {
+    if (videoAsset && isYouTube && videoSrc) {
+      embed.src = videoSrc;
+      embed.classList.remove('hidden');
+      video.classList.add('hidden');
+      video.removeAttribute('src');
+      placeholder.classList.add('hidden');
+    } else if (videoAsset && videoSrc) {
+      video.src = videoSrc;
       video.classList.remove('hidden');
+      embed.classList.add('hidden');
+      embed.removeAttribute('src');
       placeholder.classList.add('hidden');
     } else {
       video.removeAttribute('src');
+      embed.removeAttribute('src');
       video.classList.add('hidden');
+      embed.classList.add('hidden');
       placeholder.classList.remove('hidden');
     }
   }
@@ -1482,22 +1561,28 @@ function renderLessonPlayer() {
   const readingList = document.getElementById('learningReadingList');
   if (readingList) {
     readingList.innerHTML = '';
-    const materials = playback?.readingMaterials || playback?.documents || [];
-    if (!materials.length) {
+    if (!assets.length) {
       const item = document.createElement('div');
       item.className = 'text-muted';
-      item.textContent = 'No reading materials for this lesson.';
+      item.textContent = 'No lesson assets for this lesson.';
       readingList.appendChild(item);
     } else {
-      materials.forEach(material => {
-        const link = document.createElement(material.url ? 'a' : 'div');
+      assets.forEach(asset => {
+        const href = resolveAssetUrl(asset);
+        const link = document.createElement(href ? 'a' : 'div');
         link.className = 'learning-reading-item';
-        if (material.url) {
-          link.href = material.url;
+        if (href) {
+          link.href = href;
           link.target = '_blank';
           link.rel = 'noopener';
         }
-        link.innerHTML = `<span class="material-symbols-rounded">description</span>${escapeHtml(material.title || material.name || material.label || 'Resource')}`;
+        const icon = isVideoAsset(asset) ? 'play_circle' : 'description';
+        const typeLabel = resolveAssetTypeLabel(asset);
+        link.innerHTML = `
+          <span class="material-symbols-rounded">${icon}</span>
+          <span class="learning-asset-title">${escapeHtml(resolveAssetLabel(asset))}</span>
+          ${typeLabel ? `<span class="learning-asset-type">${escapeHtml(typeLabel)}</span>` : ''}
+        `;
         readingList.appendChild(link);
       });
     }
