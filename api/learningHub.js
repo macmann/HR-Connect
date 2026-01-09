@@ -16,6 +16,72 @@ const {
 
 const router = express.Router();
 
+const HR_LEARNING_ROLES = new Set([
+  'hr',
+  'human resources',
+  'l&d',
+  'ld',
+  'lnd',
+  'learning and development',
+  'learning & development'
+]);
+
+const MANAGER_ROLES = new Set(['manager', 'superadmin']);
+
+function normalizeRole(role) {
+  return typeof role === 'string' ? role.trim().toLowerCase() : '';
+}
+
+function getUserRoles(user) {
+  if (!user) return [];
+  if (Array.isArray(user.roles)) {
+    return user.roles.map(normalizeRole).filter(Boolean);
+  }
+  const singleRole = normalizeRole(user.role);
+  return singleRole ? [singleRole] : [];
+}
+
+function hasAnyRole(user, allowedRoles) {
+  const roles = getUserRoles(user);
+  return roles.some(role => allowedRoles.has(role));
+}
+
+function requireAuthenticatedUser(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'authentication_required' });
+  }
+  return next();
+}
+
+function requireLearningHubWriteAccess(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'authentication_required' });
+  }
+  if (!hasAnyRole(req.user, HR_LEARNING_ROLES)) {
+    return res.status(403).json({ error: 'learning_hub_write_forbidden' });
+  }
+  return next();
+}
+
+function requireProgressReadAccess(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'authentication_required' });
+  }
+  const hasManagerRole = hasAnyRole(req.user, MANAGER_ROLES);
+  const hasLearningRole = hasAnyRole(req.user, HR_LEARNING_ROLES);
+  if (!hasManagerRole && !hasLearningRole) {
+    return res.status(403).json({ error: 'learning_hub_progress_forbidden' });
+  }
+  return next();
+}
+
+// Access policy:
+// - All endpoints require authenticated portal sessions.
+// - Write endpoints (course/module/lesson/asset create/edit/publish/archive/reorder/assignments)
+//   require HR/L&D roles.
+// - Progress read endpoints allow HR/L&D and manager roles.
+router.use(requireAuthenticatedUser);
+
 function toObjectId(id) {
   try {
     return new ObjectId(id);
@@ -30,7 +96,7 @@ function normalizeDocument(document) {
   return { ...document, _id: document._id.toString() };
 }
 
-router.post('/courses', async (req, res) => {
+router.post('/courses', requireLearningHubWriteAccess, async (req, res) => {
   try {
     const { course, error } = buildCourse(req.body, { userId: req.user?.id });
     if (error) {
@@ -47,7 +113,7 @@ router.post('/courses', async (req, res) => {
   }
 });
 
-router.put('/courses/:id', async (req, res) => {
+router.put('/courses/:id', requireLearningHubWriteAccess, async (req, res) => {
   const courseId = toObjectId(req.params.id);
   if (!courseId) {
     return res.status(400).json({ error: 'invalid_course_id' });
@@ -88,7 +154,7 @@ router.put('/courses/:id', async (req, res) => {
   }
 });
 
-router.patch('/courses/:id/publish', async (req, res) => {
+router.patch('/courses/:id/publish', requireLearningHubWriteAccess, async (req, res) => {
   const courseId = toObjectId(req.params.id);
   if (!courseId) {
     return res.status(400).json({ error: 'invalid_course_id' });
@@ -118,7 +184,7 @@ router.patch('/courses/:id/publish', async (req, res) => {
   }
 });
 
-router.patch('/courses/:id/archive', async (req, res) => {
+router.patch('/courses/:id/archive', requireLearningHubWriteAccess, async (req, res) => {
   const courseId = toObjectId(req.params.id);
   if (!courseId) {
     return res.status(400).json({ error: 'invalid_course_id' });
@@ -147,7 +213,7 @@ router.patch('/courses/:id/archive', async (req, res) => {
   }
 });
 
-router.post('/courses/:courseId/modules', async (req, res) => {
+router.post('/courses/:courseId/modules', requireLearningHubWriteAccess, async (req, res) => {
   try {
     const { module, error } = buildModule({
       ...req.body,
@@ -167,7 +233,7 @@ router.post('/courses/:courseId/modules', async (req, res) => {
   }
 });
 
-router.put('/modules/:id', async (req, res) => {
+router.put('/modules/:id', requireLearningHubWriteAccess, async (req, res) => {
   const moduleId = toObjectId(req.params.id);
   if (!moduleId) {
     return res.status(400).json({ error: 'invalid_module_id' });
@@ -196,7 +262,7 @@ router.put('/modules/:id', async (req, res) => {
   }
 });
 
-router.post('/modules/:moduleId/lessons', async (req, res) => {
+router.post('/modules/:moduleId/lessons', requireLearningHubWriteAccess, async (req, res) => {
   try {
     const { lesson, error } = buildLesson({
       ...req.body,
@@ -216,7 +282,7 @@ router.post('/modules/:moduleId/lessons', async (req, res) => {
   }
 });
 
-router.put('/lessons/:id', async (req, res) => {
+router.put('/lessons/:id', requireLearningHubWriteAccess, async (req, res) => {
   const lessonId = toObjectId(req.params.id);
   if (!lessonId) {
     return res.status(400).json({ error: 'invalid_lesson_id' });
@@ -245,7 +311,7 @@ router.put('/lessons/:id', async (req, res) => {
   }
 });
 
-router.post('/lessons/:lessonId/assets', async (req, res) => {
+router.post('/lessons/:lessonId/assets', requireLearningHubWriteAccess, async (req, res) => {
   try {
     const { asset, error } = buildLessonAsset({
       ...req.body,
@@ -265,7 +331,7 @@ router.post('/lessons/:lessonId/assets', async (req, res) => {
   }
 });
 
-router.put('/assets/:id', async (req, res) => {
+router.put('/assets/:id', requireLearningHubWriteAccess, async (req, res) => {
   const assetId = toObjectId(req.params.id);
   if (!assetId) {
     return res.status(400).json({ error: 'invalid_asset_id' });
@@ -294,7 +360,7 @@ router.put('/assets/:id', async (req, res) => {
   }
 });
 
-router.post('/courses/:courseId/modules/reorder', async (req, res) => {
+router.post('/courses/:courseId/modules/reorder', requireLearningHubWriteAccess, async (req, res) => {
   const orderedModuleIds = Array.isArray(req.body.orderedModuleIds)
     ? req.body.orderedModuleIds
     : [];
@@ -345,58 +411,61 @@ router.post('/courses/:courseId/modules/reorder', async (req, res) => {
   }
 });
 
-router.post('/modules/:moduleId/lessons/reorder', async (req, res) => {
-  const orderedLessonIds = Array.isArray(req.body.orderedLessonIds)
-    ? req.body.orderedLessonIds
-    : [];
+router.post(
+  '/modules/:moduleId/lessons/reorder',
+  requireLearningHubWriteAccess,
+  async (req, res) => {
+    const orderedLessonIds = Array.isArray(req.body.orderedLessonIds)
+      ? req.body.orderedLessonIds
+      : [];
 
-  if (!orderedLessonIds.length) {
-    return res.status(400).json({ error: 'ordered_lesson_ids_required' });
-  }
-
-  const orderMap = new Map();
-  orderedLessonIds.forEach((id, index) => {
-    const objectId = toObjectId(id);
-    if (objectId) {
-      orderMap.set(objectId.toString(), index);
-    }
-  });
-
-  if (!orderMap.size) {
-    return res.status(400).json({ error: 'invalid_lesson_ids' });
-  }
-
-  try {
-    const database = getDatabase();
-    const lessons = await database
-      .collection('learningLessons')
-      .find({
-        _id: { $in: Array.from(orderMap.keys()).map(id => new ObjectId(id)) },
-        moduleId: String(req.params.moduleId)
-      })
-      .toArray();
-
-    if (lessons.length !== orderMap.size) {
-      return res.status(400).json({ error: 'lesson_module_mismatch' });
+    if (!orderedLessonIds.length) {
+      return res.status(400).json({ error: 'ordered_lesson_ids_required' });
     }
 
-    const bulkOps = lessons.map(lesson => ({
-      updateOne: {
-        filter: { _id: lesson._id },
-        update: { $set: { order: orderMap.get(lesson._id.toString()), updatedAt: new Date() } }
+    const orderMap = new Map();
+    orderedLessonIds.forEach((id, index) => {
+      const objectId = toObjectId(id);
+      if (objectId) {
+        orderMap.set(objectId.toString(), index);
       }
-    }));
+    });
 
-    await database.collection('learningLessons').bulkWrite(bulkOps, { ordered: true });
-    db.invalidateCache?.();
-    return res.json({ success: true });
-  } catch (error) {
-    console.error('Failed to reorder lessons', error);
-    return res.status(500).json({ error: 'internal_error' });
-  }
+    if (!orderMap.size) {
+      return res.status(400).json({ error: 'invalid_lesson_ids' });
+    }
+
+    try {
+      const database = getDatabase();
+      const lessons = await database
+        .collection('learningLessons')
+        .find({
+          _id: { $in: Array.from(orderMap.keys()).map(id => new ObjectId(id)) },
+          moduleId: String(req.params.moduleId)
+        })
+        .toArray();
+
+      if (lessons.length !== orderMap.size) {
+        return res.status(400).json({ error: 'lesson_module_mismatch' });
+      }
+
+      const bulkOps = lessons.map(lesson => ({
+        updateOne: {
+          filter: { _id: lesson._id },
+          update: { $set: { order: orderMap.get(lesson._id.toString()), updatedAt: new Date() } }
+        }
+      }));
+
+      await database.collection('learningLessons').bulkWrite(bulkOps, { ordered: true });
+      db.invalidateCache?.();
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Failed to reorder lessons', error);
+      return res.status(500).json({ error: 'internal_error' });
+    }
 });
 
-router.post('/assignments', async (req, res) => {
+router.post('/assignments', requireLearningHubWriteAccess, async (req, res) => {
   const { assignments, error } = buildCourseAssignments(req.body, {
     assignedBy: req.user?.id
   });
@@ -428,7 +497,7 @@ router.post('/assignments', async (req, res) => {
   }
 });
 
-router.get('/progress', async (req, res) => {
+router.get('/progress', requireProgressReadAccess, async (req, res) => {
   try {
     const { employeeId, courseId } = req.query;
     const query = {};

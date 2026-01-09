@@ -2028,7 +2028,7 @@ app.use('/api/hr', hrPositionsRoutes);
   app.use('/api/hr', hrApplicationsRoutes);
   app.use('/api/public', publicCareersRoutes);
   app.use('/api/public', publicAiInterviewRoutes);
-  app.use('/api/learning-hub', learningHubRoutes);
+  app.use('/api/learning-hub', authRequired, learningHubRoutes);
 
 app.get('/careers', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'careers.html'));
