@@ -1407,6 +1407,10 @@
               <span class="material-symbols-rounded">edit_note</span>
               <span>Learning Admin</span>
             </button>
+            <button id="tabLearningReports" class="tab-button hidden">
+              <span class="material-symbols-rounded">analytics</span>
+              <span>Learning Reports</span>
+            </button>
           </div>
         </div>
       </div>
@@ -2400,6 +2404,103 @@
                 <p class="learning-admin-helper">Assets attach to the currently selected lesson.</p>
               </form>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Learning Reports Panel -->
+      <section id="learningReportsPanel" class="panel hidden">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="material-symbols-rounded">analytics</span>
+            Learning Reports
+          </h2>
+          <p class="panel-subtitle">Track completion trends, overdue mandatory learning, and team progress at a glance.</p>
+        </div>
+        <div id="learningReportsStatus" class="learning-hub-status hidden"></div>
+        <div id="learningReportsGrid" class="learning-reports-grid">
+          <div class="md-card learning-report-card">
+            <div class="learning-hub-card-header">
+              <div>
+                <h3 class="card-title">Completion rates by role</h3>
+                <p class="card-subtitle">Monitor how each role tracks against assigned coursework.</p>
+              </div>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>Total</th>
+                  <th>Completed</th>
+                  <th>In progress</th>
+                  <th>Not started</th>
+                  <th>Completion rate</th>
+                </tr>
+              </thead>
+              <tbody id="learningReportCompletionBody"></tbody>
+            </table>
+          </div>
+
+          <div class="md-card learning-report-card">
+            <div class="learning-hub-card-header">
+              <div>
+                <h3 class="card-title">Overdue mandatory courses</h3>
+                <p class="card-subtitle">Identify courses that need attention and follow up with overdue learners.</p>
+              </div>
+              <div class="learning-report-meta">
+                <span class="badge badge--warning">Overdue: <strong id="learningReportOverdueCount">0</strong></span>
+              </div>
+            </div>
+            <div class="learning-report-section">
+              <h4 class="learning-report-subtitle">Overdue by course</h4>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Course</th>
+                    <th>Overdue learners</th>
+                  </tr>
+                </thead>
+                <tbody id="learningReportOverdueCourseBody"></tbody>
+              </table>
+            </div>
+            <div class="learning-report-section">
+              <h4 class="learning-report-subtitle">Overdue learner details</h4>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Course</th>
+                    <th>Due date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="learningReportOverdueBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="md-card learning-report-card">
+            <div class="learning-hub-card-header">
+              <div>
+                <h3 class="card-title">Team progress dashboard</h3>
+                <p class="card-subtitle">See how direct reports are progressing through assigned learning.</p>
+              </div>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Role</th>
+                  <th>Total</th>
+                  <th>Completed</th>
+                  <th>In progress</th>
+                  <th>Not started</th>
+                  <th>Completion rate</th>
+                  <th>Courses</th>
+                </tr>
+              </thead>
+              <tbody id="learningReportTeamBody"></tbody>
+            </table>
           </div>
         </div>
       </section>
