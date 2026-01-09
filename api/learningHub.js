@@ -332,11 +332,29 @@ router.post('/role-assignments', requireLearningHubWriteAccess, async (req, res)
 
   try {
     const database = getDatabase();
-    const result = await database
-      .collection('learningRoleAssignments')
-      .insertOne(roleAssignment);
+    const result = await database.collection('learningRoleAssignments').findOneAndUpdate(
+      { role: roleAssignment.role, courseId: roleAssignment.courseId },
+      {
+        $set: {
+          courseId: roleAssignment.courseId,
+          role: roleAssignment.role,
+          required: roleAssignment.required,
+          dueDays: roleAssignment.dueDays,
+          updatedAt: roleAssignment.updatedAt,
+          updatedBy: roleAssignment.updatedBy
+        },
+        $setOnInsert: {
+          createdAt: roleAssignment.createdAt,
+          createdBy: roleAssignment.createdBy
+        }
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
     db.invalidateCache?.();
-    return res.status(201).json({ id: result.insertedId });
+    const assignmentId = result?.value?._id;
+    const updatedExisting = result?.lastErrorObject?.updatedExisting;
+    const status = updatedExisting ? 200 : 201;
+    return res.status(status).json({ id: assignmentId });
   } catch (error) {
     console.error('Failed to create role assignment', error);
     return res.status(500).json({ error: 'internal_error' });
@@ -358,6 +376,23 @@ router.put('/role-assignments/:id', requireLearningHubWriteAccess, async (req, r
 
   try {
     const database = getDatabase();
+    if (updates.role || updates.courseId) {
+      const current = await database.collection('learningRoleAssignments').findOne({ _id: assignmentId });
+      if (!current) {
+        return res.status(404).json({ error: 'role_assignment_not_found' });
+      }
+      const role = updates.role || current.role;
+      const courseId = updates.courseId || current.courseId;
+      const duplicate = await database.collection('learningRoleAssignments').findOne({
+        _id: { $ne: assignmentId },
+        role,
+        courseId
+      });
+      if (duplicate) {
+        return res.status(409).json({ error: 'role_assignment_duplicate' });
+      }
+    }
+
     const result = await database
       .collection('learningRoleAssignments')
       .updateOne({ _id: assignmentId }, { $set: updates });

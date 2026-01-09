@@ -42,6 +42,9 @@ const hrApplicationsRoutes = require('./api/hrApplications');
 const publicCareersRoutes = require('./api/publicCareers');
 const publicAiInterviewRoutes = require('./api/publicAiInterview');
 const learningHubRoutes = require('./api/learningHub');
+const {
+  reconcileLearningRoleAssignments
+} = require('./services/learningRoleAssignmentService');
 const { getUploadsRoot } = require('./utils/uploadPaths');
 const {
   computeAllLeaveBalances,
@@ -1604,6 +1607,18 @@ function upsertUserForEmployee(emp) {
   return true;
 }
 
+async function reconcileLearningAssignmentsForEmployees(employeeIds = []) {
+  const ids = Array.isArray(employeeIds)
+    ? employeeIds.map(id => (id === undefined || id === null ? '' : String(id))).filter(Boolean)
+    : [];
+  if (!ids.length) return;
+  try {
+    await reconcileLearningRoleAssignments({ employeeIds: ids });
+  } catch (error) {
+    console.error('Failed to reconcile learning role assignments', error);
+  }
+}
+
 const SESSION_TOKENS = {}; // token: userId
 const WIDGET_JWT_SECRET = process.env.WIDGET_JWT_SECRET || process.env.JWT_SECRET || 'brillar-widget-secret';
 const WIDGET_JWT_EXPIRES_IN = Number(process.env.WIDGET_JWT_EXPIRES_IN || 300);
@@ -2848,6 +2863,7 @@ init().then(async () => {
       // When upsert adds a new user, db.data.users is already updated.
     }
     await db.write();
+    await reconcileLearningAssignmentsForEmployees([employee.id]);
     res.status(201).json(employee);
   });
 
@@ -2924,6 +2940,7 @@ init().then(async () => {
     try {
       const rows = parse(req.body, { columns: true, skip_empty_lines: true });
       const start = Date.now();
+      const createdEmployeeIds = [];
       rows.forEach((row, idx) => {
         const id = start + idx;
         const nameKey = Object.keys(row).find(k => k.toLowerCase() === 'name');
@@ -2950,8 +2967,10 @@ init().then(async () => {
         normalizeEmployeeEmail(emp);
         db.data.employees.push(emp);
         upsertUserForEmployee(emp);
+        createdEmployeeIds.push(id);
       });
       await db.write();
+      await reconcileLearningAssignmentsForEmployees(createdEmployeeIds);
       res.status(201).json({ added: rows.length });
     } catch (err) {
       console.error('CSV parse failed', err);
@@ -2963,6 +2982,7 @@ init().then(async () => {
     await db.read();
     const emp = db.data.employees.find(e => e.id == req.params.id);
     if (!emp) return res.status(404).json({ error: 'Not found' });
+    const previousRole = getEmpRole(emp);
     const updates = req.body && typeof req.body === 'object' ? { ...req.body } : {};
     delete updates._id;
     Object.assign(emp, updates);
@@ -2971,6 +2991,10 @@ init().then(async () => {
     ensureInternFlag(emp);
     upsertUserForEmployee(emp);
     await db.write();
+    const nextRole = getEmpRole(emp);
+    if (previousRole !== nextRole) {
+      await reconcileLearningAssignmentsForEmployees([emp.id]);
+    }
     res.json(emp);
   });
 

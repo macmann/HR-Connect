@@ -15,6 +15,11 @@ function normalizeRole(role) {
   return normalizeString(role).toLowerCase();
 }
 
+function normalizeEmployeeId(value) {
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+}
+
 function normalizeBoolean(value) {
   return value === true || value === 'true';
 }
@@ -139,6 +144,11 @@ function calculateDueDate(now, dueDays) {
 async function reconcileLearningRoleAssignments(options = {}) {
   const database = options.database || getDatabase();
   const now = options.now instanceof Date ? options.now : new Date();
+  const targetEmployeeIds = Array.isArray(options.employeeIds)
+    ? options.employeeIds.map(normalizeEmployeeId).filter(Boolean)
+    : [];
+  const targetEmployeeIdSet = new Set(targetEmployeeIds);
+  const filterEmployees = targetEmployeeIdSet.size > 0;
 
   const [roleAssignments, users, employees] = await Promise.all([
     database.collection('learningRoleAssignments').find().toArray(),
@@ -169,11 +179,15 @@ async function reconcileLearningRoleAssignments(options = {}) {
     employeesById.set(String(employee.id), employee);
   });
 
-  const employeeIds = users
-    .map(user => (user?.employeeId === undefined || user?.employeeId === null)
-      ? ''
-      : String(user.employeeId))
-    .filter(Boolean);
+  const filteredUsers = filterEmployees
+    ? users.filter(user => targetEmployeeIdSet.has(normalizeEmployeeId(user?.employeeId)))
+    : users;
+
+  const employeeIds = filterEmployees
+    ? Array.from(targetEmployeeIdSet)
+    : filteredUsers
+        .map(user => normalizeEmployeeId(user?.employeeId))
+        .filter(Boolean);
 
   const existingAssignments = employeeIds.length
     ? await database.collection('learningCourseAssignments').find({
@@ -201,11 +215,12 @@ async function reconcileLearningRoleAssignments(options = {}) {
   const selectedAssignmentByCourse = new Map();
   let employeesProcessed = 0;
 
-  users.forEach(user => {
+  filteredUsers.forEach(user => {
     const employeeId = user?.employeeId === undefined || user?.employeeId === null
       ? ''
       : String(user.employeeId);
     if (!employeeId) return;
+    if (filterEmployees && !targetEmployeeIdSet.has(employeeId)) return;
 
     const employee = employeesById.get(employeeId) || null;
     if (employee && !isActiveEmployeeStatus(employee.status)) {
