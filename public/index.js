@@ -1907,6 +1907,15 @@ function setLearningAdminAccessState(isAllowed) {
   if (grid) grid.classList.toggle('hidden', !isAllowed);
 }
 
+function handleLearningAdminAuthFailure(res) {
+  if (res.status === 401 || res.status === 403) {
+    setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
+    setLearningAdminAccessState(false);
+    return true;
+  }
+  return false;
+}
+
 function learningAdminFetch(path, options = {}) {
   const headers = options.headers ? { ...options.headers } : {};
   if (!headers.Accept) headers.Accept = 'application/json';
@@ -2138,10 +2147,7 @@ async function loadLearningAdminCourses() {
   learningAdminState.loading.courses = true;
   try {
     const res = await learningAdminFetch('/api/learning-hub/courses');
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     const data = await res.json();
     const rawCourses = Array.isArray(data) ? data : data.courses || [];
     learningAdminState.courses = normalizeLearningItems(rawCourses, ['id', 'courseId', '_id']);
@@ -2176,10 +2182,7 @@ async function loadLearningAdminModules(courseId) {
   learningAdminState.loading.modules = true;
   try {
     const res = await learningAdminFetch(`/api/learning-hub/courses/${courseId}/modules`);
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     const data = await res.json();
     const rawModules = Array.isArray(data) ? data : data.modules || [];
     const modules = normalizeLearningItems(rawModules, ['id', 'moduleId', '_id']);
@@ -2213,10 +2216,7 @@ async function loadLearningAdminLessons(moduleId) {
   learningAdminState.loading.lessons = true;
   try {
     const res = await learningAdminFetch(`/api/learning-hub/modules/${moduleId}/lessons`);
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     const data = await res.json();
     const rawLessons = Array.isArray(data) ? data : data.lessons || [];
     const lessons = normalizeLearningItems(rawLessons, ['id', 'lessonId', '_id']);
@@ -2247,10 +2247,7 @@ async function loadLearningAdminAssets(lessonId) {
   learningAdminState.loading.assets = true;
   try {
     const res = await learningAdminFetch(`/api/learning-hub/lessons/${lessonId}/playback`);
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     const data = await res.json();
     const lesson = resolveLearningAdminLesson();
     if (lesson && Array.isArray(data.assets)) {
@@ -2269,11 +2266,18 @@ async function loadLearningAdminEmployees() {
   if (learningAdminState.loading.employees) return;
   learningAdminState.loading.employees = true;
   try {
-    const employees = await getJSON('/employees');
+    const res = await learningAdminFetch('/employees');
+    if (handleLearningAdminAuthFailure(res)) return;
+    if (!res.ok) {
+      setLearningAdminStatus('Unable to load employee list.');
+      return;
+    }
+    const employees = await res.json();
     learningAdminState.employees = Array.isArray(employees) ? employees : [];
     updateLearningAdminEmployeesSelect();
   } catch (error) {
     console.error('Failed to load employee list for learning admin', error);
+    setLearningAdminStatus('Unable to load employee list.');
   } finally {
     learningAdminState.loading.employees = false;
   }
@@ -2349,10 +2353,7 @@ async function persistLearningAdminModuleOrder() {
         orderedModuleIds: modules.map(module => module.id)
       })
     });
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     if (!res.ok) {
       setLearningAdminStatus('Unable to save module ordering.');
     }
@@ -2373,10 +2374,7 @@ async function persistLearningAdminLessonOrder() {
         orderedLessonIds: lessons.map(lesson => lesson.id)
       })
     });
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     if (!res.ok) {
       setLearningAdminStatus('Unable to save lesson ordering.');
     }
@@ -2449,10 +2447,7 @@ async function onLearningAdminCourseSubmit(event) {
       method: id ? 'PUT' : 'POST',
       body: JSON.stringify(payload)
     });
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     await loadLearningAdminCourses();
     setLearningAdminStatus('');
   } catch (error) {
@@ -2471,10 +2466,7 @@ async function onLearningAdminCourseAction(action) {
     const res = await learningAdminFetch(`/api/learning-hub/courses/${courseId}/${action}`, {
       method: 'PATCH'
     });
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     await loadLearningAdminCourses();
     setLearningAdminStatus('');
   } catch (error) {
@@ -2510,10 +2502,7 @@ async function onLearningAdminModuleSubmit(event) {
         body: JSON.stringify(payload)
       }
     );
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     await loadLearningAdminModules(learningAdminState.selectedCourseId);
     setLearningAdminStatus('');
   } catch (error) {
@@ -2549,10 +2538,7 @@ async function onLearningAdminLessonSubmit(event) {
         body: JSON.stringify(payload)
       }
     );
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     await loadLearningAdminLessons(learningAdminState.selectedModuleId);
     setLearningAdminStatus('');
   } catch (error) {
@@ -2582,10 +2568,7 @@ async function onLearningAdminAssetSubmit(event) {
       method: 'POST',
       body: JSON.stringify(payload)
     });
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     const lesson = resolveLearningAdminLesson();
     if (lesson) {
       if (!Array.isArray(lesson.assets)) lesson.assets = [];
@@ -2624,10 +2607,7 @@ async function onLearningAdminAssignmentSubmit(event) {
       method: 'POST',
       body: JSON.stringify(payload)
     });
-    if (res.status === 401 || res.status === 403) {
-      setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
-      return;
-    }
+    if (handleLearningAdminAuthFailure(res)) return;
     setLearningAdminStatus('Assignments saved.');
   } catch (error) {
     console.error('Failed to save assignments', error);
