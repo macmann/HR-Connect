@@ -1073,6 +1073,87 @@
   margin-bottom: 16px;
 }
 
+.learning-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.learning-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.learning-report-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.learning-report-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.learning-report-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.learning-report-item {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.learning-report-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.learning-report-meta {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.learning-report-progress {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.learning-report-progress span {
+  display: block;
+  height: 100%;
+  background: #2563eb;
+}
+
+.learning-report-highlight {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(248, 113, 113, 0.12);
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.learning-report-highlight--ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
 .learning-admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

@@ -56,6 +56,10 @@ function isLearningAdminRole(roleOrUser) {
   return ['superadmin', 'hr', 'l&d', 'learning', 'learning & development', 'learning and development', 'ld'].includes(normalized);
 }
 
+function isLearningReportRole(roleOrUser) {
+  return isManagerRole(roleOrUser) || isLearningAdminRole(roleOrUser);
+}
+
 function isActiveEmployeeStatus(status) {
   const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
   if (!normalized) return true;
@@ -940,6 +944,7 @@ function showPanel(name) {
   const portalBtn   = document.getElementById('tabPortal');
   const performanceBtn = document.getElementById('tabPerformance');
   const learningHubBtn = document.getElementById('tabLearningHub');
+  const learningReportsBtn = document.getElementById('tabLearningReports');
   const learningAdminBtn = document.getElementById('tabLearningAdmin');
   const manageBtn   = document.getElementById('tabManage');
   const recruitmentBtn = document.getElementById('tabRecruitment');
@@ -952,6 +957,7 @@ function showPanel(name) {
   const portalPanel = document.getElementById('portalPanel');
   const performancePanel = document.getElementById('performancePanel');
   const learningHubPanel = document.getElementById('learningHubPanel');
+  const learningReportsPanel = document.getElementById('learningReportsPanel');
   const learningAdminPanel = document.getElementById('learningAdminPanel');
   const managePanel = document.getElementById('managePanel');
   const recruitmentPanel = document.getElementById('recruitmentPanel');
@@ -961,13 +967,14 @@ function showPanel(name) {
   const settingsPanel = document.getElementById('settingsPanel');
   const financePanel = document.getElementById('financePanel');
 
-  [profileBtn, portalBtn, performanceBtn, learningHubBtn, learningAdminBtn, manageBtn, recruitmentBtn, managerBtn, reportBtn, locationBtn, settingsBtn, financeBtn].forEach(btn =>
+  [profileBtn, portalBtn, performanceBtn, learningHubBtn, learningReportsBtn, learningAdminBtn, manageBtn, recruitmentBtn, managerBtn, reportBtn, locationBtn, settingsBtn, financeBtn].forEach(btn =>
  btn && btn.classList.remove('active-tab'));
 
   if (profilePanel) profilePanel.classList.add('hidden');
   portalPanel.classList.add('hidden');
   if (performancePanel) performancePanel.classList.add('hidden');
   if (learningHubPanel) learningHubPanel.classList.add('hidden');
+  if (learningReportsPanel) learningReportsPanel.classList.add('hidden');
   if (learningAdminPanel) learningAdminPanel.classList.add('hidden');
   managePanel.classList.add('hidden');
   recruitmentPanel.classList.add('hidden');
@@ -995,6 +1002,11 @@ function showPanel(name) {
     learningHubPanel.classList.remove('hidden');
     if (learningHubBtn) learningHubBtn.classList.add('active-tab');
     initLearningHub();
+  }
+  if (name === 'learningReports' && learningReportsPanel) {
+    learningReportsPanel.classList.remove('hidden');
+    if (learningReportsBtn) learningReportsBtn.classList.add('active-tab');
+    initLearningReports();
   }
   if (name === 'learningAdmin' && learningAdminPanel) {
     learningAdminPanel.classList.remove('hidden');
@@ -1074,11 +1086,13 @@ function toggleTabsByRole() {
   const settingsTab = document.getElementById('tabSettings');
   const financeTab = document.getElementById('tabFinance');
   const learningHubTab = document.getElementById('tabLearningHub');
+  const learningReportsTab = document.getElementById('tabLearningReports');
   const learningAdminTab = document.getElementById('tabLearningAdmin');
 
   const managerVisible = isManagerRole(currentUser?.role);
   const superAdminVisible = isSuperAdmin(currentUser);
   const learningAdminVisible = isLearningAdminRole(currentUser?.role);
+  const learningReportsVisible = isLearningReportRole(currentUser?.role);
 
   [manageTab, recruitmentTab, managerAppsTab, leaveReportTab, locationTab, settingsTab].forEach(tab => {
     if (!tab) return;
@@ -1091,6 +1105,10 @@ function toggleTabsByRole() {
 
   if (learningHubTab) {
     learningHubTab.classList.remove('hidden');
+  }
+
+  if (learningReportsTab) {
+    learningReportsTab.classList.toggle('hidden', !learningReportsVisible);
   }
 
   if (learningAdminTab) {
@@ -2703,6 +2721,244 @@ function initLearningAdmin() {
   resetLearningAdminLessonForm();
   loadLearningAdminCourses();
   loadLearningAdminEmployees();
+}
+
+// ----------- LEARNING REPORTS -----------
+const learningReportsState = {
+  initialized: false,
+  loading: false,
+  updatedAt: null,
+  data: {
+    roles: [],
+    overdueCount: 0,
+    byCourse: [],
+    overdue: [],
+    team: []
+  }
+};
+
+function setLearningReportsStatus(message = '') {
+  const statusEl = document.getElementById('learningReportsStatus');
+  if (!statusEl) return;
+  if (!message) {
+    statusEl.textContent = '';
+    statusEl.classList.add('hidden');
+    return;
+  }
+  statusEl.textContent = message;
+  statusEl.classList.remove('hidden');
+}
+
+function formatRoleLabel(role) {
+  const normalized = normalizeRole(role);
+  if (!normalized) return 'Unknown';
+  if (normalized === 'hr') return 'HR';
+  if (normalized === 'human resources') return 'Human Resources';
+  if (['l&d', 'ld', 'lnd'].includes(normalized)) return 'L&D';
+  return normalized.replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function clampPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(100, numeric));
+}
+
+function formatPercent(value) {
+  return `${roundToOneDecimal(clampPercent(value))}%`;
+}
+
+function updateLearningReportsSummary() {
+  const roleCountEl = document.getElementById('learningReportsRoleCount');
+  const teamCountEl = document.getElementById('learningReportsTeamCount');
+  const avgCompletionEl = document.getElementById('learningReportsAvgCompletion');
+  const overdueCountEl = document.getElementById('learningReportsOverdueCount');
+  const updatedAtEl = document.getElementById('learningReportsUpdatedAt');
+
+  const roles = learningReportsState.data.roles || [];
+  const team = learningReportsState.data.team || [];
+  const overdueCount = Number(learningReportsState.data.overdueCount || 0);
+  const avgCompletion = team.length
+    ? roundToOneDecimal(team.reduce((sum, entry) => sum + clampPercent(entry.completionRate), 0) / team.length)
+    : 0;
+
+  if (roleCountEl) roleCountEl.textContent = `Roles: ${roles.length}`;
+  if (teamCountEl) teamCountEl.textContent = `Team: ${team.length}`;
+  if (avgCompletionEl) avgCompletionEl.textContent = `Avg Completion: ${avgCompletion}%`;
+  if (overdueCountEl) overdueCountEl.textContent = `Overdue: ${overdueCount}`;
+  if (updatedAtEl) {
+    const ts = learningReportsState.updatedAt;
+    updatedAtEl.textContent = ts ? `Updated: ${ts.toLocaleString()}` : 'Updated: --';
+  }
+}
+
+function renderLearningReportRoles() {
+  const list = document.getElementById('learningReportsRoleList');
+  if (!list) return;
+  const roles = Array.isArray(learningReportsState.data.roles)
+    ? [...learningReportsState.data.roles]
+    : [];
+  if (!roles.length) {
+    list.innerHTML = '<p class="text-muted" style="font-style: italic;">No role assignments found.</p>';
+    return;
+  }
+  roles.sort((a, b) => clampPercent(b.completionRate) - clampPercent(a.completionRate));
+  list.innerHTML = roles.map(role => {
+    const completionRate = clampPercent(role.completionRate);
+    return `
+      <div class="learning-report-item">
+        <div class="learning-report-metric">
+          <span>${escapeHtml(formatRoleLabel(role.role))}</span>
+          <span>${formatPercent(completionRate)}</span>
+        </div>
+        <div class="learning-report-progress">
+          <span style="width: ${completionRate}%;"></span>
+        </div>
+        <div class="learning-report-meta">
+          ${role.completed || 0} completed · ${role.inProgress || 0} in progress · ${role.notStarted || 0} not started
+        </div>
+        <div class="learning-report-meta">${role.totalAssignments || 0} assignments</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLearningReportOverdue() {
+  const list = document.getElementById('learningReportsOverdueList');
+  const summary = document.getElementById('learningReportsOverdueSummary');
+  if (!list || !summary) return;
+  const overdueCount = Number(learningReportsState.data.overdueCount || 0);
+  const byCourse = Array.isArray(learningReportsState.data.byCourse)
+    ? [...learningReportsState.data.byCourse]
+    : [];
+
+  summary.textContent = overdueCount
+    ? `${overdueCount} mandatory assignment${overdueCount === 1 ? '' : 's'} overdue.`
+    : 'No overdue mandatory assignments.';
+  summary.classList.toggle('learning-report-highlight--ok', overdueCount === 0);
+
+  if (!byCourse.length) {
+    list.innerHTML = '<p class="text-muted" style="font-style: italic;">No overdue courses to review.</p>';
+    return;
+  }
+
+  byCourse.sort((a, b) => (b.overdueCount || 0) - (a.overdueCount || 0));
+  list.innerHTML = byCourse.map(course => `
+    <div class="learning-report-item">
+      <div class="learning-report-metric">
+        <span>${escapeHtml(course.courseTitle || 'Untitled Course')}</span>
+        <span>${course.overdueCount || 0} overdue</span>
+      </div>
+      <div class="learning-report-meta">Course ID: ${escapeHtml(course.courseId || '-')}</div>
+    </div>
+  `).join('');
+}
+
+function renderLearningReportTeam() {
+  const list = document.getElementById('learningReportsTeamList');
+  if (!list) return;
+  const team = Array.isArray(learningReportsState.data.team)
+    ? [...learningReportsState.data.team]
+    : [];
+  if (!team.length) {
+    list.innerHTML = '<p class="text-muted" style="font-style: italic;">No team progress data available.</p>';
+    return;
+  }
+  team.sort((a, b) => clampPercent(b.completionRate) - clampPercent(a.completionRate));
+  list.innerHTML = team.map(member => {
+    const completionRate = clampPercent(member.completionRate);
+    const name = member.employeeName || `Employee ${member.employeeId || ''}`.trim();
+    const roleLabel = member.role ? formatRoleLabel(member.role) : 'Role: -';
+    return `
+      <div class="learning-report-item">
+        <div class="learning-report-metric">
+          <span>${escapeHtml(name)}</span>
+          <span>${formatPercent(completionRate)}</span>
+        </div>
+        <div class="learning-report-meta">${escapeHtml(roleLabel)}</div>
+        <div class="learning-report-progress">
+          <span style="width: ${completionRate}%;"></span>
+        </div>
+        <div class="learning-report-meta">
+          ${member.completed || 0}/${member.totalAssignments || 0} completed · ${member.inProgress || 0} in progress · ${member.notStarted || 0} not started
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderLearningReports() {
+  updateLearningReportsSummary();
+  renderLearningReportRoles();
+  renderLearningReportOverdue();
+  renderLearningReportTeam();
+}
+
+async function fetchLearningReportData(path) {
+  const res = await learningHubFetch(path);
+  if (res.status === 401 || res.status === 403) {
+    const error = new Error('access_denied');
+    error.code = 'access_denied';
+    throw error;
+  }
+  if (!res.ok) {
+    const error = new Error('request_failed');
+    error.code = 'request_failed';
+    throw error;
+  }
+  return res.json().catch(() => ({}));
+}
+
+async function loadLearningReports(triggerButton) {
+  if (learningReportsState.loading) return;
+  learningReportsState.loading = true;
+  if (triggerButton) setButtonLoading(triggerButton, true);
+  setLearningReportsStatus('Loading learning reports...');
+  try {
+    const [completionData, overdueData, teamData] = await Promise.all([
+      fetchLearningReportData('/api/learning-hub/reports/completion-by-role'),
+      fetchLearningReportData('/api/learning-hub/reports/overdue-mandatory'),
+      fetchLearningReportData('/api/learning-hub/reports/team-progress')
+    ]);
+    learningReportsState.data = {
+      roles: Array.isArray(completionData?.roles) ? completionData.roles : [],
+      overdueCount: Number(overdueData?.overdueCount || 0),
+      byCourse: Array.isArray(overdueData?.byCourse) ? overdueData.byCourse : [],
+      overdue: Array.isArray(overdueData?.overdue) ? overdueData.overdue : [],
+      team: Array.isArray(teamData?.team) ? teamData.team : []
+    };
+    learningReportsState.updatedAt = new Date();
+    setLearningReportsStatus('');
+    renderLearningReports();
+  } catch (error) {
+    console.error('Failed to load learning reports', error);
+    if (error?.code === 'access_denied') {
+      setLearningReportsStatus('Access denied. Please sign in with HR/L&D or manager credentials.');
+    } else {
+      setLearningReportsStatus('Unable to load learning reports right now.');
+    }
+  } finally {
+    learningReportsState.loading = false;
+    if (triggerButton) setButtonLoading(triggerButton, false);
+  }
+}
+
+function initLearningReports() {
+  if (learningReportsState.initialized) {
+    loadLearningReports();
+    return;
+  }
+  learningReportsState.initialized = true;
+  const hasAccess = isLearningReportRole(currentUser?.role);
+  if (!hasAccess) {
+    setLearningReportsStatus('Access denied. Please sign in with HR/L&D or manager credentials.');
+    return;
+  }
+  const refreshBtn = document.getElementById('learningReportsRefresh');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => loadLearningReports(refreshBtn));
+  }
+  loadLearningReports(refreshBtn);
 }
 
 // ----------- PERFORMANCE REVIEW -----------
@@ -7538,6 +7794,8 @@ async function init() {
   if (performanceTab) performanceTab.onclick = () => showPanel('performance');
   const learningHubTab = document.getElementById('tabLearningHub');
   if (learningHubTab) learningHubTab.onclick = () => showPanel('learningHub');
+  const learningReportsTab = document.getElementById('tabLearningReports');
+  if (learningReportsTab) learningReportsTab.onclick = () => showPanel('learningReports');
   const learningAdminTab = document.getElementById('tabLearningAdmin');
   if (learningAdminTab) learningAdminTab.onclick = () => showPanel('learningAdmin');
   document.getElementById('tabManage').onclick = () => showPanel('manage');

@@ -1403,6 +1403,10 @@
               <span class="material-symbols-rounded">auto_stories</span>
               <span>My Learning</span>
             </button>
+            <button id="tabLearningReports" class="tab-button hidden">
+              <span class="material-symbols-rounded">analytics</span>
+              <span>Learning Reports</span>
+            </button>
             <button id="tabLearningAdmin" class="tab-button hidden">
               <span class="material-symbols-rounded">edit_note</span>
               <span>Learning Admin</span>
@@ -2401,6 +2405,91 @@
                 <p class="learning-admin-helper">Assets attach to the currently selected lesson.</p>
               </form>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Learning Reports Panel -->
+      <section id="learningReportsPanel" class="panel hidden">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="material-symbols-rounded">analytics</span>
+            Learning Reports
+          </h2>
+          <p class="panel-subtitle">Monitor completion, overdue, and team progress across assigned learning.</p>
+        </div>
+
+        <div class="learning-report-actions">
+          <button type="button" id="learningReportsRefresh" class="md-button md-button--outlined md-button--small">
+            <span class="material-symbols-rounded">refresh</span>
+            Refresh
+          </button>
+        </div>
+
+        <div id="learningReportsStatus" class="learning-hub-status hidden"></div>
+
+        <div class="learning-hub-summary">
+          <div class="md-chip">
+            <span class="material-symbols-rounded">group</span>
+            <span id="learningReportsTeamCount">Team: 0</span>
+          </div>
+          <div class="md-chip">
+            <span class="material-symbols-rounded">workspace_premium</span>
+            <span id="learningReportsRoleCount">Roles: 0</span>
+          </div>
+          <div class="md-chip">
+            <span class="material-symbols-rounded">percent</span>
+            <span id="learningReportsAvgCompletion">Avg Completion: 0%</span>
+          </div>
+          <div class="md-chip">
+            <span class="material-symbols-rounded">error</span>
+            <span id="learningReportsOverdueCount">Overdue: 0</span>
+          </div>
+          <div class="md-chip">
+            <span class="material-symbols-rounded">schedule</span>
+            <span id="learningReportsUpdatedAt">Updated: --</span>
+          </div>
+        </div>
+
+        <div class="learning-report-grid">
+          <div class="md-card learning-report-card">
+            <div class="learning-report-card-header">
+              <div>
+                <p class="card-title">
+                  <span class="material-symbols-rounded">emoji_events</span>
+                  Completion by Role
+                </p>
+                <p class="card-subtitle">Track overall completion status for each job role.</p>
+              </div>
+            </div>
+            <div id="learningReportsRoleList" class="learning-report-list"></div>
+          </div>
+
+          <div class="md-card learning-report-card">
+            <div class="learning-report-card-header">
+              <div>
+                <p class="card-title">
+                  <span class="material-symbols-rounded">warning</span>
+                  Overdue Mandatory
+                </p>
+                <p class="card-subtitle">Review required courses that are past due.</p>
+              </div>
+            </div>
+            <div id="learningReportsOverdueSummary" class="learning-report-highlight"></div>
+            <div id="learningReportsOverdueList" class="learning-report-list"></div>
+          </div>
+
+          <div class="md-card learning-report-card">
+            <div class="learning-report-card-header">
+              <div>
+                <p class="card-title">
+                  <span class="material-symbols-rounded">groups</span>
+                  Team Progress
+                </p>
+                <p class="card-subtitle">Spot who is on track and who needs support.</p>
+              </div>
+            </div>
+            <div id="learningReportsTeamList" class="learning-report-list"></div>
           </div>
         </div>
       </section>
