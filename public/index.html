@@ -56,6 +56,12 @@
       color: #0f172a;
     }
 
+    .kpi-card__meta {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: #64748b;
+    }
+
     .action-bar {
       display: flex;
       flex-wrap: wrap;
@@ -2449,6 +2455,39 @@
           <div class="md-chip">
             <span class="material-symbols-rounded">schedule</span>
             <span id="learningReportsUpdatedAt">Updated: --</span>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--info" aria-hidden="true">
+              <span class="material-symbols-rounded">workspace_premium</span>
+            </div>
+            <div class="kpi-card__content">
+              <p class="kpi-card__label">Role-based completion</p>
+              <p id="learningReportsRoleDashboardValue" class="kpi-card__value">Avg 0%</p>
+              <p id="learningReportsRoleDashboardMeta" class="kpi-card__meta">Top role: --</p>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--warning" aria-hidden="true">
+              <span class="material-symbols-rounded">warning</span>
+            </div>
+            <div class="kpi-card__content">
+              <p class="kpi-card__label">Overdue compliance</p>
+              <p id="learningReportsOverdueDashboardValue" class="kpi-card__value">Overdue 0</p>
+              <p id="learningReportsOverdueDashboardMeta" class="kpi-card__meta">All mandatory learning on track.</p>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-card__icon kpi-card__icon--success" aria-hidden="true">
+              <span class="material-symbols-rounded">groups</span>
+            </div>
+            <div class="kpi-card__content">
+              <p class="kpi-card__label">Team progress</p>
+              <p id="learningReportsTeamDashboardValue" class="kpi-card__value">On track 0/0</p>
+              <p id="learningReportsTeamDashboardMeta" class="kpi-card__meta">At risk 0</p>
+            </div>
           </div>
         </div>
 

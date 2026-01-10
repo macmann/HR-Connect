@@ -1783,6 +1783,12 @@
   color: #0f172a;
 }
 
+.kpi-card__meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
 .action-bar {
   display: flex;
   flex-wrap: wrap;

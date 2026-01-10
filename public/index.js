@@ -2779,6 +2779,72 @@ function updateLearningReportsSummary() {
   }
 }
 
+function updateLearningReportsDashboards() {
+  const roleValueEl = document.getElementById('learningReportsRoleDashboardValue');
+  const roleMetaEl = document.getElementById('learningReportsRoleDashboardMeta');
+  const overdueValueEl = document.getElementById('learningReportsOverdueDashboardValue');
+  const overdueMetaEl = document.getElementById('learningReportsOverdueDashboardMeta');
+  const teamValueEl = document.getElementById('learningReportsTeamDashboardValue');
+  const teamMetaEl = document.getElementById('learningReportsTeamDashboardMeta');
+
+  const roles = Array.isArray(learningReportsState.data.roles)
+    ? [...learningReportsState.data.roles]
+    : [];
+  const team = Array.isArray(learningReportsState.data.team)
+    ? [...learningReportsState.data.team]
+    : [];
+  const overdueCount = Number(learningReportsState.data.overdueCount || 0);
+  const byCourse = Array.isArray(learningReportsState.data.byCourse)
+    ? [...learningReportsState.data.byCourse]
+    : [];
+
+  if (roleValueEl) {
+    const avgCompletion = roles.length
+      ? roundToOneDecimal(roles.reduce((sum, role) => sum + clampPercent(role.completionRate), 0) / roles.length)
+      : 0;
+    roleValueEl.textContent = `Avg ${avgCompletion}%`;
+  }
+  if (roleMetaEl) {
+    if (!roles.length) {
+      roleMetaEl.textContent = 'Top role: --';
+    } else {
+      const topRole = roles.reduce((best, role) => {
+        const current = clampPercent(role.completionRate);
+        const bestValue = clampPercent(best?.completionRate);
+        return current > bestValue ? role : best;
+      }, roles[0]);
+      roleMetaEl.textContent = `Top role: ${formatRoleLabel(topRole.role)} (${formatPercent(topRole.completionRate)})`;
+    }
+  }
+
+  if (overdueValueEl) {
+    overdueValueEl.textContent = `Overdue ${overdueCount}`;
+  }
+  if (overdueMetaEl) {
+    if (!overdueCount) {
+      overdueMetaEl.textContent = 'All mandatory learning on track.';
+    } else if (byCourse.length) {
+      byCourse.sort((a, b) => (b.overdueCount || 0) - (a.overdueCount || 0));
+      overdueMetaEl.textContent = `Most overdue: ${byCourse[0]?.courseTitle || 'Untitled Course'}`;
+    } else {
+      overdueMetaEl.textContent = 'Review overdue assignments.';
+    }
+  }
+
+  if (teamValueEl) {
+    const onTrack = team.filter(member => clampPercent(member.completionRate) >= 80).length;
+    teamValueEl.textContent = `On track ${onTrack}/${team.length}`;
+  }
+  if (teamMetaEl) {
+    if (!team.length) {
+      teamMetaEl.textContent = 'At risk 0';
+    } else {
+      const atRisk = team.filter(member => clampPercent(member.completionRate) < 50).length;
+      teamMetaEl.textContent = `At risk ${atRisk}`;
+    }
+  }
+}
+
 function renderLearningReportRoles() {
   const list = document.getElementById('learningReportsRoleList');
   if (!list) return;
@@ -2876,6 +2942,7 @@ function renderLearningReportTeam() {
 
 function renderLearningReports() {
   updateLearningReportsSummary();
+  updateLearningReportsDashboards();
   renderLearningReportRoles();
   renderLearningReportOverdue();
   renderLearningReportTeam();
