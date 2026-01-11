@@ -1549,9 +1549,16 @@ function renderCourseDetails() {
 
 function renderModuleList() {
   const list = document.getElementById('learningModuleList');
+  const empty = document.getElementById('learningModuleEmpty');
   if (!list) return;
   list.innerHTML = '';
   const modules = learningHubState.modulesByCourse.get(String(learningHubState.selectedCourseId)) || [];
+
+  if (!modules.length) {
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+  if (empty) empty.classList.add('hidden');
 
   modules.forEach(module => {
     const button = document.createElement('button');
@@ -1591,9 +1598,16 @@ function renderModuleList() {
 
 function renderLessonList() {
   const list = document.getElementById('learningLessonList');
+  const empty = document.getElementById('learningLessonEmpty');
   if (!list) return;
   list.innerHTML = '';
   const lessons = learningHubState.lessonsByModule.get(String(learningHubState.selectedModuleId)) || [];
+
+  if (!lessons.length) {
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+  if (empty) empty.classList.add('hidden');
 
   lessons.forEach(lesson => {
     const button = document.createElement('button');
@@ -1633,6 +1647,12 @@ function renderLessonList() {
 function renderLessonPlayer() {
   const lesson = findCurrentLesson();
   const title = document.getElementById('learningLessonTitle');
+  const prevBtn = document.getElementById('learningPrevLesson');
+  const nextBtn = document.getElementById('learningNextLesson');
+  const orderedLessons = getOrderedLessons();
+  const lessonIndex = lesson
+    ? orderedLessons.findIndex(item => String(item.id) === String(lesson.id))
+    : -1;
   if (title) {
     title.textContent = lesson
       ? (lesson.title || lesson.name || 'Lesson player')
@@ -1731,6 +1751,13 @@ function renderLessonPlayer() {
       markComplete.textContent = isCompleted ? 'Completed' : 'Mark complete';
       markComplete.title = isCompleted ? 'Lesson already completed.' : 'Mark this lesson as complete.';
     }
+  }
+
+  if (prevBtn) {
+    prevBtn.disabled = lessonIndex <= 0;
+  }
+  if (nextBtn) {
+    nextBtn.disabled = lessonIndex === -1 || lessonIndex >= orderedLessons.length - 1;
   }
 }
 
