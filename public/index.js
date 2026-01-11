@@ -2518,6 +2518,10 @@ async function loadLearningAdminModules(courseId) {
   try {
     const res = await learningAdminFetch(`/api/learning-hub/courses/${courseId}/modules`);
     if (handleLearningAdminAuthFailure(res)) return;
+    if (!res.ok) {
+      setLearningAdminStatus('Modules endpoint unavailable.');
+      return;
+    }
     const data = await res.json();
     const rawModules = Array.isArray(data) ? data : data.modules || [];
     const modules = normalizeLearningItems(rawModules, ['id', 'moduleId', '_id']);
@@ -2552,6 +2556,10 @@ async function loadLearningAdminLessons(moduleId) {
   try {
     const res = await learningAdminFetch(`/api/learning-hub/modules/${moduleId}/lessons`);
     if (handleLearningAdminAuthFailure(res)) return;
+    if (!res.ok) {
+      setLearningAdminStatus('Lessons endpoint unavailable.');
+      return;
+    }
     const data = await res.json();
     const rawLessons = Array.isArray(data) ? data : data.lessons || [];
     const lessons = normalizeLearningItems(rawLessons, ['id', 'lessonId', '_id']);
