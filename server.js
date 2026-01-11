@@ -42,6 +42,7 @@ const hrApplicationsRoutes = require('./api/hrApplications');
 const publicCareersRoutes = require('./api/publicCareers');
 const publicAiInterviewRoutes = require('./api/publicAiInterview');
 const learningHubRoutes = require('./api/learningHub');
+const adminRolesRoutes = require('./api/adminRoles');
 const {
   scheduleLearningRoleAssignmentReconciliation
 } = require('./services/learningRoleAssignmentService');
@@ -2042,11 +2043,12 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(getUploadsRoot()));
 app.use('/api/hr', hrPositionsRoutes);
-  app.use('/api/hr', hrAiInterviewRoutes);
-  app.use('/api/hr', hrApplicationsRoutes);
-  app.use('/api/public', publicCareersRoutes);
-  app.use('/api/public', publicAiInterviewRoutes);
-  app.use('/api/learning-hub', authRequired, learningHubRoutes);
+app.use('/api/hr', hrAiInterviewRoutes);
+app.use('/api/hr', hrApplicationsRoutes);
+app.use('/api/public', publicCareersRoutes);
+app.use('/api/public', publicAiInterviewRoutes);
+app.use('/api/learning-hub', authRequired, learningHubRoutes);
+app.use('/api/admin-roles', authRequired, superadminOnly, adminRolesRoutes);
 
 app.get('/careers', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'careers.html'));
