@@ -39,21 +39,30 @@ function normalizeRole(role) {
   return typeof role === 'string' ? role.trim().toLowerCase() : '';
 }
 
+function getNormalizedRoles(roleOrUser) {
+  if (!roleOrUser) return [];
+  if (typeof roleOrUser === 'string') return [normalizeRole(roleOrUser)].filter(Boolean);
+  if (Array.isArray(roleOrUser)) return roleOrUser.map(normalizeRole).filter(Boolean);
+  if (Array.isArray(roleOrUser.roles)) return roleOrUser.roles.map(normalizeRole).filter(Boolean);
+  if (roleOrUser.role) return [normalizeRole(roleOrUser.role)].filter(Boolean);
+  return [];
+}
+
 function isManagerRole(roleOrUser) {
-  const role = typeof roleOrUser === 'string' ? roleOrUser : roleOrUser?.role;
-  const normalized = normalizeRole(role);
-  return normalized === 'manager' || normalized === 'superadmin';
+  const roles = getNormalizedRoles(roleOrUser);
+  return roles.includes('manager') || roles.includes('superadmin');
 }
 
 function isSuperAdmin(roleOrUser) {
-  const role = typeof roleOrUser === 'string' ? roleOrUser : roleOrUser?.role;
-  return normalizeRole(role) === 'superadmin';
+  const roles = getNormalizedRoles(roleOrUser);
+  return roles.includes('superadmin');
 }
 
 function isLearningAdminRole(roleOrUser) {
-  const role = typeof roleOrUser === 'string' ? roleOrUser : roleOrUser?.role;
-  const normalized = normalizeRole(role);
-  return ['superadmin', 'hr', 'l&d', 'learning', 'learning & development', 'learning and development', 'ld'].includes(normalized);
+  const roles = getNormalizedRoles(roleOrUser);
+  return roles.some(role =>
+    ['superadmin', 'hr', 'l&d', 'learning', 'learning & development', 'learning and development', 'ld'].includes(role)
+  );
 }
 
 function isLearningReportRole(roleOrUser) {
@@ -167,7 +176,7 @@ function updateBalanceWarning(balanceMap = {}) {
   const warningText = warningEl.querySelector('p');
   if (warningText) {
     const readableTypes = negativeTypes.map(capitalize).join(', ');
-    const managerOverride = isManagerRole(currentUser?.role)
+    const managerOverride = isManagerRole(currentUser)
       ? ' Managers can proceed but balances will go negative.'
       : ' Applications for these types are temporarily disabled.';
     warningText.textContent = `Negative balance for ${readableTypes}.${managerOverride}`;
@@ -188,7 +197,7 @@ function populateLeaveTypeOptions(selectEl, balanceMap = {}) {
   let firstEnabled = '';
   types.forEach(type => {
     const balance = balanceMap[type] ?? 0;
-    const isDisabled = balance < 0 && !isManagerRole(currentUser?.role);
+    const isDisabled = balance < 0 && !isManagerRole(currentUser);
     const opt = document.createElement('option');
     opt.value = type;
     opt.disabled = isDisabled;
@@ -1024,7 +1033,7 @@ function showPanel(name) {
   if (name === 'recruitment') {
     recruitmentPanel.classList.remove('hidden');
     recruitmentBtn.classList.add('active-tab');
-    if (isManagerRole(currentUser?.role)) {
+    if (isManagerRole(currentUser)) {
       if (recruitmentInitialized) {
         loadRecruitmentPositions();
         updateRecruitmentSubtab(recruitmentActiveSubtab);
@@ -1055,7 +1064,7 @@ function showPanel(name) {
   if (name === 'settings') {
     settingsPanel.classList.remove('hidden');
     if (settingsBtn) settingsBtn.classList.add('active-tab');
-    if (isManagerRole(currentUser?.role)) {
+    if (isManagerRole(currentUser)) {
       loadHolidays();
       loadEmailSettingsConfig();
       loadAiSettingsConfig();
@@ -1093,10 +1102,10 @@ function toggleTabsByRole() {
   const learningReportsTab = document.getElementById('tabLearningReports');
   const learningAdminTab = document.getElementById('tabLearningAdmin');
 
-  const managerVisible = isManagerRole(currentUser?.role);
+  const managerVisible = isManagerRole(currentUser);
   const superAdminVisible = isSuperAdmin(currentUser);
-  const learningAdminVisible = isLearningAdminRole(currentUser?.role);
-  const learningReportsVisible = isLearningReportRole(currentUser?.role);
+  const learningAdminVisible = isLearningAdminRole(currentUser);
+  const learningReportsVisible = isLearningReportRole(currentUser);
 
   [manageTab, recruitmentTab, managerAppsTab, leaveReportTab, locationTab, settingsTab].forEach(tab => {
     if (!tab) return;
@@ -2825,7 +2834,7 @@ async function onLearningAdminAssignmentSubmit(event) {
 function initLearningAdmin() {
   if (learningAdminState.initialized) return;
   learningAdminState.initialized = true;
-  const hasAccess = isLearningAdminRole(currentUser?.role);
+  const hasAccess = isLearningAdminRole(currentUser);
   setLearningAdminAccessState(hasAccess);
   if (!hasAccess) {
     setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
@@ -3190,7 +3199,7 @@ function initLearningReports() {
     return;
   }
   learningReportsState.initialized = true;
-  const hasAccess = isLearningReportRole(currentUser?.role);
+  const hasAccess = isLearningReportRole(currentUser);
   if (!hasAccess) {
     setLearningReportsStatus('Access denied. Please sign in with HR/L&D or manager credentials.');
     return;
@@ -8063,7 +8072,7 @@ async function init() {
   const defaultPanel = currentUser
     ? isSuperAdmin(currentUser)
       ? 'finance'
-      : isManagerRole(currentUser.role)
+      : isManagerRole(currentUser)
         ? 'portal'
         : 'profile'
     : 'portal';
@@ -8477,7 +8486,7 @@ function onApplySubmit(ev) {
     showToast('Please fill in all required leave details before continuing.', 'warning');
     return;
   }
-  if (currentLeaveBalances[type] < 0 && !isManagerRole(currentUser?.role)) {
+  if (currentLeaveBalances[type] < 0 && !isManagerRole(currentUser)) {
     showToast('This leave type is disabled because the balance is negative.', 'warning');
     return;
   }
