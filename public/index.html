@@ -479,6 +479,37 @@
       gap: 10px;
     }
 
+    .learning-admin-context {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+
+    .learning-admin-context-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .learning-admin-context-label {
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #94a3b8;
+    }
+
+    .learning-admin-context-value {
+      color: #0f172a;
+      font-weight: 600;
+      text-align: right;
+    }
+
     .learning-admin-helper {
       font-size: 12px;
       color: #64748b;
@@ -2902,6 +2933,12 @@
                   </button>
                 </div>
                 <div id="learningAdminModuleList" class="learning-admin-list learning-admin-list--droppable"></div>
+                <div class="learning-admin-context" aria-live="polite">
+                  <div class="learning-admin-context-item">
+                    <span class="learning-admin-context-label">Current course</span>
+                    <span id="learningAdminCurrentCourse" class="learning-admin-context-value">Not selected</span>
+                  </div>
+                </div>
                 <form id="learningAdminModuleForm" class="learning-admin-form">
                   <input type="hidden" id="learningAdminModuleId" />
                   <label class="md-field">
@@ -2950,6 +2987,16 @@
                   </button>
                 </div>
                 <div id="learningAdminLessonList" class="learning-admin-list learning-admin-list--droppable"></div>
+                <div class="learning-admin-context" aria-live="polite">
+                  <div class="learning-admin-context-item">
+                    <span class="learning-admin-context-label">Current course</span>
+                    <span id="learningAdminLessonCourse" class="learning-admin-context-value">Not selected</span>
+                  </div>
+                  <div class="learning-admin-context-item">
+                    <span class="learning-admin-context-label">Current module</span>
+                    <span id="learningAdminLessonModule" class="learning-admin-context-value">Not selected</span>
+                  </div>
+                </div>
                 <form id="learningAdminLessonForm" class="learning-admin-form">
                   <input type="hidden" id="learningAdminLessonId" />
                   <label class="md-field">
