@@ -2014,7 +2014,17 @@ function handleVideoEnded(event) {
 
 async function selectCourse(courseId) {
   if (!courseId) return;
+  const previousModuleId = learningHubState.selectedModuleId;
+  const previousLessonId = learningHubState.selectedLessonId;
   learningHubState.selectedCourseId = courseId;
+  learningHubState.selectedModuleId = null;
+  learningHubState.selectedLessonId = null;
+  if (previousModuleId) {
+    learningHubState.lessonsByModule.delete(String(previousModuleId));
+  }
+  if (previousLessonId) {
+    learningHubState.playbackByLesson.delete(String(previousLessonId));
+  }
   const modules = learningHubState.modulesByCourse.get(String(courseId));
   if (!modules) {
     await loadCourseModules(courseId);
@@ -2029,6 +2039,7 @@ async function selectCourse(courseId) {
 
 async function selectModule(moduleId) {
   if (!moduleId) return;
+  learningHubState.selectedLessonId = null;
   learningHubState.selectedModuleId = moduleId;
   const lessons = learningHubState.lessonsByModule.get(String(moduleId));
   if (!lessons) {
