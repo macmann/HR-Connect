@@ -61,7 +61,17 @@ function isSuperAdmin(roleOrUser) {
 function isLearningAdminRole(roleOrUser) {
   const roles = getNormalizedRoles(roleOrUser);
   return roles.some(role =>
-    ['superadmin', 'hr', 'l&d', 'learning', 'learning & development', 'learning and development', 'ld'].includes(role)
+    [
+      'superadmin',
+      'admin',
+      'administrator',
+      'hr',
+      'l&d',
+      'learning',
+      'learning & development',
+      'learning and development',
+      'ld',
+    ].includes(role)
   );
 }
 
