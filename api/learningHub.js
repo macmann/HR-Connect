@@ -215,6 +215,51 @@ function buildProgressKey(employeeId, courseId) {
   return `${String(employeeId)}:${String(courseId)}`;
 }
 
+function applyProgressTimestamps(existingProgress, progress) {
+  if (!existingProgress) return progress;
+
+  const existingStartedAt = existingProgress.startedAt instanceof Date
+    ? existingProgress.startedAt
+    : null;
+  if (existingStartedAt && (!progress.startedAt || existingStartedAt < progress.startedAt)) {
+    progress.startedAt = existingStartedAt;
+  }
+
+  const existingCompletedAt = existingProgress.completedAt instanceof Date
+    ? existingProgress.completedAt
+    : null;
+  if (progress.status === 'completed') {
+    if (existingCompletedAt && (!progress.completedAt || existingCompletedAt < progress.completedAt)) {
+      progress.completedAt = existingCompletedAt;
+    }
+  } else {
+    progress.completedAt = null;
+  }
+
+  return progress;
+}
+
+async function upsertLearningProgress(database, progress) {
+  const query = {
+    employeeId: progress.employeeId,
+    courseId: progress.courseId,
+    moduleId: progress.moduleId || null,
+    lessonId: progress.lessonId || null,
+    progressType: progress.progressType
+  };
+
+  const existingProgress = await database.collection('learningProgress').findOne(query);
+  const mergedProgress = applyProgressTimestamps(existingProgress, { ...progress });
+
+  await database.collection('learningProgress').updateOne(
+    query,
+    { $set: mergedProgress },
+    { upsert: true }
+  );
+
+  return mergedProgress;
+}
+
 function selectUniqueAssignments(assignments = []) {
   const assignmentsByKey = new Map();
   assignments.forEach(assignment => {
@@ -1227,47 +1272,37 @@ router.post('/progress', async (req, res) => {
       return res.status(400).json({ error });
     }
 
-    await database.collection('learningProgress').updateOne(
-      {
-        employeeId: progress.employeeId,
-        courseId: progress.courseId,
-        moduleId: progress.moduleId || null,
-        lessonId: progress.lessonId || null,
-        progressType: progress.progressType
-      },
-      { $set: progress },
-      { upsert: true }
-    );
+    const savedProgress = await upsertLearningProgress(database, progress);
 
-    if (progress.progressType === 'lesson') {
+    if (savedProgress.progressType === 'lesson') {
       const moduleRollup = await computeModuleRollup(database, {
         employeeId,
-        moduleId: progress.moduleId,
-        courseId: progress.courseId
+        moduleId: savedProgress.moduleId,
+        courseId: savedProgress.courseId
       });
       const courseRollup = await computeCourseRollup(database, {
         employeeId,
-        courseId: progress.courseId
+        courseId: savedProgress.courseId
       });
       return res.json({
-        progress,
+        progress: savedProgress,
         moduleRollup,
         courseRollup
       });
     }
 
-    if (progress.progressType === 'module') {
+    if (savedProgress.progressType === 'module') {
       const courseRollup = await computeCourseRollup(database, {
         employeeId,
-        courseId: progress.courseId
+        courseId: savedProgress.courseId
       });
       return res.json({
-        progress,
+        progress: savedProgress,
         courseRollup
       });
     }
 
-    return res.json({ progress });
+    return res.json({ progress: savedProgress });
   } catch (error) {
     console.error('Failed to record progress', error);
     return res.status(500).json({ error: 'internal_error' });
@@ -1306,29 +1341,19 @@ router.post('/progress/lessons/:lessonId', async (req, res) => {
       return res.status(400).json({ error: progressError });
     }
 
-    await database.collection('learningProgress').updateOne(
-      {
-        employeeId: progress.employeeId,
-        courseId: progress.courseId,
-        moduleId: progress.moduleId || null,
-        lessonId: progress.lessonId || null,
-        progressType: progress.progressType
-      },
-      { $set: progress },
-      { upsert: true }
-    );
+    const savedProgress = await upsertLearningProgress(database, progress);
 
     const moduleRollup = await computeModuleRollup(database, {
       employeeId,
-      moduleId: progress.moduleId,
-      courseId: progress.courseId
+      moduleId: savedProgress.moduleId,
+      courseId: savedProgress.courseId
     });
     const courseRollup = await computeCourseRollup(database, {
       employeeId,
-      courseId: progress.courseId
+      courseId: savedProgress.courseId
     });
 
-    return res.json({ progress, moduleRollup, courseRollup });
+    return res.json({ progress: savedProgress, moduleRollup, courseRollup });
   } catch (error) {
     console.error('Failed to update lesson progress', error);
     return res.status(500).json({ error: 'internal_error' });
@@ -1367,24 +1392,14 @@ router.post('/progress/modules/:moduleId', async (req, res) => {
       return res.status(400).json({ error: progressError });
     }
 
-    await database.collection('learningProgress').updateOne(
-      {
-        employeeId: progress.employeeId,
-        courseId: progress.courseId,
-        moduleId: progress.moduleId || null,
-        lessonId: progress.lessonId || null,
-        progressType: progress.progressType
-      },
-      { $set: progress },
-      { upsert: true }
-    );
+    const savedProgress = await upsertLearningProgress(database, progress);
 
     const courseRollup = await computeCourseRollup(database, {
       employeeId,
-      courseId: progress.courseId
+      courseId: savedProgress.courseId
     });
 
-    return res.json({ progress, courseRollup });
+    return res.json({ progress: savedProgress, courseRollup });
   } catch (error) {
     console.error('Failed to update module progress', error);
     return res.status(500).json({ error: 'internal_error' });
@@ -1425,19 +1440,9 @@ router.post('/progress/courses/:courseId', async (req, res) => {
       return res.status(400).json({ error: progressError });
     }
 
-    await database.collection('learningProgress').updateOne(
-      {
-        employeeId: progress.employeeId,
-        courseId: progress.courseId,
-        moduleId: progress.moduleId || null,
-        lessonId: progress.lessonId || null,
-        progressType: progress.progressType
-      },
-      { $set: progress },
-      { upsert: true }
-    );
+    const savedProgress = await upsertLearningProgress(database, progress);
 
-    return res.json({ progress });
+    return res.json({ progress: savedProgress });
   } catch (error) {
     console.error('Failed to update course progress', error);
     return res.status(500).json({ error: 'internal_error' });
@@ -1477,29 +1482,19 @@ router.post('/progress/lessons/:lessonId/completion', async (req, res) => {
       return res.status(400).json({ error: progressError });
     }
 
-    await database.collection('learningProgress').updateOne(
-      {
-        employeeId: progress.employeeId,
-        courseId: progress.courseId,
-        moduleId: progress.moduleId || null,
-        lessonId: progress.lessonId || null,
-        progressType: progress.progressType
-      },
-      { $set: progress },
-      { upsert: true }
-    );
+    const savedProgress = await upsertLearningProgress(database, progress);
 
     const moduleRollup = await computeModuleRollup(database, {
       employeeId,
-      moduleId: progress.moduleId,
-      courseId: progress.courseId
+      moduleId: savedProgress.moduleId,
+      courseId: savedProgress.courseId
     });
     const courseRollup = await computeCourseRollup(database, {
       employeeId,
-      courseId: progress.courseId
+      courseId: savedProgress.courseId
     });
 
-    return res.json({ progress, moduleRollup, courseRollup });
+    return res.json({ progress: savedProgress, moduleRollup, courseRollup });
   } catch (error) {
     console.error('Failed to record lesson completion', error);
     return res.status(500).json({ error: 'internal_error' });
@@ -1542,29 +1537,19 @@ router.post('/progress/lessons/:lessonId/watch', async (req, res) => {
       return res.status(400).json({ error: progressError });
     }
 
-    await database.collection('learningProgress').updateOne(
-      {
-        employeeId: progress.employeeId,
-        courseId: progress.courseId,
-        moduleId: progress.moduleId || null,
-        lessonId: progress.lessonId || null,
-        progressType: progress.progressType
-      },
-      { $set: progress },
-      { upsert: true }
-    );
+    const savedProgress = await upsertLearningProgress(database, progress);
 
     const moduleRollup = await computeModuleRollup(database, {
       employeeId,
-      moduleId: progress.moduleId,
-      courseId: progress.courseId
+      moduleId: savedProgress.moduleId,
+      courseId: savedProgress.courseId
     });
     const courseRollup = await computeCourseRollup(database, {
       employeeId,
-      courseId: progress.courseId
+      courseId: savedProgress.courseId
     });
 
-    return res.json({ progress, moduleRollup, courseRollup });
+    return res.json({ progress: savedProgress, moduleRollup, courseRollup });
   } catch (error) {
     console.error('Failed to record lesson watch progress', error);
     return res.status(500).json({ error: 'internal_error' });
