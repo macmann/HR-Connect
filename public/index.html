@@ -2837,6 +2837,10 @@
                       <span class="material-symbols-rounded">inventory_2</span>
                       Archive
                     </button>
+                    <button type="button" id="learningAdminDeleteCourse" class="md-button md-button--text md-button--small learning-admin-danger">
+                      <span class="material-symbols-rounded">delete</span>
+                      Delete
+                    </button>
                   </div>
                   <p class="learning-admin-helper">Publishing makes the course visible to assignments. Archived courses stay read-only.</p>
                 </form>
@@ -2931,6 +2935,10 @@
                       <span class="material-symbols-rounded">save</span>
                       Save module
                     </button>
+                    <button type="button" id="learningAdminDeleteModule" class="md-button md-button--text md-button--small learning-admin-danger">
+                      <span class="material-symbols-rounded">delete</span>
+                      Delete
+                    </button>
                   </div>
                 </form>
               </div>
@@ -2979,6 +2987,10 @@
                       <span class="material-symbols-rounded">save</span>
                       Save lesson
                     </button>
+                    <button type="button" id="learningAdminDeleteLesson" class="md-button md-button--text md-button--small learning-admin-danger">
+                      <span class="material-symbols-rounded">delete</span>
+                      Delete
+                    </button>
                   </div>
                 </form>
               </div>
@@ -3001,6 +3013,7 @@
                 </div>
                 <div id="learningAdminAssetList" class="learning-admin-asset-list"></div>
                 <form id="learningAdminAssetForm" class="learning-admin-form">
+                  <input type="hidden" id="learningAdminAssetId" />
                   <label class="md-field">
                     <span class="md-label">Asset title</span>
                     <div class="md-input-wrapper">
@@ -3022,9 +3035,13 @@
                     </div>
                   </label>
                   <div class="learning-admin-actions">
-                    <button type="submit" class="md-button md-button--filled md-button--small">
+                    <button type="submit" id="learningAdminAssetSubmit" class="md-button md-button--filled md-button--small">
                       <span class="material-symbols-rounded">link</span>
                       Add asset
+                    </button>
+                    <button type="button" id="learningAdminAssetCancel" class="md-button md-button--text md-button--small">
+                      <span class="material-symbols-rounded">close</span>
+                      Cancel
                     </button>
                   </div>
                   <p class="learning-admin-helper">Assets attach to the currently selected lesson.</p>
