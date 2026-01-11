@@ -2459,16 +2459,28 @@ function populateLearningAdminLessonForm(lesson) {
   document.getElementById('learningAdminLessonRequired').checked = Boolean(lesson.required);
 }
 
-function populateLearningAdminAssetForm(asset) {
-  if (!asset) return;
-  const assetIdInput = document.getElementById('learningAdminAssetId');
-  if (assetIdInput) assetIdInput.value = asset.id || '';
-  document.getElementById('learningAdminAssetLabel').value = asset.title || '';
-  document.getElementById('learningAdminAssetType').value = asset.provider || 'document';
-  document.getElementById('learningAdminAssetUrl').value = resolveAssetUrl(asset) || '';
-  const submitBtn = document.getElementById('learningAdminAssetSubmit');
-  if (submitBtn) {
-    submitBtn.innerHTML = '<span class="material-symbols-rounded">save</span> Save asset';
+function updateLearningAdminContextIndicators() {
+  const course = learningAdminState.courses.find(
+    item => String(item.id) === String(learningAdminState.selectedCourseId)
+  );
+  const modules = learningAdminState.modulesByCourse.get(String(learningAdminState.selectedCourseId)) || [];
+  const module = modules.find(item => String(item.id) === String(learningAdminState.selectedModuleId));
+  const courseLabel = course?.title || 'Not selected';
+  const moduleLabel = module?.title || 'Not selected';
+
+  const courseEls = [
+    document.getElementById('learningAdminCurrentCourse'),
+    document.getElementById('learningAdminLessonCourse')
+  ].filter(Boolean);
+  courseEls.forEach(el => {
+    el.textContent = courseLabel;
+    el.title = courseLabel;
+  });
+
+  const moduleEl = document.getElementById('learningAdminLessonModule');
+  if (moduleEl) {
+    moduleEl.textContent = moduleLabel;
+    moduleEl.title = moduleLabel;
   }
 }
 
@@ -2559,6 +2571,7 @@ async function loadLearningAdminCourses() {
     }
     renderLearningAdminCourses();
     updateLearningAdminAssignmentOptions();
+    updateLearningAdminContextIndicators();
     if (learningAdminState.selectedCourseId) {
       await loadLearningAdminModules(learningAdminState.selectedCourseId);
     }
@@ -2592,6 +2605,7 @@ async function loadLearningAdminModules(courseId) {
       resetLearningAdminModuleForm();
     }
     renderLearningAdminModules();
+    updateLearningAdminContextIndicators();
     if (learningAdminState.selectedModuleId) {
       await loadLearningAdminLessons(learningAdminState.selectedModuleId);
     } else {
@@ -2786,6 +2800,7 @@ function selectLearningAdminCourse(courseId) {
   }
   renderLearningAdminCourses();
   updateLearningAdminAssignmentOptions();
+  updateLearningAdminContextIndicators();
   if (courseId) {
     loadLearningAdminModules(courseId);
   }
@@ -2799,6 +2814,7 @@ function selectLearningAdminModule(moduleId) {
     populateLearningAdminModuleForm(module);
   }
   renderLearningAdminModules();
+  updateLearningAdminContextIndicators();
   if (moduleId) {
     loadLearningAdminLessons(moduleId);
   }

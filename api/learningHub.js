@@ -1361,15 +1361,35 @@ router.get('/lessons/:lessonId/playback', async (req, res) => {
   if (!lessonId) {
     return res.status(400).json({ error: 'invalid_lesson_id' });
   }
+  const requestedModuleId = req.query.moduleId ? String(req.query.moduleId).trim() : '';
+  const requestedCourseId = req.query.courseId ? String(req.query.courseId).trim() : '';
 
   try {
     const database = getDatabase();
-    const lesson = await database
-      .collection('learningLessons')
-      .findOne({ _id: lessonId });
+    const hierarchy = await resolveLessonHierarchy(database, lessonId.toString());
+    if (hierarchy.error) {
+      return res.status(hierarchy.status).json({ error: hierarchy.error });
+    }
+    const { lesson, moduleDoc } = hierarchy;
 
-    if (!lesson) {
-      return res.status(404).json({ error: 'lesson_not_found' });
+    if (requestedModuleId) {
+      const moduleObjectId = toObjectId(requestedModuleId);
+      if (!moduleObjectId) {
+        return res.status(400).json({ error: 'invalid_module_id' });
+      }
+      if (requestedModuleId !== lesson.moduleId) {
+        return res.status(404).json({ error: 'module_not_found' });
+      }
+    }
+
+    if (requestedCourseId) {
+      const courseObjectId = toObjectId(requestedCourseId);
+      if (!courseObjectId) {
+        return res.status(400).json({ error: 'invalid_course_id' });
+      }
+      if (requestedCourseId !== moduleDoc.courseId) {
+        return res.status(404).json({ error: 'course_not_found' });
+      }
     }
 
     const assets = await database
