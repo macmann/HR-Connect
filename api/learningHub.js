@@ -906,6 +906,35 @@ router.put('/modules/:id', requireLearningHubWriteAccess, async (req, res) => {
   }
 });
 
+router.get('/modules/:moduleId/lessons', async (req, res) => {
+  const moduleObjectId = toObjectId(req.params.moduleId);
+  if (!moduleObjectId) {
+    return res.status(400).json({ error: 'invalid_module_id' });
+  }
+
+  try {
+    const database = getDatabase();
+    const moduleDoc = await database
+      .collection('learningModules')
+      .findOne({ _id: moduleObjectId });
+    if (!moduleDoc) {
+      return res.status(404).json({ error: 'module_not_found' });
+    }
+
+    const moduleId = String(moduleDoc._id);
+    const lessons = await database
+      .collection('learningLessons')
+      .find({ moduleId })
+      .sort({ order: 1, createdAt: 1 })
+      .toArray();
+
+    return res.json({ lessons: lessons.map(normalizeDocument) });
+  } catch (error) {
+    console.error('Failed to list lessons', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 router.post('/modules/:moduleId/lessons', requireLearningHubWriteAccess, async (req, res) => {
   try {
     const { lesson, error } = buildLesson({
