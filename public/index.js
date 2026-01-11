@@ -868,6 +868,12 @@ const recruitmentSubtabPanels = {
   positions: document.getElementById('recruitmentPositionsSection'),
   pipeline: document.getElementById('recruitmentPipelineSection')
 };
+const learningAdminTabButtons = document.querySelectorAll('[data-learning-admin-tab]');
+const learningAdminTabPanels = {
+  courses: document.getElementById('learningAdminTabCourses'),
+  modules: document.getElementById('learningAdminTabModules'),
+  assets: document.getElementById('learningAdminTabAssets')
+};
 const payrollSummaryBody = document.getElementById('payrollSummaryBody');
 const payrollSummaryMonth = document.getElementById('payrollSummaryMonth');
 const payrollSummaryEmpty = document.getElementById('payrollSummaryEmpty');
@@ -879,6 +885,7 @@ let financeSaving = false;
 let financeSavingId = null;
 let financeSearchTerm = '';
 let financeActiveSubtab = 'employees';
+let learningAdminActiveTab = 'courses';
 
 document.addEventListener('DOMContentLoaded', function () {
   var searchInput = document.getElementById('employee-search');
@@ -2145,9 +2152,9 @@ function setLearningAdminStatus(message = '') {
 
 function setLearningAdminAccessState(isAllowed) {
   const gate = document.getElementById('learningAdminGate');
-  const grid = document.getElementById('learningAdminGrid');
+  const settings = document.getElementById('learningAdminSettings');
   if (gate) gate.classList.toggle('hidden', isAllowed);
-  if (grid) grid.classList.toggle('hidden', !isAllowed);
+  if (settings) settings.classList.toggle('hidden', !isAllowed);
 }
 
 function handleLearningAdminAuthFailure(res) {
@@ -2866,6 +2873,16 @@ function initLearningAdmin() {
   if (!hasAccess) {
     setLearningAdminStatus('Access denied. Please sign in with HR/L&D credentials.');
     return;
+  }
+
+  if (learningAdminTabButtons.length) {
+    learningAdminTabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetTab = button.dataset.learningAdminTab || 'courses';
+        updateLearningAdminTab(targetTab);
+      });
+    });
+    updateLearningAdminTab(learningAdminActiveTab);
   }
 
   const courseForm = document.getElementById('learningAdminCourseForm');
@@ -3889,6 +3906,25 @@ function updateRecruitmentSubtab(name = 'pipeline') {
     const isActive = panelName === name;
     panelEl.classList.toggle('hidden', !isActive);
     panelEl.classList.toggle('recruitment-subtab-panel--active', isActive);
+  });
+}
+
+function updateLearningAdminTab(name = 'courses') {
+  if (!name || !learningAdminTabPanels[name]) return;
+
+  learningAdminActiveTab = name;
+
+  learningAdminTabButtons.forEach(button => {
+    const isActive = button.dataset.learningAdminTab === name;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+
+  Object.entries(learningAdminTabPanels).forEach(([panelName, panelEl]) => {
+    if (!panelEl) return;
+    const isActive = panelName === name;
+    panelEl.classList.toggle('hidden', !isActive);
+    panelEl.classList.toggle('learning-admin-tab-panel--active', isActive);
   });
 }
 

@@ -2177,250 +2177,295 @@
           <p>Learning Hub administration is available to HR and L&amp;D team members.</p>
         </div>
 
-        <div id="learningAdminGrid" class="learning-admin-grid">
-          <div class="learning-admin-column">
-            <div class="md-card learning-admin-card">
-              <div class="learning-hub-card-header">
-                <div>
-                  <p class="card-title">
-                    <span class="material-symbols-rounded">library_books</span>
-                    Courses
-                  </p>
-                  <p class="card-subtitle">Manage course catalog details, publish state, and summaries.</p>
-                </div>
-                <button type="button" id="learningAdminNewCourse" class="md-button md-button--text md-button--small">
-                  <span class="material-symbols-rounded">add</span>
-                  New course
-                </button>
-              </div>
-              <div id="learningAdminCourseList" class="learning-admin-list"></div>
-              <form id="learningAdminCourseForm" class="learning-admin-form">
-                <input type="hidden" id="learningAdminCourseId" />
-                <label class="md-field">
-                  <span class="md-label">Title</span>
-                  <div class="md-input-wrapper">
-                    <input id="learningAdminCourseTitle" type="text" class="md-input" placeholder="Course title" required />
-                  </div>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Summary</span>
-                  <div class="md-input-wrapper">
-                    <input id="learningAdminCourseSummary" type="text" class="md-input" placeholder="Short overview" />
-                  </div>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Description</span>
-                  <div class="md-input-wrapper">
-                    <textarea id="learningAdminCourseDescription" class="md-textarea" placeholder="Detailed course description"></textarea>
-                  </div>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Status</span>
-                  <select id="learningAdminCourseStatus" class="md-select">
-                    <option value="draft" selected>Draft</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                </label>
-                <div class="learning-admin-actions">
-                  <button type="submit" class="md-button md-button--filled md-button--small">
-                    <span class="material-symbols-rounded">save</span>
-                    Save course
-                  </button>
-                  <button type="button" id="learningAdminPublishCourse" class="md-button md-button--text md-button--small">
-                    <span class="material-symbols-rounded">rocket_launch</span>
-                    Publish
-                  </button>
-                  <button type="button" id="learningAdminArchiveCourse" class="md-button md-button--text md-button--small">
-                    <span class="material-symbols-rounded">inventory_2</span>
-                    Archive
-                  </button>
-                </div>
-                <p class="learning-admin-helper">Publishing makes the course visible to assignments. Archived courses stay read-only.</p>
-              </form>
-            </div>
-
-            <div class="md-card learning-admin-card">
-              <div class="learning-hub-card-header">
-                <div>
-                  <p class="card-title">
-                    <span class="material-symbols-rounded">assignment_ind</span>
-                    Assignments
-                  </p>
-                  <p class="card-subtitle">Assign learning by role or to specific employees.</p>
-                </div>
-              </div>
-              <form id="learningAdminAssignmentForm" class="learning-admin-form">
-                <label class="md-field">
-                  <span class="md-label">Course</span>
-                  <select id="learningAdminAssignmentCourse" class="md-select"></select>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Role assignment</span>
-                  <select id="learningAdminAssignmentRole" class="md-select">
-                    <option value="">-- none --</option>
-                    <option value="employee">Employee</option>
-                    <option value="manager">Manager</option>
-                    <option value="hr">HR</option>
-                    <option value="l&d">L&amp;D</option>
-                  </select>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Specific employees</span>
-                  <select id="learningAdminAssignmentEmployees" class="md-select" multiple size="6"></select>
-                </label>
-                <div class="learning-admin-actions">
-                  <button type="submit" class="md-button md-button--filled md-button--small">
-                    <span class="material-symbols-rounded">send</span>
-                    Assign course
-                  </button>
-                </div>
-                <p class="learning-admin-helper">Select both a role and employees to layer assignments.</p>
-              </form>
-            </div>
+        <div id="learningAdminSettings">
+          <div class="learning-admin-tabs" role="tablist" aria-label="Learning Hub admin settings">
+            <button
+              type="button"
+              class="learning-admin-tab active"
+              data-learning-admin-tab="courses"
+              role="tab"
+              aria-selected="true"
+              aria-controls="learningAdminTabCourses"
+            >
+              Courses &amp; assignments
+            </button>
+            <button
+              type="button"
+              class="learning-admin-tab"
+              data-learning-admin-tab="modules"
+              role="tab"
+              aria-selected="false"
+              aria-controls="learningAdminTabModules"
+            >
+              Modules &amp; lessons
+            </button>
+            <button
+              type="button"
+              class="learning-admin-tab"
+              data-learning-admin-tab="assets"
+              role="tab"
+              aria-selected="false"
+              aria-controls="learningAdminTabAssets"
+            >
+              Lesson assets
+            </button>
           </div>
 
-          <div class="learning-admin-column">
-            <div class="md-card learning-admin-card">
-              <div class="learning-hub-card-header">
-                <div>
-                  <p class="card-title">
-                    <span class="material-symbols-rounded">view_module</span>
-                    Modules
-                  </p>
-                  <p class="card-subtitle">Drag to reorder modules within a course.</p>
-                </div>
-                <button type="button" id="learningAdminNewModule" class="md-button md-button--text md-button--small">
-                  <span class="material-symbols-rounded">add</span>
-                  New module
-                </button>
-              </div>
-              <div id="learningAdminModuleList" class="learning-admin-list learning-admin-list--droppable"></div>
-              <form id="learningAdminModuleForm" class="learning-admin-form">
-                <input type="hidden" id="learningAdminModuleId" />
-                <label class="md-field">
-                  <span class="md-label">Title</span>
-                  <div class="md-input-wrapper">
-                    <input id="learningAdminModuleTitle" type="text" class="md-input" placeholder="Module title" required />
+          <div id="learningAdminTabCourses" class="learning-admin-tab-panel learning-admin-tab-panel--active">
+            <div class="learning-admin-grid">
+            <div class="learning-admin-column">
+              <div class="md-card learning-admin-card">
+                <div class="learning-hub-card-header">
+                  <div>
+                    <p class="card-title">
+                      <span class="material-symbols-rounded">library_books</span>
+                      Courses
+                    </p>
+                    <p class="card-subtitle">Manage course catalog details, publish state, and summaries.</p>
                   </div>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Summary</span>
-                  <div class="md-input-wrapper">
-                    <input id="learningAdminModuleSummary" type="text" class="md-input" placeholder="Module summary" />
-                  </div>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Description</span>
-                  <div class="md-input-wrapper">
-                    <textarea id="learningAdminModuleDescription" class="md-textarea" placeholder="Module description"></textarea>
-                  </div>
-                </label>
-                <label class="learning-admin-checkbox">
-                  <input id="learningAdminModuleRequired" type="checkbox" />
-                  Required module
-                </label>
-                <div class="learning-admin-actions">
-                  <button type="submit" class="md-button md-button--filled md-button--small">
-                    <span class="material-symbols-rounded">save</span>
-                    Save module
+                  <button type="button" id="learningAdminNewCourse" class="md-button md-button--text md-button--small">
+                    <span class="material-symbols-rounded">add</span>
+                    New course
                   </button>
                 </div>
-              </form>
-            </div>
+                <div id="learningAdminCourseList" class="learning-admin-list"></div>
+                <form id="learningAdminCourseForm" class="learning-admin-form">
+                  <input type="hidden" id="learningAdminCourseId" />
+                  <label class="md-field">
+                    <span class="md-label">Title</span>
+                    <div class="md-input-wrapper">
+                      <input id="learningAdminCourseTitle" type="text" class="md-input" placeholder="Course title" required />
+                    </div>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Summary</span>
+                    <div class="md-input-wrapper">
+                      <input id="learningAdminCourseSummary" type="text" class="md-input" placeholder="Short overview" />
+                    </div>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Description</span>
+                    <div class="md-input-wrapper">
+                      <textarea id="learningAdminCourseDescription" class="md-textarea" placeholder="Detailed course description"></textarea>
+                    </div>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Status</span>
+                    <select id="learningAdminCourseStatus" class="md-select">
+                      <option value="draft" selected>Draft</option>
+                      <option value="published">Published</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                  </label>
+                  <div class="learning-admin-actions">
+                    <button type="submit" class="md-button md-button--filled md-button--small">
+                      <span class="material-symbols-rounded">save</span>
+                      Save course
+                    </button>
+                    <button type="button" id="learningAdminPublishCourse" class="md-button md-button--text md-button--small">
+                      <span class="material-symbols-rounded">rocket_launch</span>
+                      Publish
+                    </button>
+                    <button type="button" id="learningAdminArchiveCourse" class="md-button md-button--text md-button--small">
+                      <span class="material-symbols-rounded">inventory_2</span>
+                      Archive
+                    </button>
+                  </div>
+                  <p class="learning-admin-helper">Publishing makes the course visible to assignments. Archived courses stay read-only.</p>
+                </form>
+              </div>
 
-            <div class="md-card learning-admin-card">
-              <div class="learning-hub-card-header">
-                <div>
-                  <p class="card-title">
-                    <span class="material-symbols-rounded">menu_book</span>
-                    Lessons
-                  </p>
-                  <p class="card-subtitle">Drag to reorder lessons within the module.</p>
+              <div class="md-card learning-admin-card">
+                <div class="learning-hub-card-header">
+                  <div>
+                    <p class="card-title">
+                      <span class="material-symbols-rounded">assignment_ind</span>
+                      Assignments
+                    </p>
+                    <p class="card-subtitle">Assign learning by role or to specific employees.</p>
+                  </div>
                 </div>
-                <button type="button" id="learningAdminNewLesson" class="md-button md-button--text md-button--small">
-                  <span class="material-symbols-rounded">add</span>
-                  New lesson
-                </button>
+                <form id="learningAdminAssignmentForm" class="learning-admin-form">
+                  <label class="md-field">
+                    <span class="md-label">Course</span>
+                    <select id="learningAdminAssignmentCourse" class="md-select"></select>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Role assignment</span>
+                    <select id="learningAdminAssignmentRole" class="md-select">
+                      <option value="">-- none --</option>
+                      <option value="employee">Employee</option>
+                      <option value="manager">Manager</option>
+                      <option value="hr">HR</option>
+                      <option value="l&d">L&amp;D</option>
+                    </select>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Specific employees</span>
+                    <select id="learningAdminAssignmentEmployees" class="md-select" multiple size="6"></select>
+                  </label>
+                  <div class="learning-admin-actions">
+                    <button type="submit" class="md-button md-button--filled md-button--small">
+                      <span class="material-symbols-rounded">send</span>
+                      Assign course
+                    </button>
+                  </div>
+                  <p class="learning-admin-helper">Select both a role and employees to layer assignments.</p>
+                </form>
               </div>
-              <div id="learningAdminLessonList" class="learning-admin-list learning-admin-list--droppable"></div>
-              <form id="learningAdminLessonForm" class="learning-admin-form">
-                <input type="hidden" id="learningAdminLessonId" />
-                <label class="md-field">
-                  <span class="md-label">Title</span>
-                  <div class="md-input-wrapper">
-                    <input id="learningAdminLessonTitle" type="text" class="md-input" placeholder="Lesson title" required />
-                  </div>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Summary</span>
-                  <div class="md-input-wrapper">
-                    <input id="learningAdminLessonSummary" type="text" class="md-input" placeholder="Lesson summary" />
-                  </div>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Description</span>
-                  <div class="md-input-wrapper">
-                    <textarea id="learningAdminLessonDescription" class="md-textarea" placeholder="Lesson description"></textarea>
-                  </div>
-                </label>
-                <label class="learning-admin-checkbox">
-                  <input id="learningAdminLessonRequired" type="checkbox" />
-                  Required lesson
-                </label>
-                <div class="learning-admin-actions">
-                  <button type="submit" class="md-button md-button--filled md-button--small">
-                    <span class="material-symbols-rounded">save</span>
-                    Save lesson
-                  </button>
-                </div>
-              </form>
             </div>
           </div>
+        </div>
 
-          <div class="learning-admin-column">
-            <div class="md-card learning-admin-card">
-              <div class="learning-hub-card-header">
-                <div>
-                  <p class="card-title">
-                    <span class="material-symbols-rounded">attach_file</span>
-                    Lesson Assets
-                  </p>
-                  <p class="card-subtitle">Attach OneDrive files, YouTube links, or documents.</p>
-                </div>
-              </div>
-              <div id="learningAdminAssetList" class="learning-admin-asset-list"></div>
-              <form id="learningAdminAssetForm" class="learning-admin-form">
-                <label class="md-field">
-                  <span class="md-label">Asset title</span>
-                  <div class="md-input-wrapper">
-                    <input id="learningAdminAssetLabel" type="text" class="md-input" placeholder="Onboarding deck" />
+          <div id="learningAdminTabModules" class="learning-admin-tab-panel hidden">
+          <div class="learning-admin-grid">
+            <div class="learning-admin-column">
+              <div class="md-card learning-admin-card">
+                <div class="learning-hub-card-header">
+                  <div>
+                    <p class="card-title">
+                      <span class="material-symbols-rounded">view_module</span>
+                      Modules
+                    </p>
+                    <p class="card-subtitle">Drag to reorder modules within a course.</p>
                   </div>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Provider</span>
-                  <select id="learningAdminAssetType" class="md-select">
-                    <option value="onedrive">OneDrive</option>
-                    <option value="youtube">YouTube</option>
-                    <option value="document">Document</option>
-                  </select>
-                </label>
-                <label class="md-field">
-                  <span class="md-label">Asset URL</span>
-                  <div class="md-input-wrapper">
-                    <input id="learningAdminAssetUrl" type="url" class="md-input" placeholder="https://..." required />
-                  </div>
-                </label>
-                <div class="learning-admin-actions">
-                  <button type="submit" class="md-button md-button--filled md-button--small">
-                    <span class="material-symbols-rounded">link</span>
-                    Add asset
+                  <button type="button" id="learningAdminNewModule" class="md-button md-button--text md-button--small">
+                    <span class="material-symbols-rounded">add</span>
+                    New module
                   </button>
                 </div>
-                <p class="learning-admin-helper">Assets attach to the currently selected lesson.</p>
-              </form>
+                <div id="learningAdminModuleList" class="learning-admin-list learning-admin-list--droppable"></div>
+                <form id="learningAdminModuleForm" class="learning-admin-form">
+                  <input type="hidden" id="learningAdminModuleId" />
+                  <label class="md-field">
+                    <span class="md-label">Title</span>
+                    <div class="md-input-wrapper">
+                      <input id="learningAdminModuleTitle" type="text" class="md-input" placeholder="Module title" required />
+                    </div>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Summary</span>
+                    <div class="md-input-wrapper">
+                      <input id="learningAdminModuleSummary" type="text" class="md-input" placeholder="Module summary" />
+                    </div>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Description</span>
+                    <div class="md-input-wrapper">
+                      <textarea id="learningAdminModuleDescription" class="md-textarea" placeholder="Module description"></textarea>
+                    </div>
+                  </label>
+                  <label class="learning-admin-checkbox">
+                    <input id="learningAdminModuleRequired" type="checkbox" />
+                    Required module
+                  </label>
+                  <div class="learning-admin-actions">
+                    <button type="submit" class="md-button md-button--filled md-button--small">
+                      <span class="material-symbols-rounded">save</span>
+                      Save module
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="md-card learning-admin-card">
+                <div class="learning-hub-card-header">
+                  <div>
+                    <p class="card-title">
+                      <span class="material-symbols-rounded">menu_book</span>
+                      Lessons
+                    </p>
+                    <p class="card-subtitle">Drag to reorder lessons within the module.</p>
+                  </div>
+                  <button type="button" id="learningAdminNewLesson" class="md-button md-button--text md-button--small">
+                    <span class="material-symbols-rounded">add</span>
+                    New lesson
+                  </button>
+                </div>
+                <div id="learningAdminLessonList" class="learning-admin-list learning-admin-list--droppable"></div>
+                <form id="learningAdminLessonForm" class="learning-admin-form">
+                  <input type="hidden" id="learningAdminLessonId" />
+                  <label class="md-field">
+                    <span class="md-label">Title</span>
+                    <div class="md-input-wrapper">
+                      <input id="learningAdminLessonTitle" type="text" class="md-input" placeholder="Lesson title" required />
+                    </div>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Summary</span>
+                    <div class="md-input-wrapper">
+                      <input id="learningAdminLessonSummary" type="text" class="md-input" placeholder="Lesson summary" />
+                    </div>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Description</span>
+                    <div class="md-input-wrapper">
+                      <textarea id="learningAdminLessonDescription" class="md-textarea" placeholder="Lesson description"></textarea>
+                    </div>
+                  </label>
+                  <label class="learning-admin-checkbox">
+                    <input id="learningAdminLessonRequired" type="checkbox" />
+                    Required lesson
+                  </label>
+                  <div class="learning-admin-actions">
+                    <button type="submit" class="md-button md-button--filled md-button--small">
+                      <span class="material-symbols-rounded">save</span>
+                      Save lesson
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
+        </div>
+
+          <div id="learningAdminTabAssets" class="learning-admin-tab-panel hidden">
+          <div class="learning-admin-grid">
+            <div class="learning-admin-column">
+              <div class="md-card learning-admin-card">
+                <div class="learning-hub-card-header">
+                  <div>
+                    <p class="card-title">
+                      <span class="material-symbols-rounded">attach_file</span>
+                      Lesson Assets
+                    </p>
+                    <p class="card-subtitle">Attach OneDrive files, YouTube links, or documents.</p>
+                  </div>
+                </div>
+                <div id="learningAdminAssetList" class="learning-admin-asset-list"></div>
+                <form id="learningAdminAssetForm" class="learning-admin-form">
+                  <label class="md-field">
+                    <span class="md-label">Asset title</span>
+                    <div class="md-input-wrapper">
+                      <input id="learningAdminAssetLabel" type="text" class="md-input" placeholder="Onboarding deck" />
+                    </div>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Provider</span>
+                    <select id="learningAdminAssetType" class="md-select">
+                      <option value="onedrive">OneDrive</option>
+                      <option value="youtube">YouTube</option>
+                      <option value="document">Document</option>
+                    </select>
+                  </label>
+                  <label class="md-field">
+                    <span class="md-label">Asset URL</span>
+                    <div class="md-input-wrapper">
+                      <input id="learningAdminAssetUrl" type="url" class="md-input" placeholder="https://..." required />
+                    </div>
+                  </label>
+                  <div class="learning-admin-actions">
+                    <button type="submit" class="md-button md-button--filled md-button--small">
+                      <span class="material-symbols-rounded">link</span>
+                      Add asset
+                    </button>
+                  </div>
+                  <p class="learning-admin-helper">Assets attach to the currently selected lesson.</p>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
         </div>
       </section>
 

@@ -1154,6 +1154,50 @@
   color: #15803d;
 }
 
+.learning-admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 20px;
+}
+
+.learning-admin-tab {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #1f2937;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.learning-admin-tab:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.learning-admin-tab.active {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #4f46e5;
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.25);
+}
+
+.learning-admin-tab:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.learning-admin-tab-panel {
+  display: none;
+}
+
+.learning-admin-tab-panel--active {
+  display: block;
+}
+
 .learning-admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
