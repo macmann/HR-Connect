@@ -763,6 +763,57 @@ router.put('/courses/:id', requireLearningHubWriteAccess, async (req, res) => {
   }
 });
 
+router.delete('/courses/:id', requireLearningHubWriteAccess, async (req, res) => {
+  const courseId = toObjectId(req.params.id);
+  if (!courseId) {
+    return res.status(400).json({ error: 'invalid_course_id' });
+  }
+
+  try {
+    const database = getDatabase();
+    const courseDoc = await database.collection('learningCourses').findOne({ _id: courseId });
+    if (!courseDoc) {
+      return res.status(404).json({ error: 'course_not_found' });
+    }
+
+    const courseIdString = courseId.toString();
+    const modules = await database
+      .collection('learningModules')
+      .find({ courseId: courseIdString })
+      .project({ _id: 1 })
+      .toArray();
+    const moduleIds = modules.map(module => module._id.toString());
+
+    const lessons = moduleIds.length
+      ? await database
+        .collection('learningLessons')
+        .find({ moduleId: { $in: moduleIds } })
+        .project({ _id: 1 })
+        .toArray()
+      : [];
+    const lessonIds = lessons.map(lesson => lesson._id.toString());
+
+    if (lessonIds.length) {
+      await database.collection('learningLessonAssets').deleteMany({ lessonId: { $in: lessonIds } });
+    }
+    if (moduleIds.length) {
+      await database.collection('learningLessons').deleteMany({ moduleId: { $in: moduleIds } });
+      await database.collection('learningModules').deleteMany({ courseId: courseIdString });
+    }
+
+    await database.collection('learningCourseAssignments').deleteMany({ courseId: courseIdString });
+    await database.collection('learningRoleAssignments').deleteMany({ courseId: courseIdString });
+    await database.collection('learningProgress').deleteMany({ courseId: courseIdString });
+    await database.collection('learningCourses').deleteOne({ _id: courseId });
+
+    db.invalidateCache?.();
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete course', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 router.patch('/courses/:id/publish', requireLearningHubWriteAccess, async (req, res) => {
   const courseId = toObjectId(req.params.id);
   if (!courseId) {
@@ -906,6 +957,42 @@ router.put('/modules/:id', requireLearningHubWriteAccess, async (req, res) => {
   }
 });
 
+router.delete('/modules/:id', requireLearningHubWriteAccess, async (req, res) => {
+  const moduleId = toObjectId(req.params.id);
+  if (!moduleId) {
+    return res.status(400).json({ error: 'invalid_module_id' });
+  }
+
+  try {
+    const database = getDatabase();
+    const moduleDoc = await database.collection('learningModules').findOne({ _id: moduleId });
+    if (!moduleDoc) {
+      return res.status(404).json({ error: 'module_not_found' });
+    }
+
+    const moduleIdString = moduleId.toString();
+    const lessons = await database
+      .collection('learningLessons')
+      .find({ moduleId: moduleIdString })
+      .project({ _id: 1 })
+      .toArray();
+    const lessonIds = lessons.map(lesson => lesson._id.toString());
+
+    if (lessonIds.length) {
+      await database.collection('learningLessonAssets').deleteMany({ lessonId: { $in: lessonIds } });
+    }
+    await database.collection('learningLessons').deleteMany({ moduleId: moduleIdString });
+    await database.collection('learningProgress').deleteMany({ moduleId: moduleIdString });
+    await database.collection('learningModules').deleteOne({ _id: moduleId });
+
+    db.invalidateCache?.();
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete module', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 router.get('/modules/:moduleId/lessons', async (req, res) => {
   const moduleObjectId = toObjectId(req.params.moduleId);
   if (!moduleObjectId) {
@@ -984,6 +1071,32 @@ router.put('/lessons/:id', requireLearningHubWriteAccess, async (req, res) => {
   }
 });
 
+router.delete('/lessons/:id', requireLearningHubWriteAccess, async (req, res) => {
+  const lessonId = toObjectId(req.params.id);
+  if (!lessonId) {
+    return res.status(400).json({ error: 'invalid_lesson_id' });
+  }
+
+  try {
+    const database = getDatabase();
+    const lessonDoc = await database.collection('learningLessons').findOne({ _id: lessonId });
+    if (!lessonDoc) {
+      return res.status(404).json({ error: 'lesson_not_found' });
+    }
+
+    const lessonIdString = lessonId.toString();
+    await database.collection('learningLessonAssets').deleteMany({ lessonId: lessonIdString });
+    await database.collection('learningProgress').deleteMany({ lessonId: lessonIdString });
+    await database.collection('learningLessons').deleteOne({ _id: lessonId });
+
+    db.invalidateCache?.();
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete lesson', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
 router.post('/lessons/:lessonId/assets', requireLearningHubWriteAccess, async (req, res) => {
   try {
     const { asset, error } = buildLessonAsset({
@@ -1029,6 +1142,30 @@ router.put('/assets/:id', requireLearningHubWriteAccess, async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     console.error('Failed to update lesson asset', error);
+    return res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+router.delete('/assets/:id', requireLearningHubWriteAccess, async (req, res) => {
+  const assetId = toObjectId(req.params.id);
+  if (!assetId) {
+    return res.status(400).json({ error: 'invalid_asset_id' });
+  }
+
+  try {
+    const database = getDatabase();
+    const result = await database
+      .collection('learningLessonAssets')
+      .deleteOne({ _id: assetId });
+
+    if (!result.deletedCount) {
+      return res.status(404).json({ error: 'asset_not_found' });
+    }
+
+    db.invalidateCache?.();
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete lesson asset', error);
     return res.status(500).json({ error: 'internal_error' });
   }
 });

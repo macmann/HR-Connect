@@ -2265,6 +2265,18 @@ function resetLearningAdminLessonForm() {
   document.getElementById('learningAdminLessonId').value = '';
 }
 
+function resetLearningAdminAssetForm() {
+  const form = document.getElementById('learningAdminAssetForm');
+  if (!form) return;
+  form.reset();
+  const assetIdInput = document.getElementById('learningAdminAssetId');
+  if (assetIdInput) assetIdInput.value = '';
+  const submitBtn = document.getElementById('learningAdminAssetSubmit');
+  if (submitBtn) {
+    submitBtn.innerHTML = '<span class="material-symbols-rounded">link</span> Add asset';
+  }
+}
+
 function renderLearningAdminCourses() {
   const list = document.getElementById('learningAdminCourseList');
   if (!list) return;
@@ -2386,6 +2398,8 @@ function renderLearningAdminAssets() {
   assets.forEach(asset => {
     const item = document.createElement('div');
     item.className = 'learning-admin-asset-item';
+    const assetId = asset.id || '';
+    item.dataset.assetId = assetId;
     const label = escapeHtml(asset.title || asset.label || asset.name || 'Untitled asset');
     const type = escapeHtml(asset.provider || asset.type || 'asset');
     const link = asset.url
@@ -2396,9 +2410,23 @@ function renderLearningAdminAssets() {
       || '';
     const url = escapeHtml(link || '#');
     item.innerHTML = `
-      <strong>${label}</strong>
-      <span class="learning-admin-meta">${type}</span>
-      ${link ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>` : '<span class="learning-admin-meta">Link pending</span>'}
+      <div class="learning-admin-asset-header">
+        <div class="learning-admin-asset-details">
+          <strong>${label}</strong>
+          <span class="learning-admin-meta">${type}</span>
+          ${link ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>` : '<span class="learning-admin-meta">Link pending</span>'}
+        </div>
+        <div class="learning-admin-asset-actions">
+          <button type="button" class="md-button md-button--text md-button--small" data-asset-action="edit" data-asset-id="${assetId}">
+            <span class="material-symbols-rounded">edit</span>
+            Edit
+          </button>
+          <button type="button" class="md-button md-button--text md-button--small learning-admin-danger" data-asset-action="delete" data-asset-id="${assetId}">
+            <span class="material-symbols-rounded">delete</span>
+            Delete
+          </button>
+        </div>
+      </div>
     `;
     list.appendChild(item);
   });
@@ -2511,6 +2539,12 @@ function resolveLearningAdminLesson() {
   if (!learningAdminState.selectedLessonId) return null;
   const lessons = learningAdminState.lessonsByModule.get(String(learningAdminState.selectedModuleId)) || [];
   return lessons.find(item => String(item.id) === String(learningAdminState.selectedLessonId)) || null;
+}
+
+function resolveLearningAdminAsset(assetId) {
+  const lesson = resolveLearningAdminLesson();
+  if (!lesson || !Array.isArray(lesson.assets)) return null;
+  return lesson.assets.find(asset => String(asset.id) === String(assetId)) || null;
 }
 
 async function loadLearningAdminCourses() {
@@ -2793,6 +2827,7 @@ function selectLearningAdminLesson(lessonId) {
   if (lesson) {
     populateLearningAdminLessonForm(lesson);
   }
+  resetLearningAdminAssetForm();
   renderLearningAdminLessons();
   if (lessonId) {
     loadLearningAdminAssets(lessonId);
@@ -2952,6 +2987,39 @@ async function onLearningAdminCourseAction(action) {
   }
 }
 
+async function onLearningAdminCourseDelete() {
+  const courseId = document.getElementById('learningAdminCourseId').value;
+  if (!courseId) {
+    setLearningAdminStatus('Select a course first.');
+    return;
+  }
+  if (!window.confirm('Delete this course and all associated modules, lessons, and assets?')) {
+    return;
+  }
+  try {
+    const res = await learningAdminFetch(`/api/learning-hub/courses/${courseId}`, {
+      method: 'DELETE'
+    });
+    if (handleLearningAdminAuthFailure(res)) return;
+    if (!res.ok) {
+      setLearningAdminStatus('Unable to delete course.');
+      return;
+    }
+    learningAdminState.selectedCourseId = null;
+    learningAdminState.selectedModuleId = null;
+    learningAdminState.selectedLessonId = null;
+    resetLearningAdminCourseForm();
+    resetLearningAdminModuleForm();
+    resetLearningAdminLessonForm();
+    resetLearningAdminAssetForm();
+    await loadLearningAdminCourses();
+    setLearningAdminStatus('');
+  } catch (error) {
+    console.error('Failed to delete course', error);
+    setLearningAdminStatus('Unable to delete course.');
+  }
+}
+
 async function onLearningAdminModuleSubmit(event) {
   event.preventDefault();
   if (!learningAdminState.selectedCourseId) {
@@ -2985,6 +3053,37 @@ async function onLearningAdminModuleSubmit(event) {
   } catch (error) {
     console.error('Failed to save module', error);
     setLearningAdminStatus('Unable to save module.');
+  }
+}
+
+async function onLearningAdminModuleDelete() {
+  const moduleId = document.getElementById('learningAdminModuleId').value;
+  if (!moduleId) {
+    setLearningAdminStatus('Select a module first.');
+    return;
+  }
+  if (!window.confirm('Delete this module and its lessons/assets?')) {
+    return;
+  }
+  try {
+    const res = await learningAdminFetch(`/api/learning-hub/modules/${moduleId}`, {
+      method: 'DELETE'
+    });
+    if (handleLearningAdminAuthFailure(res)) return;
+    if (!res.ok) {
+      setLearningAdminStatus('Unable to delete module.');
+      return;
+    }
+    learningAdminState.selectedModuleId = null;
+    learningAdminState.selectedLessonId = null;
+    resetLearningAdminModuleForm();
+    resetLearningAdminLessonForm();
+    resetLearningAdminAssetForm();
+    await loadLearningAdminModules(learningAdminState.selectedCourseId);
+    setLearningAdminStatus('');
+  } catch (error) {
+    console.error('Failed to delete module', error);
+    setLearningAdminStatus('Unable to delete module.');
   }
 }
 
@@ -3024,12 +3123,42 @@ async function onLearningAdminLessonSubmit(event) {
   }
 }
 
+async function onLearningAdminLessonDelete() {
+  const lessonId = document.getElementById('learningAdminLessonId').value;
+  if (!lessonId) {
+    setLearningAdminStatus('Select a lesson first.');
+    return;
+  }
+  if (!window.confirm('Delete this lesson and its assets?')) {
+    return;
+  }
+  try {
+    const res = await learningAdminFetch(`/api/learning-hub/lessons/${lessonId}`, {
+      method: 'DELETE'
+    });
+    if (handleLearningAdminAuthFailure(res)) return;
+    if (!res.ok) {
+      setLearningAdminStatus('Unable to delete lesson.');
+      return;
+    }
+    learningAdminState.selectedLessonId = null;
+    resetLearningAdminLessonForm();
+    resetLearningAdminAssetForm();
+    await loadLearningAdminLessons(learningAdminState.selectedModuleId);
+    setLearningAdminStatus('');
+  } catch (error) {
+    console.error('Failed to delete lesson', error);
+    setLearningAdminStatus('Unable to delete lesson.');
+  }
+}
+
 async function onLearningAdminAssetSubmit(event) {
   event.preventDefault();
   if (!learningAdminState.selectedLessonId) {
     setLearningAdminStatus('Select a lesson before attaching assets.');
     return;
   }
+  const assetId = document.getElementById('learningAdminAssetId').value;
   const payload = {
     lessonId: learningAdminState.selectedLessonId,
     title: document.getElementById('learningAdminAssetLabel').value.trim(),
@@ -3041,22 +3170,67 @@ async function onLearningAdminAssetSubmit(event) {
     return;
   }
   try {
-    const res = await learningAdminFetch(`/api/learning-hub/lessons/${learningAdminState.selectedLessonId}/assets`, {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
+    const res = await learningAdminFetch(
+      assetId ? `/api/learning-hub/assets/${assetId}` : `/api/learning-hub/lessons/${learningAdminState.selectedLessonId}/assets`,
+      {
+        method: assetId ? 'PUT' : 'POST',
+        body: JSON.stringify(payload)
+      }
+    );
     if (handleLearningAdminAuthFailure(res)) return;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setLearningAdminStatus('Unable to save lesson asset.');
+      return;
+    }
     const lesson = resolveLearningAdminLesson();
     if (lesson) {
       if (!Array.isArray(lesson.assets)) lesson.assets = [];
-      lesson.assets.push({ ...payload });
+      if (assetId) {
+        const assetIndex = lesson.assets.findIndex(asset => String(asset.id) === String(assetId));
+        if (assetIndex >= 0) {
+          lesson.assets[assetIndex] = { ...lesson.assets[assetIndex], ...payload };
+        }
+      } else {
+        const newAssetId = data.id || data.assetId;
+        lesson.assets.push({ ...payload, id: newAssetId });
+      }
     }
-    document.getElementById('learningAdminAssetForm').reset();
+    resetLearningAdminAssetForm();
     renderLearningAdminAssets();
     setLearningAdminStatus('');
   } catch (error) {
-    console.error('Failed to add lesson asset', error);
-    setLearningAdminStatus('Unable to add lesson asset.');
+    console.error('Failed to save lesson asset', error);
+    setLearningAdminStatus('Unable to save lesson asset.');
+  }
+}
+
+async function onLearningAdminAssetDelete(assetId) {
+  if (!assetId) return;
+  if (!window.confirm('Delete this lesson asset?')) {
+    return;
+  }
+  try {
+    const res = await learningAdminFetch(`/api/learning-hub/assets/${assetId}`, {
+      method: 'DELETE'
+    });
+    if (handleLearningAdminAuthFailure(res)) return;
+    if (!res.ok) {
+      setLearningAdminStatus('Unable to delete lesson asset.');
+      return;
+    }
+    const lesson = resolveLearningAdminLesson();
+    if (lesson && Array.isArray(lesson.assets)) {
+      lesson.assets = lesson.assets.filter(asset => String(asset.id) !== String(assetId));
+    }
+    if (document.getElementById('learningAdminAssetId').value === String(assetId)) {
+      resetLearningAdminAssetForm();
+    }
+    renderLearningAdminAssets();
+    setLearningAdminStatus('');
+  } catch (error) {
+    console.error('Failed to delete lesson asset', error);
+    setLearningAdminStatus('Unable to delete lesson asset.');
   }
 }
 
@@ -3122,8 +3296,13 @@ function initLearningAdmin() {
   const newLessonBtn = document.getElementById('learningAdminNewLesson');
   const publishBtn = document.getElementById('learningAdminPublishCourse');
   const archiveBtn = document.getElementById('learningAdminArchiveCourse');
+  const deleteCourseBtn = document.getElementById('learningAdminDeleteCourse');
+  const deleteModuleBtn = document.getElementById('learningAdminDeleteModule');
+  const deleteLessonBtn = document.getElementById('learningAdminDeleteLesson');
   const moduleList = document.getElementById('learningAdminModuleList');
   const lessonList = document.getElementById('learningAdminLessonList');
+  const assetList = document.getElementById('learningAdminAssetList');
+  const assetCancelBtn = document.getElementById('learningAdminAssetCancel');
   const assignmentCourseSelect = document.getElementById('learningAdminAssignmentCourse');
 
   if (courseForm) courseForm.addEventListener('submit', onLearningAdminCourseSubmit);
@@ -3141,6 +3320,7 @@ function initLearningAdmin() {
     renderLearningAdminModules();
     renderLearningAdminLessons();
     renderLearningAdminAssets();
+    resetLearningAdminAssetForm();
   });
   if (newModuleBtn) newModuleBtn.addEventListener('click', () => {
     learningAdminState.selectedModuleId = null;
@@ -3149,15 +3329,35 @@ function initLearningAdmin() {
     renderLearningAdminModules();
     renderLearningAdminLessons();
     renderLearningAdminAssets();
+    resetLearningAdminAssetForm();
   });
   if (newLessonBtn) newLessonBtn.addEventListener('click', () => {
     learningAdminState.selectedLessonId = null;
     resetLearningAdminLessonForm();
     renderLearningAdminLessons();
     renderLearningAdminAssets();
+    resetLearningAdminAssetForm();
   });
   if (publishBtn) publishBtn.addEventListener('click', () => onLearningAdminCourseAction('publish'));
   if (archiveBtn) archiveBtn.addEventListener('click', () => onLearningAdminCourseAction('archive'));
+  if (deleteCourseBtn) deleteCourseBtn.addEventListener('click', onLearningAdminCourseDelete);
+  if (deleteModuleBtn) deleteModuleBtn.addEventListener('click', onLearningAdminModuleDelete);
+  if (deleteLessonBtn) deleteLessonBtn.addEventListener('click', onLearningAdminLessonDelete);
+  if (assetCancelBtn) assetCancelBtn.addEventListener('click', resetLearningAdminAssetForm);
+  if (assetList) {
+    assetList.addEventListener('click', event => {
+      const actionButton = event.target.closest('[data-asset-action]');
+      if (!actionButton) return;
+      const assetId = actionButton.dataset.assetId;
+      const action = actionButton.dataset.assetAction;
+      if (action === 'edit') {
+        const asset = resolveLearningAdminAsset(assetId);
+        if (asset) populateLearningAdminAssetForm(asset);
+      } else if (action === 'delete') {
+        onLearningAdminAssetDelete(assetId);
+      }
+    });
+  }
   if (assignmentCourseSelect) {
     assignmentCourseSelect.addEventListener('change', event => {
       const courseId = event.target.value;
@@ -3173,6 +3373,7 @@ function initLearningAdmin() {
   resetLearningAdminCourseForm();
   resetLearningAdminModuleForm();
   resetLearningAdminLessonForm();
+  resetLearningAdminAssetForm();
   loadLearningAdminCourses();
   loadLearningAdminEmployees();
 }
