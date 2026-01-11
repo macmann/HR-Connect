@@ -1697,16 +1697,24 @@ router.get('/reports/summary', requireProgressReadAccess, async (req, res) => {
   }
 });
 
-router.get('/progress', requireProgressReadAccess, async (req, res) => {
+router.get('/progress', async (req, res) => {
   try {
-    const { employeeId, courseId } = req.query;
-    const query = {};
+    const requestedEmployeeId = req.query.employeeId ? String(req.query.employeeId) : '';
+    const employeeId = requestedEmployeeId || String(req.user?.id || '');
 
-    if (employeeId) {
-      query.employeeId = String(employeeId);
+    if (!employeeId) {
+      return res.status(400).json({ error: 'employee_id_required' });
     }
-    if (courseId) {
-      query.courseId = String(courseId);
+
+    if (requestedEmployeeId && requestedEmployeeId !== String(req.user?.id || '')) {
+      if (!hasProgressOverrideAccess(req.user)) {
+        return res.status(403).json({ error: 'learning_hub_progress_forbidden' });
+      }
+    }
+
+    const query = { employeeId };
+    if (req.query.courseId) {
+      query.courseId = String(req.query.courseId);
     }
 
     const database = getDatabase();
@@ -1727,6 +1735,56 @@ router.get('/courses', async (req, res) => {
   try {
     const database = getDatabase();
     const statusFilter = normalizeCourseStatus(req.query.status);
+    const filter = normalizeString(req.query.filter).toLowerCase();
+
+    if (filter === 'assigned' || filter === 'available') {
+      const employeeId = String(req.user?.id || '');
+      if (!employeeId) {
+        return res.status(400).json({ error: 'employee_id_required' });
+      }
+
+      const assignments = await database
+        .collection('learningCourseAssignments')
+        .find({ employeeId })
+        .toArray();
+      const uniqueAssignments = selectUniqueAssignments(assignments);
+      const assignedCourseIds = uniqueAssignments.map(assignment => String(assignment.courseId));
+
+      const courseQuery = statusFilter ? { status: statusFilter } : {};
+      if (filter === 'assigned') {
+        courseQuery._id = { $in: assignedCourseIds.map(id => new ObjectId(id)) };
+      } else {
+        courseQuery.status = courseQuery.status || 'published';
+        courseQuery._id = { $nin: assignedCourseIds.map(id => new ObjectId(id)) };
+      }
+
+      const courses = await database
+        .collection('learningCourses')
+        .find(courseQuery)
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      const assignmentByCourse = new Map(
+        uniqueAssignments.map(assignment => [String(assignment.courseId), assignment])
+      );
+
+      const response = courses.map(course => {
+        const normalized = normalizeDocument(course);
+        const assignment = assignmentByCourse.get(String(course._id)) || null;
+        if (!assignment) return normalized;
+        return {
+          ...normalized,
+          assignmentRequired: assignment.required,
+          assignmentType: assignment.assignmentType,
+          dueDate: assignment.dueDate,
+          dueDays: assignment.dueDays,
+          assignedAt: assignment.assignedAt
+        };
+      });
+
+      return res.json({ courses: response });
+    }
+
     const query = statusFilter ? { status: statusFilter } : {};
     const courses = await database
       .collection('learningCourses')

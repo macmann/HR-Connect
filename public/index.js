@@ -1142,6 +1142,13 @@ const learningHubState = {
     modules: false,
     lessons: false,
     playback: false
+  },
+  progressTracking: {
+    activeLessonId: null,
+    lastWatchPercent: 0,
+    lastWatchSentAt: 0,
+    pendingWatchUpdate: false,
+    pendingCompletionUpdate: false
   }
 };
 
@@ -1212,6 +1219,28 @@ function normalizeProgressCollection(collection, idKeys) {
     });
   }
   return map;
+}
+
+function splitProgressEntries(payload) {
+  const grouped = { courses: [], modules: [], lessons: [] };
+  if (Array.isArray(payload)) {
+    payload.forEach(entry => {
+      if (!entry || typeof entry !== 'object') return;
+      if (entry.progressType === 'course') grouped.courses.push(entry);
+      if (entry.progressType === 'module') grouped.modules.push(entry);
+      if (entry.progressType === 'lesson') grouped.lessons.push(entry);
+    });
+    return grouped;
+  }
+  if (payload && typeof payload === 'object') {
+    if (Array.isArray(payload.courses) || Array.isArray(payload.modules) || Array.isArray(payload.lessons)) {
+      grouped.courses = Array.isArray(payload.courses) ? payload.courses : [];
+      grouped.modules = Array.isArray(payload.modules) ? payload.modules : [];
+      grouped.lessons = Array.isArray(payload.lessons) ? payload.lessons : [];
+      return grouped;
+    }
+  }
+  return grouped;
 }
 
 function normalizeLearningItems(items, idKeys) {
@@ -1375,6 +1404,32 @@ function resolveLessonStatus(lessonId) {
     return 'In progress';
   }
   return 'Not started';
+}
+
+function upsertProgressEntry(entry) {
+  if (!entry || typeof entry !== 'object') return;
+  if (entry.progressType === 'course' && entry.courseId) {
+    learningHubState.progress.courses.set(String(entry.courseId), entry);
+  }
+  if (entry.progressType === 'module' && entry.moduleId) {
+    learningHubState.progress.modules.set(String(entry.moduleId), entry);
+  }
+  if (entry.progressType === 'lesson' && entry.lessonId) {
+    learningHubState.progress.lessons.set(String(entry.lessonId), entry);
+  }
+}
+
+function applyProgressPayload(payload) {
+  if (!payload || typeof payload !== 'object') return;
+  if (payload.progress) {
+    upsertProgressEntry(payload.progress);
+  }
+  if (payload.moduleRollup) {
+    upsertProgressEntry(payload.moduleRollup);
+  }
+  if (payload.courseRollup) {
+    upsertProgressEntry(payload.courseRollup);
+  }
 }
 
 function buildRequirementBadge(isRequired) {
@@ -1586,6 +1641,13 @@ function renderLessonPlayer() {
   renderProgressBar('learningLessonProgressBar', 'learningLessonProgressText', lesson ? resolveLessonProgress(lesson.id) : 0);
   renderProgressBar('learningModuleProgressBar', 'learningModuleProgressText', learningHubState.selectedModuleId ? resolveModuleProgress(learningHubState.selectedModuleId) : 0);
 
+  const activeLessonId = lesson?.id ? String(lesson.id) : null;
+  if (learningHubState.progressTracking.activeLessonId !== activeLessonId) {
+    learningHubState.progressTracking.activeLessonId = activeLessonId;
+    learningHubState.progressTracking.lastWatchPercent = 0;
+    learningHubState.progressTracking.lastWatchSentAt = 0;
+  }
+
   const playback = lesson ? learningHubState.playbackByLesson.get(String(lesson.id)) : null;
   const video = document.getElementById('learningVideo');
   const embed = document.getElementById('learningVideoEmbed');
@@ -1649,8 +1711,17 @@ function renderLessonPlayer() {
 
   const markComplete = document.getElementById('learningMarkComplete');
   if (markComplete) {
-    markComplete.disabled = true;
-    markComplete.title = 'Progress tracking will be available once completion updates are enabled.';
+    if (!lesson) {
+      markComplete.disabled = true;
+      markComplete.textContent = 'Mark complete';
+      markComplete.title = 'Select a lesson to enable completion.';
+    } else {
+      const status = resolveLessonStatus(lesson.id);
+      const isCompleted = status === 'Completed';
+      markComplete.disabled = isCompleted;
+      markComplete.textContent = isCompleted ? 'Completed' : 'Mark complete';
+      markComplete.title = isCompleted ? 'Lesson already completed.' : 'Mark this lesson as complete.';
+    }
   }
 }
 
@@ -1677,9 +1748,10 @@ async function loadLearningHubProgress() {
       return;
     }
     const data = await res.json().catch(() => ({}));
-    learningHubState.progress.courses = normalizeProgressCollection(data.courses, ['courseId', 'id']);
-    learningHubState.progress.modules = normalizeProgressCollection(data.modules, ['moduleId', 'id']);
-    learningHubState.progress.lessons = normalizeProgressCollection(data.lessons, ['lessonId', 'id']);
+    const grouped = splitProgressEntries(data);
+    learningHubState.progress.courses = normalizeProgressCollection(grouped.courses, ['courseId', 'id']);
+    learningHubState.progress.modules = normalizeProgressCollection(grouped.modules, ['moduleId', 'id']);
+    learningHubState.progress.lessons = normalizeProgressCollection(grouped.lessons, ['lessonId', 'id']);
     setLearningHubStatus('');
   } catch (error) {
     console.error('Failed to load learning hub progress', error);
@@ -1795,6 +1867,95 @@ function refreshLearningHubData() {
   return Promise.all([loadLearningHubProgress(), loadLearningHubCourses()]).then(updateLearningHubUI);
 }
 
+async function recordLessonCompletion(lessonId) {
+  if (!lessonId || learningHubState.progressTracking.pendingCompletionUpdate) return;
+  learningHubState.progressTracking.pendingCompletionUpdate = true;
+  try {
+    const res = await learningHubFetch(`/api/learning-hub/progress/lessons/${lessonId}/completion`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    if (res.status === 401 || res.status === 403) {
+      setLearningHubStatus('Access denied for completion tracking. Please reauthenticate.');
+      return;
+    }
+    if (!res.ok) {
+      setLearningHubStatus('Unable to update completion right now. Please try again.');
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    applyProgressPayload(data);
+    updateLearningHubUI();
+  } catch (error) {
+    console.error('Failed to record lesson completion', error);
+    setLearningHubStatus('Unable to update completion right now. Please try again later.');
+  } finally {
+    learningHubState.progressTracking.pendingCompletionUpdate = false;
+  }
+}
+
+async function recordLessonWatchProgress(lessonId, percent) {
+  if (!lessonId || learningHubState.progressTracking.pendingWatchUpdate) return;
+  if (!Number.isFinite(percent)) return;
+  learningHubState.progressTracking.pendingWatchUpdate = true;
+  try {
+    const res = await learningHubFetch(`/api/learning-hub/progress/lessons/${lessonId}/watch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ videoWatchPercent: percent })
+    });
+    if (res.status === 401 || res.status === 403) {
+      setLearningHubStatus('Access denied for watch tracking. Please reauthenticate.');
+      return;
+    }
+    if (!res.ok) {
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    applyProgressPayload(data);
+    updateLearningHubUI();
+  } catch (error) {
+    console.error('Failed to record watch progress', error);
+  } finally {
+    learningHubState.progressTracking.pendingWatchUpdate = false;
+  }
+}
+
+function handleVideoProgressUpdate(event) {
+  const video = event.target;
+  const lessonId = learningHubState.progressTracking.activeLessonId;
+  if (!lessonId || !video) return;
+  if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+  const percent = Math.min(100, Math.max(0, Math.round((video.currentTime / video.duration) * 100)));
+  if (!Number.isFinite(percent) || percent < 1) return;
+
+  const now = Date.now();
+  const lastPercent = learningHubState.progressTracking.lastWatchPercent;
+  const lastSentAt = learningHubState.progressTracking.lastWatchSentAt;
+  const percentDelta = percent - lastPercent;
+  const timeDelta = now - lastSentAt;
+
+  if (percent < 100 && percentDelta < 5 && timeDelta < 15000) {
+    return;
+  }
+
+  learningHubState.progressTracking.lastWatchPercent = percent;
+  learningHubState.progressTracking.lastWatchSentAt = now;
+  recordLessonWatchProgress(lessonId, percent);
+}
+
+function handleVideoEnded(event) {
+  const lessonId = learningHubState.progressTracking.activeLessonId;
+  if (!lessonId) return;
+  learningHubState.progressTracking.lastWatchPercent = 100;
+  learningHubState.progressTracking.lastWatchSentAt = Date.now();
+  recordLessonWatchProgress(lessonId, 100);
+}
+
 async function selectCourse(courseId) {
   if (!courseId) return;
   learningHubState.selectedCourseId = courseId;
@@ -1858,6 +2019,7 @@ function initLearningHub() {
   const prevBtn = document.getElementById('learningPrevLesson');
   const nextBtn = document.getElementById('learningNextLesson');
   const markBtn = document.getElementById('learningMarkComplete');
+  const video = document.getElementById('learningVideo');
 
   if (filter) {
     filter.addEventListener('change', () => {
@@ -1899,8 +2061,16 @@ function initLearningHub() {
     nextBtn.addEventListener('click', () => navigateLesson('next'));
   }
   if (markBtn) {
-    markBtn.disabled = true;
-    markBtn.title = 'Progress tracking will be available once completion updates are enabled.';
+    markBtn.addEventListener('click', () => {
+      const lesson = findCurrentLesson();
+      if (!lesson) return;
+      recordLessonCompletion(lesson.id);
+    });
+  }
+
+  if (video) {
+    video.addEventListener('timeupdate', handleVideoProgressUpdate);
+    video.addEventListener('ended', handleVideoEnded);
   }
 
   refreshLearningHubData();
