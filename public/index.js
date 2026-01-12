@@ -1310,6 +1310,7 @@ function resolveAssetUrl(asset) {
   return (
     asset?.playback?.streamUrl ||
     asset?.playback?.url ||
+    asset?.metadata?.oneDrive?.webUrl ||
     asset?.playback?.embedUrl ||
     asset?.url ||
     ''

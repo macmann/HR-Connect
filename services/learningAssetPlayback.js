@@ -69,6 +69,12 @@ async function generateOneDriveStreamingLink(oneDrive = {}) {
     process.env.ONEDRIVE_GRAPH_TOKEN ||
     process.env.MS_GRAPH_TOKEN ||
     '';
+  const skipCreateLink =
+    normalizeString(process.env.ONEDRIVE_SKIP_CREATE_LINK).toLowerCase() === 'true';
+
+  if (skipCreateLink) {
+    return { streamUrl: null, expiresAt: null, error: 'onedrive_stream_skipped' };
+  }
 
   if (!endpoint || !token) {
     return { streamUrl: null, expiresAt: null, error: 'onedrive_stream_unavailable' };
@@ -112,7 +118,14 @@ async function generateOneDriveStreamingLink(oneDrive = {}) {
 }
 
 function extractSafeMetadata(metadata = {}) {
+  const oneDrive = metadata.oneDrive && typeof metadata.oneDrive === 'object'
+    ? {
+        webUrl: normalizeString(metadata.oneDrive.webUrl)
+      }
+    : null;
+
   return {
+    oneDrive,
     mimeType: normalizeString(metadata.mimeType),
     fileName: normalizeString(metadata.fileName),
     fileSize: Number.isFinite(Number(metadata.fileSize)) ? Number(metadata.fileSize) : null,
@@ -126,6 +139,8 @@ function extractSafeMetadata(metadata = {}) {
 async function normalizeLessonAssetForPlayback(asset = {}) {
   const provider = normalizeProvider(asset.provider);
   const metadata = asset.metadata || {};
+  const oneDriveMetadata = metadata.oneDrive || {};
+  const storedOneDriveUrl = normalizeString(oneDriveMetadata.webUrl);
   const base = {
     id: asset._id?.toString ? asset._id.toString() : asset._id,
     provider: asset.provider,
@@ -137,13 +152,15 @@ async function normalizeLessonAssetForPlayback(asset = {}) {
 
   if (provider === 'onedrive') {
     const stream = await generateOneDriveStreamingLink(metadata.oneDrive || {});
+    const fallbackUrl = storedOneDriveUrl || null;
     return {
       ...base,
       playback: {
         type: 'onedrive',
         streamUrl: stream.streamUrl,
+        url: fallbackUrl,
         expiresAt: stream.expiresAt,
-        error: stream.error
+        error: stream.streamUrl || fallbackUrl ? null : stream.error
       }
     };
   }
