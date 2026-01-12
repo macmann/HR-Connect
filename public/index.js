@@ -1325,11 +1325,12 @@ function normalizePlaybackAssets(playback) {
 }
 
 function resolveAssetUrl(asset) {
+  const embedUrl = resolveAssetEmbedUrl(asset);
   return (
     asset?.playback?.streamUrl ||
+    embedUrl ||
     asset?.playback?.url ||
     asset?.metadata?.oneDrive?.webUrl ||
-    asset?.playback?.embedUrl ||
     asset?.url ||
     ''
   );
@@ -1344,12 +1345,41 @@ function resolveAssetTypeLabel(asset) {
   if (playbackType === 'youtube') return 'YouTube';
   if (playbackType === 'onedrive') return 'OneDrive';
   if (playbackType === 'direct') return 'Link';
+  if (asset?.metadata?.oneDrive?.webUrl) return 'OneDrive';
+  if (asset?.playback?.embedUrl) return 'Embed';
   if (asset?.metadata?.mimeType) return asset.metadata.mimeType;
   return '';
 }
 
 function looksLikeVideoUrl(url = '') {
   return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/.test(url);
+}
+
+function resolveAssetEmbedUrl(asset) {
+  if (!asset) return '';
+  const embedUrl = asset?.playback?.embedUrl;
+  if (embedUrl) return embedUrl;
+  const oneDriveUrl = asset?.metadata?.oneDrive?.webUrl;
+  if (!oneDriveUrl) return '';
+  try {
+    const url = new URL(oneDriveUrl);
+    if (url.pathname.includes('/embed')) {
+      return oneDriveUrl;
+    }
+    if (!url.host.includes('onedrive.live.com')) {
+      return '';
+    }
+    const resid = url.searchParams.get('resid') || url.searchParams.get('id');
+    if (!resid) return '';
+    const params = new URLSearchParams();
+    params.set('resid', resid);
+    const authkey = url.searchParams.get('authkey');
+    if (authkey) params.set('authkey', authkey);
+    params.set('em', '2');
+    return `https://onedrive.live.com/embed?${params.toString()}`;
+  } catch (error) {
+    return '';
+  }
 }
 
 function isVideoAsset(asset) {
@@ -1778,12 +1808,22 @@ function renderLessonPlayer() {
   const videoAsset = assets.find(isVideoAsset);
   const videoSrc = videoAsset ? resolveAssetUrl(videoAsset) : '';
   const isYouTube = videoAsset?.playback?.type === 'youtube';
+  const onedriveAsset = assets.find(asset => asset?.playback?.type === 'onedrive');
+  const onedriveEmbedUrl = onedriveAsset ? resolveAssetEmbedUrl(onedriveAsset) : '';
   const docAsset = !videoAsset ? assets.find(asset => isPptxAsset(asset) || isPdfAsset(asset)) : null;
   const docSrc = docAsset ? resolveDocumentEmbedUrl(docAsset) : '';
 
   if (video && embed && placeholder && docEmbed) {
     if (videoAsset && isYouTube && videoSrc) {
       embed.src = videoSrc;
+      embed.classList.remove('hidden');
+      video.classList.add('hidden');
+      video.removeAttribute('src');
+      docEmbed.classList.add('hidden');
+      docEmbed.removeAttribute('src');
+      placeholder.classList.add('hidden');
+    } else if (onedriveAsset && onedriveEmbedUrl) {
+      embed.src = onedriveEmbedUrl;
       embed.classList.remove('hidden');
       video.classList.add('hidden');
       video.removeAttribute('src');
