@@ -1037,32 +1037,6 @@
   gap: 6px;
 }
 
-.learning-hub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 20px;
-}
-
-.learning-hub-column {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.learning-hub-card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.learning-hub-card-header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
 
 .learning-hub-status {
   padding: 12px 16px;
@@ -1506,14 +1480,6 @@
   font-size: 14px;
   font-weight: 700;
   color: #0f172a;
-}
-
-.learning-course-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 13px;
-  color: #475569;
 }
 
 .learning-player {

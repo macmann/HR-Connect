@@ -1631,13 +1631,15 @@ function renderLessonList() {
   if (empty) empty.classList.add('hidden');
 
   lessons.forEach(lesson => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'learning-list-item';
+    const item = document.createElement('div');
+    item.className = 'learning-lesson-item';
     if (String(lesson.id) === String(learningHubState.selectedLessonId)) {
-      button.classList.add('learning-list-item--active');
+      item.classList.add('learning-lesson-item--active');
     }
-    button.dataset.lessonId = lesson.id;
+    item.dataset.lessonId = lesson.id;
+
+    const header = document.createElement('div');
+    header.className = 'learning-lesson-header';
 
     const title = document.createElement('div');
     title.className = 'learning-list-title';
@@ -1646,10 +1648,12 @@ function renderLessonList() {
     `;
     title.appendChild(buildRequirementBadge(lesson.required ?? lesson.isRequired ?? lesson.assignmentRequired));
 
+    header.appendChild(title);
+
     const meta = document.createElement('div');
-    meta.className = 'learning-list-meta';
+    meta.className = 'learning-lesson-meta';
     const progress = resolveLessonProgress(lesson.id);
-    meta.textContent = `${resolveLessonStatus(lesson.id)} • ${progress}%`;
+    meta.innerHTML = `<span>${resolveLessonStatus(lesson.id)}</span><span>•</span><span>${progress}% complete</span>`;
 
     const status = document.createElement('div');
     status.className = 'learning-progress-inline';
@@ -1660,8 +1664,21 @@ function renderLessonList() {
       <span class="learning-progress-text">${progress}%</span>
     `;
 
-    button.append(title, meta, status);
-    list.appendChild(button);
+    const actionWrap = document.createElement('div');
+    actionWrap.className = 'learning-lesson-actions';
+    const actionBtn = document.createElement('button');
+    actionBtn.type = 'button';
+    actionBtn.className = 'md-button md-button--outlined md-button--small learning-lesson-action';
+    actionBtn.dataset.lessonId = lesson.id;
+    const actionLabel = progress > 0 ? 'Resume Lesson' : 'Start Lesson';
+    actionBtn.innerHTML = `
+      <span class="material-symbols-rounded">play_circle</span>
+      ${actionLabel}
+    `;
+    actionWrap.appendChild(actionBtn);
+
+    item.append(header, meta, status, actionWrap);
+    list.appendChild(item);
   });
 }
 
