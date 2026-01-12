@@ -1364,6 +1364,33 @@ function isVideoAsset(asset) {
   return false;
 }
 
+function isPptxAsset(asset) {
+  const mime = asset?.metadata?.mimeType || '';
+  if (/presentation|powerpoint/.test(mime)) return true;
+  const url = resolveAssetUrl(asset);
+  return /\.pptx(\?.*)?$/.test(url);
+}
+
+function isPdfAsset(asset) {
+  const mime = asset?.metadata?.mimeType || '';
+  if (mime === 'application/pdf') return true;
+  const url = resolveAssetUrl(asset);
+  return /\.pdf(\?.*)?$/.test(url);
+}
+
+function resolveDocumentEmbedUrl(asset) {
+  if (!asset) return '';
+  const url = resolveAssetUrl(asset);
+  if (!url) return '';
+  if (isPptxAsset(asset)) {
+    return `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
+  }
+  if (isPdfAsset(asset)) {
+    return url;
+  }
+  return '';
+}
+
 function toPercent(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === 'number') {
@@ -1745,22 +1772,37 @@ function renderLessonPlayer() {
   const playback = lesson ? learningHubState.playbackByLesson.get(String(lesson.id)) : null;
   const video = document.getElementById('learningVideo');
   const embed = document.getElementById('learningVideoEmbed');
+  const docEmbed = document.getElementById('learningDocEmbed');
   const placeholder = document.getElementById('learningVideoPlaceholder');
   const assets = normalizePlaybackAssets(playback);
   const videoAsset = assets.find(isVideoAsset);
   const videoSrc = videoAsset ? resolveAssetUrl(videoAsset) : '';
   const isYouTube = videoAsset?.playback?.type === 'youtube';
+  const docAsset = !videoAsset ? assets.find(asset => isPptxAsset(asset) || isPdfAsset(asset)) : null;
+  const docSrc = docAsset ? resolveDocumentEmbedUrl(docAsset) : '';
 
-  if (video && embed && placeholder) {
+  if (video && embed && placeholder && docEmbed) {
     if (videoAsset && isYouTube && videoSrc) {
       embed.src = videoSrc;
       embed.classList.remove('hidden');
       video.classList.add('hidden');
       video.removeAttribute('src');
+      docEmbed.classList.add('hidden');
+      docEmbed.removeAttribute('src');
       placeholder.classList.add('hidden');
     } else if (videoAsset && videoSrc) {
       video.src = videoSrc;
       video.classList.remove('hidden');
+      embed.classList.add('hidden');
+      embed.removeAttribute('src');
+      docEmbed.classList.add('hidden');
+      docEmbed.removeAttribute('src');
+      placeholder.classList.add('hidden');
+    } else if (docAsset && docSrc) {
+      docEmbed.src = docSrc;
+      docEmbed.classList.remove('hidden');
+      video.classList.add('hidden');
+      video.removeAttribute('src');
       embed.classList.add('hidden');
       embed.removeAttribute('src');
       placeholder.classList.add('hidden');
@@ -1769,6 +1811,8 @@ function renderLessonPlayer() {
       embed.removeAttribute('src');
       video.classList.add('hidden');
       embed.classList.add('hidden');
+      docEmbed.removeAttribute('src');
+      docEmbed.classList.add('hidden');
       placeholder.classList.remove('hidden');
     }
   }
