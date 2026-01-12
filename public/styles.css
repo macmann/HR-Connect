@@ -1037,31 +1037,111 @@
   gap: 6px;
 }
 
-.learning-hub-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+.learning-course-map {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
 }
 
-.learning-hub-column {
+.learning-map-section {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.learning-hub-card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.learning-hub-card-header {
+.learning-map-header,
+.learning-map-section-header {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+}
+
+.learning-course-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.learning-course-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.learning-course-progress {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.learning-course-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.learning-map-section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.learning-lesson-item {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.learning-lesson-item:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 10px 18px rgba(79, 70, 229, 0.08);
+}
+
+.learning-lesson-item--active {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+
+.learning-lesson-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.learning-lesson-meta {
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.learning-lesson-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.learning-lesson-action {
+  font-size: 13px;
 }
 
 .learning-hub-status {
@@ -1506,14 +1586,6 @@
   font-size: 14px;
   font-weight: 700;
   color: #0f172a;
-}
-
-.learning-course-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 13px;
-  color: #475569;
 }
 
 .learning-player {

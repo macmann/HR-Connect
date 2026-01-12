@@ -211,31 +211,111 @@
       gap: 6px;
     }
 
-    .learning-hub-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    .learning-course-map {
+      display: flex;
+      flex-direction: column;
       gap: 20px;
     }
 
-    .learning-hub-column {
+    .learning-map-section {
       display: flex;
       flex-direction: column;
       gap: 16px;
     }
 
-    .learning-hub-card {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .learning-hub-card-header {
+    .learning-map-header,
+    .learning-map-section-header {
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: flex-start;
       gap: 12px;
+    }
+
+    .learning-course-overview {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+
+    .learning-course-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .learning-course-progress {
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .learning-course-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .learning-map-section-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .learning-lesson-item {
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+
+    .learning-lesson-item:hover {
+      border-color: #c7d2fe;
+      box-shadow: 0 10px 18px rgba(79, 70, 229, 0.08);
+    }
+
+    .learning-lesson-item--active {
+      border-color: #4f46e5;
+      background: #eef2ff;
+    }
+
+    .learning-lesson-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .learning-lesson-meta {
+      font-size: 13px;
+      color: #64748b;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .learning-lesson-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .learning-lesson-action {
+      font-size: 13px;
     }
 
     .learning-hub-status {
@@ -5035,129 +5115,144 @@
           </div>
         </div>
 
-        <div class="learning-hub-grid">
-          <div class="learning-hub-column">
-            <div class="md-card learning-hub-card">
-              <div class="learning-hub-card-header">
-                <div>
-                  <p class="card-title">
-                    <span class="material-symbols-rounded">assignment</span>
-                    Assigned Courses
-                  </p>
-                  <p class="card-subtitle">Focus on what is required or explore optional learning paths.</p>
-                </div>
-                <label class="md-field md-field--inline">
-                  <span class="md-label">Filter</span>
-                  <select id="learningCourseFilter" class="md-select">
-                    <option value="assigned" selected>Assigned</option>
-                    <option value="available">Available</option>
-                  </select>
-                </label>
+        <div class="learning-course-map">
+          <div class="md-card learning-map-section">
+            <div class="learning-map-header">
+              <div>
+                <p class="card-title">
+                  <span class="material-symbols-rounded">menu_book</span>
+                  Course Map
+                </p>
+                <p class="card-subtitle">Choose a course to see the overview, then move through modules and lessons.</p>
               </div>
-              <div id="learningCourseList" class="learning-list"></div>
-              <div id="learningCourseEmpty" class="empty-state hidden">
-                <p>No courses found for this filter.</p>
+              <label class="md-field md-field--inline">
+                <span class="md-label">Filter</span>
+                <select id="learningCourseFilter" class="md-select">
+                  <option value="assigned" selected>Assigned</option>
+                  <option value="available">Available</option>
+                </select>
+              </label>
+            </div>
+            <div class="learning-course-overview">
+              <div>
+                <h3 id="learningCourseTitle" class="learning-course-title">Select a course to view modules and lessons.</h3>
+                <div id="learningCourseBadges" class="learning-header-badges"></div>
+                <div class="learning-course-meta" id="learningCourseMeta"></div>
+              </div>
+              <div class="learning-progress-inline learning-course-progress">
+                <span class="learning-progress-label">Course Progress</span>
+                <div class="learning-progress-bar">
+                  <div id="learningCourseProgressBar" class="learning-progress-fill" style="width: 0%;"></div>
+                </div>
+                <span id="learningCourseProgressText" class="learning-progress-text">0%</span>
               </div>
             </div>
           </div>
 
-          <div class="learning-hub-column">
-            <div class="md-card learning-hub-card">
-              <div class="learning-hub-card-header">
-                <div>
-                  <p class="card-title">
-                    <span class="material-symbols-rounded">menu_book</span>
-                    Course Details
-                  </p>
-                  <p id="learningCourseTitle" class="card-subtitle">Select a course to view modules and lessons.</p>
-                  <div id="learningCourseBadges" class="learning-header-badges"></div>
-                </div>
-                <div class="learning-progress-inline">
-                  <span class="learning-progress-label">Course Progress</span>
-                  <div class="learning-progress-bar">
-                    <div id="learningCourseProgressBar" class="learning-progress-fill" style="width: 0%;"></div>
-                  </div>
-                  <span id="learningCourseProgressText" class="learning-progress-text">0%</span>
-                </div>
+          <div class="md-card learning-map-section">
+            <div class="learning-map-section-header">
+              <div>
+                <p class="card-title">
+                  <span class="material-symbols-rounded">assignment</span>
+                  Assigned Courses
+                </p>
+                <p class="card-subtitle">Focus on required items or explore optional learning paths.</p>
               </div>
-              <div class="learning-course-meta" id="learningCourseMeta"></div>
-              <div class="learning-detail-split">
-                <div class="learning-detail-panel">
-                  <h3 class="learning-detail-title">Modules</h3>
-                  <div id="learningModuleList" class="learning-list"></div>
-                  <div id="learningModuleEmpty" class="empty-state hidden">
-                    <p>Select a course to load modules.</p>
-                  </div>
-                </div>
-                <div class="learning-detail-panel">
-                  <h3 class="learning-detail-title">Lessons</h3>
-                  <div id="learningLessonList" class="learning-list"></div>
-                  <div id="learningLessonEmpty" class="empty-state hidden">
-                    <p>Select a module to load lessons.</p>
-                  </div>
-                </div>
-              </div>
+            </div>
+            <div id="learningCourseList" class="learning-list"></div>
+            <div id="learningCourseEmpty" class="empty-state hidden">
+              <p>No courses found for this filter.</p>
             </div>
           </div>
 
-          <div class="learning-hub-column">
-            <div class="md-card learning-hub-card">
-              <div class="learning-hub-card-header">
-                <div>
-                  <p class="card-title">
-                    <span class="material-symbols-rounded">play_circle</span>
-                    Lesson Player
-                  </p>
-                  <p id="learningLessonTitle" class="card-subtitle">Select a lesson to start playback.</p>
-                  <div id="learningLessonMeta" class="learning-header-badges"></div>
+          <div class="md-card learning-map-section">
+            <div class="learning-map-section-header">
+              <div>
+                <p class="card-title">
+                  <span class="material-symbols-rounded">folder</span>
+                  Modules
+                </p>
+                <p class="card-subtitle">Review each module and track progress.</p>
+              </div>
+            </div>
+            <div id="learningModuleList" class="learning-list"></div>
+            <div id="learningModuleEmpty" class="empty-state hidden">
+              <p>Select a course to load modules.</p>
+            </div>
+          </div>
+
+          <div class="md-card learning-map-section">
+            <div class="learning-map-section-header">
+              <div>
+                <p class="card-title">
+                  <span class="material-symbols-rounded">play_lesson</span>
+                  Lessons
+                </p>
+                <p class="card-subtitle">Start or resume each lesson to keep learning momentum.</p>
+              </div>
+            </div>
+            <div id="learningLessonList" class="learning-list"></div>
+            <div id="learningLessonEmpty" class="empty-state hidden">
+              <p>Select a module to load lessons.</p>
+            </div>
+          </div>
+
+          <div class="md-card learning-map-section">
+            <div class="learning-map-section-header">
+              <div>
+                <p class="card-title">
+                  <span class="material-symbols-rounded">play_circle</span>
+                  Lesson Player
+                </p>
+                <p id="learningLessonTitle" class="card-subtitle">Select a lesson to start playback.</p>
+                <div id="learningLessonMeta" class="learning-header-badges"></div>
+              </div>
+              <div class="learning-progress-inline">
+                <span class="learning-progress-label">Lesson Progress</span>
+                <div class="learning-progress-bar">
+                  <div id="learningLessonProgressBar" class="learning-progress-fill" style="width: 0%;"></div>
                 </div>
-                <div class="learning-progress-inline">
-                  <span class="learning-progress-label">Lesson Progress</span>
-                  <div class="learning-progress-bar">
-                    <div id="learningLessonProgressBar" class="learning-progress-fill" style="width: 0%;"></div>
-                  </div>
-                  <span id="learningLessonProgressText" class="learning-progress-text">0%</span>
+                <span id="learningLessonProgressText" class="learning-progress-text">0%</span>
+              </div>
+            </div>
+            <div class="learning-player">
+              <div class="learning-player-video">
+                <video id="learningVideo" controls playsinline class="learning-video hidden"></video>
+                <iframe id="learningVideoEmbed" class="learning-video-embed hidden" title="Lesson video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                <div id="learningVideoPlaceholder" class="learning-video-placeholder">
+                  <span class="material-symbols-rounded">videocam</span>
+                  <p>Select a lesson with a video or asset to begin.</p>
                 </div>
               </div>
-              <div class="learning-player">
-                <div class="learning-player-video">
-                  <video id="learningVideo" controls playsinline class="learning-video hidden"></video>
-                  <iframe id="learningVideoEmbed" class="learning-video-embed hidden" title="Lesson video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                  <div id="learningVideoPlaceholder" class="learning-video-placeholder">
-                    <span class="material-symbols-rounded">videocam</span>
-                    <p>Select a lesson with a video or asset to begin.</p>
-                  </div>
+              <div class="learning-player-body">
+                <div class="learning-player-section">
+                  <h4>Lesson Assets</h4>
+                  <div id="learningReadingList" class="learning-reading-list"></div>
                 </div>
-                <div class="learning-player-body">
-                  <div class="learning-player-section">
-                    <h4>Lesson Assets</h4>
-                    <div id="learningReadingList" class="learning-reading-list"></div>
-                  </div>
-                  <div class="learning-player-section">
-                    <h4>Module Progress</h4>
-                    <div class="learning-progress-inline">
-                      <div class="learning-progress-bar">
-                        <div id="learningModuleProgressBar" class="learning-progress-fill" style="width: 0%;"></div>
-                      </div>
-                      <span id="learningModuleProgressText" class="learning-progress-text">0%</span>
+                <div class="learning-player-section">
+                  <h4>Module Progress</h4>
+                  <div class="learning-progress-inline">
+                    <div class="learning-progress-bar">
+                      <div id="learningModuleProgressBar" class="learning-progress-fill" style="width: 0%;"></div>
                     </div>
+                    <span id="learningModuleProgressText" class="learning-progress-text">0%</span>
                   </div>
-                  <div class="learning-player-actions">
-                    <button id="learningPrevLesson" type="button" class="md-button md-button--outlined">
-                      <span class="material-symbols-rounded">skip_previous</span>
-                      Previous
-                    </button>
-                    <button id="learningMarkComplete" type="button" class="md-button md-button--filled" disabled>
-                      <span class="material-symbols-rounded">check_circle</span>
-                      Mark Complete
-                    </button>
-                    <button id="learningNextLesson" type="button" class="md-button md-button--outlined">
-                      <span class="material-symbols-rounded">skip_next</span>
-                      Next
-                    </button>
-                  </div>
-                  <p class="learning-progress-note">Progress updates as you watch lesson videos or mark lessons complete.</p>
                 </div>
+                <div class="learning-player-actions">
+                  <button id="learningPrevLesson" type="button" class="md-button md-button--outlined">
+                    <span class="material-symbols-rounded">skip_previous</span>
+                    Previous
+                  </button>
+                  <button id="learningMarkComplete" type="button" class="md-button md-button--filled" disabled>
+                    <span class="material-symbols-rounded">check_circle</span>
+                    Mark Complete
+                  </button>
+                  <button id="learningNextLesson" type="button" class="md-button md-button--outlined">
+                    <span class="material-symbols-rounded">skip_next</span>
+                    Next
+                  </button>
+                </div>
+                <p class="learning-progress-note">Progress updates as you watch lesson videos or mark lessons complete.</p>
               </div>
             </div>
           </div>
