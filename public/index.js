@@ -1640,9 +1640,12 @@ function renderLessonList() {
   const empty = document.getElementById('learningLessonEmpty');
   if (!list) return;
   list.innerHTML = '';
-  const lessons = learningHubState.lessonsByModule.get(String(learningHubState.selectedModuleId)) || [];
+  const hasSelectedModule = Boolean(learningHubState.selectedModuleId);
+  const lessons = hasSelectedModule
+    ? (learningHubState.lessonsByModule.get(String(learningHubState.selectedModuleId)) || [])
+    : [];
 
-  if (!lessons.length) {
+  if (!hasSelectedModule || !lessons.length) {
     if (empty) empty.classList.remove('hidden');
     return;
   }
@@ -1688,7 +1691,7 @@ function renderLessonList() {
     actionBtn.type = 'button';
     actionBtn.className = 'md-button md-button--outlined md-button--small learning-lesson-action';
     actionBtn.dataset.lessonId = lesson.id;
-    const actionLabel = progress > 0 ? 'Resume Lesson' : 'Start Lesson';
+    const actionLabel = progress > 0 ? 'Resume' : 'Start';
     actionBtn.innerHTML = `
       <span class="material-symbols-rounded">play_circle</span>
       ${actionLabel}
@@ -1941,7 +1944,13 @@ async function loadCourseModules(courseId) {
     const rawModules = Array.isArray(data.modules) ? data.modules : (Array.isArray(data) ? data : []);
     const modules = normalizeLearningItems(rawModules, ['id', 'moduleId', '_id']);
     learningHubState.modulesByCourse.set(String(courseId), modules);
-    learningHubState.selectedModuleId = modules[0]?.id || null;
+    if (learningHubState.selectedModuleId) {
+      const exists = modules.some(module => String(module.id) === String(learningHubState.selectedModuleId));
+      if (!exists) {
+        learningHubState.selectedModuleId = null;
+        learningHubState.selectedLessonId = null;
+      }
+    }
     if (learningHubState.selectedModuleId) {
       await loadModuleLessons(learningHubState.selectedModuleId);
     }
@@ -1966,8 +1975,13 @@ async function loadModuleLessons(moduleId) {
     const rawLessons = Array.isArray(data.lessons) ? data.lessons : (Array.isArray(data) ? data : []);
     const lessons = normalizeLearningItems(rawLessons, ['id', 'lessonId', '_id']);
     learningHubState.lessonsByModule.set(String(moduleId), lessons);
-    learningHubState.selectedLessonId = lessons[0]?.id || null;
     if (learningHubState.selectedLessonId) {
+      const exists = lessons.some(lesson => String(lesson.id) === String(learningHubState.selectedLessonId));
+      if (!exists) {
+        learningHubState.selectedLessonId = null;
+      }
+    }
+    if (learningHubState.selectedLessonId && !learningHubState.playbackByLesson.get(String(learningHubState.selectedLessonId))) {
       await loadLessonPlayback(learningHubState.selectedLessonId);
     }
   } catch (error) {
@@ -2106,11 +2120,6 @@ async function selectCourse(courseId) {
   const modules = learningHubState.modulesByCourse.get(String(courseId));
   if (!modules) {
     await loadCourseModules(courseId);
-  } else {
-    learningHubState.selectedModuleId = modules[0]?.id || null;
-    if (learningHubState.selectedModuleId) {
-      await selectModule(learningHubState.selectedModuleId);
-    }
   }
   updateLearningHubUI();
 }
@@ -2122,11 +2131,6 @@ async function selectModule(moduleId) {
   const lessons = learningHubState.lessonsByModule.get(String(moduleId));
   if (!lessons) {
     await loadModuleLessons(moduleId);
-  } else {
-    learningHubState.selectedLessonId = lessons[0]?.id || null;
-    if (learningHubState.selectedLessonId) {
-      await selectLesson(learningHubState.selectedLessonId);
-    }
   }
   updateLearningHubUI();
 }
@@ -2194,7 +2198,13 @@ function initLearningHub() {
   }
 
   if (lessonList) {
-    lessonList.addEventListener('click', (event) => {
+    lessonList.addEventListener('click', async (event) => {
+      const actionButton = event.target.closest('.learning-lesson-action');
+      if (actionButton) {
+        await selectLesson(actionButton.dataset.lessonId);
+        enterLearningFocusMode();
+        return;
+      }
       const button = event.target.closest('[data-lesson-id]');
       if (!button) return;
       selectLesson(button.dataset.lessonId);
