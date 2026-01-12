@@ -113,8 +113,8 @@
 }
 
 .profile-balance-chips .balance-chip {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 120px;
+  min-width: 120px;
 }
 
 .profile-payslip-status {
