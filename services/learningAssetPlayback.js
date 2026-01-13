@@ -184,6 +184,18 @@ async function normalizeLessonAssetForPlayback(asset = {}) {
     };
   }
 
+  if (provider === 'html') {
+    const url = normalizeString(asset.url);
+    return {
+      ...base,
+      url,
+      playback: {
+        type: 'html',
+        embedUrl: url
+      }
+    };
+  }
+
   return {
     ...base,
     url: normalizeString(asset.url),

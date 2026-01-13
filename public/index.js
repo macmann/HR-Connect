@@ -1345,6 +1345,12 @@ function resolveAssetTypeLabel(asset) {
   if (playbackType === 'youtube') return 'YouTube';
   if (playbackType === 'onedrive') return 'OneDrive';
   if (playbackType === 'direct') return 'Link';
+  if (playbackType === 'html') return 'HTML';
+  const provider = (asset?.provider || asset?.type || '').toLowerCase();
+  if (provider === 'youtube') return 'YouTube';
+  if (provider === 'onedrive') return 'OneDrive';
+  if (provider === 'document') return 'Document';
+  if (provider === 'html') return 'HTML';
   if (asset?.metadata?.oneDrive?.webUrl) return 'OneDrive';
   if (asset?.playback?.embedUrl) return 'Embed';
   if (asset?.metadata?.mimeType) return asset.metadata.mimeType;
@@ -1411,6 +1417,7 @@ function isPdfAsset(asset) {
 function isPreviewableEmbedAsset(asset) {
   if (!asset) return false;
   if (asset?.playback?.embedUrl) return true;
+  if (asset?.playback?.type === 'html') return Boolean(resolveAssetUrl(asset));
   if (asset?.playback?.type === 'onedrive') return Boolean(resolveAssetEmbedUrl(asset));
   return false;
 }
@@ -2618,14 +2625,9 @@ function renderLearningAdminAssets() {
     item.className = 'learning-admin-asset-item';
     const assetId = asset.id || '';
     item.dataset.assetId = assetId;
-    const label = escapeHtml(asset.title || asset.label || asset.name || 'Untitled asset');
-    const type = escapeHtml(asset.provider || asset.type || 'asset');
-    const link = asset.url
-      || asset.link
-      || asset.playback?.embedUrl
-      || asset.playback?.streamUrl
-      || asset.playback?.url
-      || '';
+    const label = escapeHtml(resolveAssetLabel(asset));
+    const type = escapeHtml(resolveAssetTypeLabel(asset) || 'asset');
+    const link = resolveAssetUrl(asset);
     const url = escapeHtml(link || '#');
     item.innerHTML = `
       <div class="learning-admin-asset-header">
