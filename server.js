@@ -6226,6 +6226,11 @@ init().then(async () => {
       return res.status(400).json({ error: validationError });
     }
 
+    ensureLeaveBalances(employee);
+    const approvedDays = getLeaveDays(app);
+    const current = getLeaveBalanceValue(employee.leaveBalances, app.type);
+    setLeaveBalanceValue(employee.leaveBalances, app.type, current - approvedDays);
+
     db.data.applications[appIdx].status = 'approved';
     db.data.applications[appIdx].approvedBy = approver || '';
     db.data.applications[appIdx].approverRemark = remark || '';
@@ -6385,6 +6390,11 @@ init().then(async () => {
       if (validationError) {
         return res.status(400).json({ error: validationError });
       }
+
+      ensureLeaveBalances(employee);
+      const approvedDays = getLeaveDays(app);
+      const current = getLeaveBalanceValue(employee.leaveBalances, app.type);
+      setLeaveBalanceValue(employee.leaveBalances, app.type, current - approvedDays);
     } else if (normalizedStatus === 'rejected') {
       // Credit back leave
       const emp = db.data.employees.find(e => e.id == app.employeeId);
