@@ -11,16 +11,63 @@ const DEFAULT_LEAVE_BALANCES = {
   lastAccrualRun: null
 };
 
+const MONTH_LOOKUP = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  sept: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11
+};
+
 function roundToOneDecimal(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
   return Math.round(numeric * 10) / 10;
 }
 
-function normalizeNullableDate(value) {
-  if (!value) return null;
-  const parsed = value instanceof Date ? value : new Date(value);
+function parseEmployeeDate(value) {
+  if (value === undefined || value === null) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+
+  const str = String(value).trim();
+  if (!str) return null;
+  const lowered = str.toLowerCase();
+  if (['current', 'present', 'n/a', 'na', 'yes', 'no'].includes(lowered)) return null;
+
+  const dashMatch = str.match(/^(\d{1,2})-([A-Za-z]{3,})-(\d{2,4})$/);
+  if (dashMatch) {
+    const day = Number(dashMatch[1]);
+    const monthKey = dashMatch[2].slice(0, 3).toLowerCase();
+    const monthIndex = MONTH_LOOKUP[monthKey];
+    const rawYear = Number(dashMatch[3]);
+    const year = rawYear < 100 ? 2000 + rawYear : rawYear;
+    if (Number.isInteger(day) && Number.isInteger(monthIndex) && Number.isInteger(year)) {
+      const parsed = new Date(year, monthIndex, day);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+  }
+
+  const parsed = new Date(str);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getEmployeeDateValue(employee, keys = []) {
+  if (!employee || typeof employee !== 'object') return null;
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(employee, key)) {
+      const parsed = parseEmployeeDate(employee[key]);
+      if (parsed) return parsed;
+    }
+  }
+  return null;
 }
 
 function startOfDay(date) {
@@ -117,16 +164,38 @@ function cloneDefaultLeaveBalances() {
 }
 
 function resolveEmploymentStart(employee, cycleStart) {
-  const primary = normalizeNullableDate(employee?.internshipStartDate);
-  const secondary = normalizeNullableDate(
-    employee?.fullTimeStartDate ?? employee?.startDate ?? employee?.start_date
-  );
-  return startOfDay(primary || secondary || cycleStart);
+  const internshipStart = getEmployeeDateValue(employee, [
+    'internshipStartDate',
+    'Start Date - Internship or Probation'
+  ]);
+  const fullTimeStart = getEmployeeDateValue(employee, [
+    'fullTimeStartDate',
+    'startDate',
+    'start_date',
+    'Start Date - Full Time'
+  ]);
+  return startOfDay(internshipStart || fullTimeStart || cycleStart);
 }
 
 function resolveEmploymentEnd(employee, cycleEnd) {
-  const explicit = normalizeNullableDate(employee?.endDate ?? employee?.fullTimeEndDate);
-  return explicit ? startOfDay(explicit) : startOfDay(cycleEnd);
+  const internshipEnd = getEmployeeDateValue(employee, [
+    'internshipEndDate',
+    'End Date - Internship or Probation'
+  ]);
+  const fullTimeStart = getEmployeeDateValue(employee, [
+    'fullTimeStartDate',
+    'startDate',
+    'start_date',
+    'Start Date - Full Time'
+  ]);
+  const fullTimeEnd = getEmployeeDateValue(employee, [
+    'fullTimeEndDate',
+    'endDate',
+    'end_date',
+    'End Date - Full Time'
+  ]);
+  const explicit = fullTimeEnd || (!fullTimeStart && internshipEnd ? internshipEnd : null);
+  return startOfDay(explicit || cycleEnd);
 }
 
 function getEffectiveEmploymentWindow(employee, cycleRange) {

@@ -2848,6 +2848,7 @@ init().then(async () => {
     }
     const employee = { id, ...payload };
     delete employee._id;
+    normalizeEmployeeDateFields(employee);
     assignEmployeeNumber(employee, db.data.employees);
     ensureLeaveBalances(employee);
     ensureInternFlag(employee);
@@ -2960,6 +2961,7 @@ init().then(async () => {
           ...row
         };
         delete emp._id;
+        normalizeEmployeeDateFields(emp);
         ensureLeaveBalances(emp);
         ensureInternFlag(emp);
         normalizeEmployeeEmail(emp);
@@ -4630,6 +4632,59 @@ init().then(async () => {
       internshipEndDate,
       fullTimeStartDate
     };
+  }
+
+  function normalizeEmployeeDateFields(employee) {
+    if (!employee || typeof employee !== 'object') return;
+
+    const internshipStart = getEmployeeDateValue(employee, [
+      'internshipStartDate',
+      'Start Date - Internship or Probation'
+    ]);
+    const fullTimeStart = getEmployeeDateValue(employee, [
+      'fullTimeStartDate',
+      'startDate',
+      'start_date',
+      'Start Date - Full Time'
+    ]);
+    const internshipEnd = getEmployeeDateValue(employee, [
+      'internshipEndDate',
+      'End Date - Internship or Probation'
+    ]);
+    const fullTimeEnd = getEmployeeDateValue(employee, [
+      'fullTimeEndDate',
+      'endDate',
+      'end_date',
+      'End Date - Full Time'
+    ]);
+
+    if (internshipStart) {
+      employee.internshipStartDate = internshipStart;
+    }
+    if (fullTimeStart) {
+      employee.fullTimeStartDate = fullTimeStart;
+    }
+    if (!employee.startDate && (internshipStart || fullTimeStart)) {
+      employee.startDate = internshipStart || fullTimeStart;
+    } else if (employee.startDate) {
+      const parsed = parseEmployeeDate(employee.startDate);
+      if (parsed) employee.startDate = parsed;
+    }
+
+    if (internshipEnd) {
+      employee.internshipEndDate = internshipEnd;
+    }
+    if (fullTimeEnd) {
+      employee.fullTimeEndDate = fullTimeEnd;
+    }
+
+    const derivedEnd = fullTimeEnd || (!fullTimeStart && internshipEnd ? internshipEnd : null);
+    if (!employee.endDate && derivedEnd) {
+      employee.endDate = derivedEnd;
+    } else if (employee.endDate) {
+      const parsed = parseEmployeeDate(employee.endDate);
+      if (parsed) employee.endDate = parsed;
+    }
   }
 
   function calculateMonthlyPayForEmployee(employee, payrollYear, payrollMonth) {
