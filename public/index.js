@@ -1454,14 +1454,6 @@ function findPrimaryPreviewAsset(assets = []) {
   if (videoAsset) {
     return { asset: videoAsset, type: 'video' };
   }
-  const documentAsset = items.find(asset => isPptxAsset(asset) || isPdfAsset(asset));
-  if (documentAsset) {
-    return { asset: documentAsset, type: 'document' };
-  }
-  const embedAsset = items.find(isPreviewableEmbedAsset);
-  if (embedAsset) {
-    return { asset: embedAsset, type: 'embed' };
-  }
   return { asset: null, type: 'placeholder' };
 }
 
