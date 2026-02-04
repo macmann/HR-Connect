@@ -236,11 +236,15 @@ function renderLeaveUpdateList() {
     const rows = SUPPORTED_LEAVE_TYPES.map(type => {
       const entry = normalizeLeaveEntry(leaveBalances[type], type);
       const typeLabel = `${capitalize(type)} Leave`;
-      const takenLabel = `${roundToOneDecimal(entry.taken).toFixed(1)} days taken`;
+      const takenValue = roundToOneDecimal(entry.taken);
+      const entitlementValue = roundToOneDecimal(entry.yearlyAllocation);
+      const balanceValue = roundToOneDecimal(entitlementValue - takenValue);
+      const takenLabel = `${takenValue.toFixed(1)} days taken`;
       const entitlementId = `leave-entitlement-${empId}-${type}`;
+      const takenId = `leave-taken-${empId}-${type}`;
       const balanceId = `leave-balance-${empId}-${type}`;
       return `
-        <div class="leave-update-row" data-leave-type="${escapeHtml(type)}">
+        <div class="leave-update-row" data-leave-type="${escapeHtml(type)}" data-leave-taken="${escapeHtml(takenValue.toString())}">
           <div class="leave-update-row__label">
             <span>${escapeHtml(typeLabel)}</span>
             <small>${escapeHtml(takenLabel)}</small>
@@ -252,19 +256,32 @@ function renderLeaveUpdateList() {
               class="md-input"
               type="number"
               step="0.5"
-              value="${escapeHtml(roundToOneDecimal(entry.yearlyAllocation).toString())}"
+              value="${escapeHtml(entitlementValue.toString())}"
               data-leave-field="entitlement"
             >
           </div>
           <div class="leave-update-row__field">
-            <label for="${escapeHtml(balanceId)}">Balance (can be negative)</label>
+            <label for="${escapeHtml(takenId)}">Leave taken</label>
+            <input
+              id="${escapeHtml(takenId)}"
+              class="md-input"
+              type="number"
+              step="0.5"
+              value="${escapeHtml(takenValue.toFixed(1))}"
+              data-leave-field="taken"
+              readonly
+            >
+          </div>
+          <div class="leave-update-row__field">
+            <label for="${escapeHtml(balanceId)}">Leave balance (calculated)</label>
             <input
               id="${escapeHtml(balanceId)}"
               class="md-input"
               type="number"
               step="0.5"
-              value="${escapeHtml(roundToOneDecimal(entry.balance).toString())}"
+              value="${escapeHtml(balanceValue.toFixed(1))}"
               data-leave-field="balance"
+              readonly
             >
           </div>
         </div>
@@ -339,6 +356,20 @@ function closeLeaveUpdateModal() {
   }
 }
 
+function updateLeaveUpdateRowBalance(row) {
+  if (!row) return;
+  const entitlementInput = row.querySelector('[data-leave-field="entitlement"]');
+  const balanceInput = row.querySelector('[data-leave-field="balance"]');
+  if (!entitlementInput || !balanceInput) return;
+  const entitlementValue = Number(entitlementInput.value);
+  const takenValue = Number(row.dataset.leaveTaken);
+  if (!Number.isFinite(entitlementValue)) return;
+  const computedBalance = roundToOneDecimal(
+    entitlementValue - (Number.isFinite(takenValue) ? takenValue : 0)
+  );
+  balanceInput.value = computedBalance.toFixed(1);
+}
+
 async function saveLeaveUpdatesForEmployee(employeeId, buttonEl) {
   const employees = Array.isArray(leaveUpdateState.employees) ? leaveUpdateState.employees : [];
   const employee = employees.find(emp => String(emp.id) === String(employeeId));
@@ -350,15 +381,16 @@ async function saveLeaveUpdatesForEmployee(employeeId, buttonEl) {
   SUPPORTED_LEAVE_TYPES.forEach(type => {
     const row = card.querySelector(`[data-leave-type="${type}"]`);
     const entitlementInput = row?.querySelector('[data-leave-field="entitlement"]');
-    const balanceInput = row?.querySelector('[data-leave-field="balance"]');
     const entitlementValue = entitlementInput ? Number(entitlementInput.value) : NaN;
-    const balanceValue = balanceInput ? Number(balanceInput.value) : NaN;
     const currentEntry = normalizeLeaveEntry(updatedBalances[type], type);
+    const computedBalance = Number.isFinite(entitlementValue)
+      ? roundToOneDecimal(entitlementValue - currentEntry.taken)
+      : currentEntry.balance;
     updatedBalances[type] = {
       ...currentEntry,
       yearlyAllocation: Number.isFinite(entitlementValue) ? entitlementValue : currentEntry.yearlyAllocation,
       monthlyAccrual: currentEntry.monthlyAccrual,
-      balance: Number.isFinite(balanceValue) ? balanceValue : currentEntry.balance
+      balance: computedBalance
     };
   });
 
@@ -9394,6 +9426,12 @@ async function init() {
       const employeeId = button.getAttribute('data-leave-save');
       if (!employeeId) return;
       saveLeaveUpdatesForEmployee(employeeId, button);
+    });
+    leaveUpdateList.addEventListener('input', event => {
+      const input = event.target.closest('[data-leave-field="entitlement"]');
+      if (!input) return;
+      const row = input.closest('.leave-update-row');
+      updateLeaveUpdateRowBalance(row);
     });
   }
   const csvBtn = document.getElementById('csvUploadBtn');
