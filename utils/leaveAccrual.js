@@ -45,10 +45,8 @@ function computeMonthsServedInCycle(employee, dateNow = new Date()) {
   );
   let months =
     (now.getFullYear() - startMonthAnchor.getFullYear()) * 12 +
-    (now.getMonth() - startMonthAnchor.getMonth());
-  if (now.getDate() < effectiveStartForCycle.getDate()) {
-    months -= 1;
-  }
+    (now.getMonth() - startMonthAnchor.getMonth()) +
+    1;
 
   if (!Number.isFinite(months) || months < 0) months = 0;
   if (months > 12) months = 12;
