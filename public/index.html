@@ -127,6 +127,113 @@
       color: #0f172a;
     }
 
+    .leave-update-modal .modal-body-scroll {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .leave-update-search {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .leave-update-search .search-input {
+      min-width: 100%;
+    }
+
+    .leave-update-list {
+      display: grid;
+      gap: 16px;
+    }
+
+    .leave-update-card {
+      border-radius: 14px;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      padding: 16px;
+      box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .leave-update-card__header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .leave-update-card__title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .leave-update-card__meta {
+      margin: 0;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .leave-update-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .leave-update-row {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      padding: 12px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+    }
+
+    .leave-update-row__label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .leave-update-row__label span {
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .leave-update-row__label small {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .leave-update-row__field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .leave-update-row__field label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #94a3b8;
+    }
+
+    .leave-update-row__field input {
+      width: 100%;
+    }
+
+    .leave-update-card__actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
     .view-toggle {
       display: inline-flex;
       align-items: center;
@@ -5991,6 +6098,10 @@
               <span class="material-symbols-rounded">event_available</span>
               Upload Leave CSV
             </button>
+            <button id="leaveUpdateBtn" class="md-button md-button--outlined" type="button">
+              <span class="material-symbols-rounded">edit_calendar</span>
+              Update Leave
+            </button>
             <button id="addEmployeeBtn" class="md-button md-button--filled">
               <span class="material-symbols-rounded">person_add</span>
               Add Employee
@@ -6100,6 +6211,38 @@
                 Save
               </button>
               <button type="button" id="empModalCancelBtn" class="md-button md-button--outlined md-button--small">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          id="leaveUpdateModal"
+          class="modal-backdrop hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="leaveUpdateTitle"
+        >
+          <div class="modal-card modal-card--wide leave-update-modal">
+            <button type="button" id="leaveUpdateCloseBtn" class="modal-close material-symbols-rounded">close</button>
+            <h3 id="leaveUpdateTitle" class="modal-title">Update Leave Entitlements</h3>
+            <div class="modal-body-scroll">
+              <div class="leave-update-search">
+                <label class="md-label" for="leaveUpdateSearch">Search employees</label>
+                <div class="search-input">
+                  <span class="material-symbols-rounded">search</span>
+                  <input
+                    id="leaveUpdateSearch"
+                    type="text"
+                    placeholder="Search name, email, or ID..."
+                    autocomplete="off"
+                    spellcheck="false"
+                  >
+                </div>
+              </div>
+              <div id="leaveUpdateList" class="leave-update-list"></div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="leaveUpdateDoneBtn" class="md-button md-button--outlined md-button--small">Done</button>
             </div>
           </div>
         </div>
