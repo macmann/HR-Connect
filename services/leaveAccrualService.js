@@ -11,6 +11,16 @@ const DEFAULT_LEAVE_BALANCES = {
   lastAccrualRun: null
 };
 
+function getEmployeeEntitlement(employee, type) {
+  const override = Number(employee?.leaveBalances?.[type]?.yearlyAllocation);
+  if (Number.isFinite(override)) return override;
+
+  const entitlementValue = Number(employee?.[`${type}LeaveEntitlement`]);
+  if (Number.isFinite(entitlementValue)) return entitlementValue;
+
+  return DEFAULT_LEAVE_BALANCES[type]?.yearlyAllocation || 0;
+}
+
 const MONTH_LOOKUP = {
   jan: 0,
   feb: 1,
@@ -244,11 +254,12 @@ function calculateAccruedLeaveForEmployee(employee, cycleRange, asOfDate = new D
   }
 
   const accrualMonths = listAccrualMonths(window, asOfDate);
-  const monthlyAccruals = {
-    annual: DEFAULT_LEAVE_BALANCES.annual.monthlyAccrual,
-    casual: DEFAULT_LEAVE_BALANCES.casual.monthlyAccrual,
-    medical: DEFAULT_LEAVE_BALANCES.medical.monthlyAccrual
-  };
+  const monthlyAccruals = Object.fromEntries(
+    SUPPORTED_LEAVE_TYPES.map(type => {
+      const entitlement = getEmployeeEntitlement(employee, type);
+      return [type, entitlement / 12];
+    })
+  );
 
   const totals = { annual: 0, casual: 0, medical: 0 };
   accrualMonths.forEach(() => {
@@ -351,14 +362,17 @@ function buildEmployeeLeaveState(employee, applications, options = {}) {
   const balances = cloneDefaultLeaveBalances();
   SUPPORTED_LEAVE_TYPES.forEach(type => {
     const defaults = DEFAULT_LEAVE_BALANCES[type];
+    const entitlement = getEmployeeEntitlement(employee, type);
+    const monthlyAccrual = entitlement / 12;
+    const overriddenDefaults = { ...defaults, yearlyAllocation: entitlement, monthlyAccrual };
     const accruedValue = accrued[type] || 0;
     const takenValue = taken[type] || 0;
-    const cappedAccrued = Math.min(accruedValue, defaults.yearlyAllocation);
+    const cappedAccrued = Math.min(accruedValue, entitlement);
     const balance = roundToOneDecimal(cappedAccrued - takenValue);
     balances[type] = {
-      ...normalizeLeaveBalanceEntry(employee?.leaveBalances?.[type], defaults),
-      monthlyAccrual: defaults.monthlyAccrual,
-      yearlyAllocation: defaults.yearlyAllocation,
+      ...normalizeLeaveBalanceEntry(employee?.leaveBalances?.[type], overriddenDefaults),
+      monthlyAccrual,
+      yearlyAllocation: entitlement,
       accrued: roundToOneDecimal(cappedAccrued),
       taken: roundToOneDecimal(takenValue),
       balance

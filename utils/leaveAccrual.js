@@ -130,10 +130,13 @@ async function computeAllLeaveBalances(employee, { dateNow = new Date(), applica
 
   const balances = {};
   SUPPORTED_LEAVE_TYPES.forEach(type => {
+    const overrideValue = Number(employee?.leaveBalances?.[type]?.yearlyAllocation);
     const entitlementValue = Number(employee?.[`${type}LeaveEntitlement`]);
-    const yearEntitlement = Number.isFinite(entitlementValue)
-      ? entitlementValue
-      : DEFAULT_ENTITLEMENTS[type];
+    const yearEntitlement = Number.isFinite(overrideValue)
+      ? overrideValue
+      : Number.isFinite(entitlementValue)
+        ? entitlementValue
+        : DEFAULT_ENTITLEMENTS[type];
     const { earned, balance } = computeAccruedLeaveBalance({
       yearEntitlement,
       monthsServedInCycle,

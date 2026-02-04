@@ -41,6 +41,23 @@ test('Full cycle accrual without leave produces full entitlement', () => {
   assert.equal(balances.medical.balance, 14);
 });
 
+test('Overrides to yearly allocations are reflected in accrual totals', () => {
+  const asOfDate = new Date('2025-06-30');
+  const employee = {
+    ...createEmployee(new Date('2020-01-01')),
+    leaveBalances: {
+      annual: { yearlyAllocation: 15 },
+      casual: { yearlyAllocation: 6 },
+      medical: { yearlyAllocation: 12 }
+    }
+  };
+  const balances = runState(employee, [], asOfDate);
+
+  assert.equal(balances.annual.balance, 15);
+  assert.equal(balances.casual.balance, 6);
+  assert.equal(balances.medical.balance, 12);
+});
+
 test('Full cycle accrual with taken leave reduces balances', () => {
   const asOfDate = new Date('2025-06-30');
   const employee = createEmployee(new Date('2020-01-01'));
