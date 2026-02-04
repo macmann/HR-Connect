@@ -161,6 +161,239 @@ function buildAvailableLeaveState(leaveBalances = {}, applications = []) {
   return { cycleStart, usage, available, accrued };
 }
 
+function normalizeLeaveEntry(entry, type) {
+  const defaults = DEFAULT_LEAVE_BALANCE_CONFIG[type] || { yearlyAllocation: 0, monthlyAccrual: 0 };
+  if (entry && typeof entry === 'object') {
+    return {
+      balance: Number.isFinite(entry.balance) ? entry.balance : 0,
+      yearlyAllocation: Number.isFinite(entry.yearlyAllocation) ? entry.yearlyAllocation : defaults.yearlyAllocation,
+      monthlyAccrual: Number.isFinite(entry.monthlyAccrual) ? entry.monthlyAccrual : defaults.monthlyAccrual,
+      taken: Number.isFinite(entry.taken) ? entry.taken : 0,
+      accrued: Number.isFinite(entry.accrued) ? entry.accrued : null
+    };
+  }
+  const numericBalance = Number(entry);
+  return {
+    balance: Number.isFinite(numericBalance) ? numericBalance : 0,
+    yearlyAllocation: defaults.yearlyAllocation,
+    monthlyAccrual: defaults.monthlyAccrual,
+    taken: 0,
+    accrued: null
+  };
+}
+
+function getEmployeeSearchString(employee) {
+  if (!employee || typeof employee !== 'object') return '';
+  return [
+    employee.name,
+    employee.email,
+    employee.title,
+    employee.department,
+    employee.id,
+    employee.employeeId
+  ]
+    .filter(Boolean)
+    .map(value => String(value).toLowerCase())
+    .join(' ');
+}
+
+function formatEmployeeMetaLine(employee) {
+  if (!employee || typeof employee !== 'object') return '';
+  const parts = [];
+  const title = employee.title || employee.position || employee.role || '';
+  const department = employee.department || employee.project || '';
+  if (title) parts.push(title);
+  if (department) parts.push(department);
+  const email = employee.email || '';
+  if (email) parts.push(email);
+  return parts.join(' • ');
+}
+
+function renderLeaveUpdateList() {
+  const listEl = document.getElementById('leaveUpdateList');
+  if (!listEl) return;
+  if (leaveUpdateState.loading) {
+    listEl.innerHTML = '<div class="text-muted" style="font-style:italic;">Loading leave balances...</div>';
+    return;
+  }
+  const query = leaveUpdateState.search.trim().toLowerCase();
+  const employees = Array.isArray(leaveUpdateState.employees) ? leaveUpdateState.employees : [];
+  const filtered = query
+    ? employees.filter(emp => getEmployeeSearchString(emp).includes(query))
+    : employees;
+
+  if (!filtered.length) {
+    listEl.innerHTML = '<div class="text-muted" style="font-style:italic;">No matching employees found.</div>';
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(employee => {
+    const empId = employee?.id ?? '';
+    const name = employee?.name || 'Unnamed employee';
+    const metaLine = formatEmployeeMetaLine(employee);
+    const leaveBalances = employee?.leaveBalances || {};
+
+    const rows = SUPPORTED_LEAVE_TYPES.map(type => {
+      const entry = normalizeLeaveEntry(leaveBalances[type], type);
+      const typeLabel = `${capitalize(type)} Leave`;
+      const takenLabel = `${roundToOneDecimal(entry.taken).toFixed(1)} days taken`;
+      const entitlementId = `leave-entitlement-${empId}-${type}`;
+      const balanceId = `leave-balance-${empId}-${type}`;
+      return `
+        <div class="leave-update-row" data-leave-type="${escapeHtml(type)}">
+          <div class="leave-update-row__label">
+            <span>${escapeHtml(typeLabel)}</span>
+            <small>${escapeHtml(takenLabel)}</small>
+          </div>
+          <div class="leave-update-row__field">
+            <label for="${escapeHtml(entitlementId)}">Entitlement</label>
+            <input
+              id="${escapeHtml(entitlementId)}"
+              class="md-input"
+              type="number"
+              step="0.5"
+              value="${escapeHtml(roundToOneDecimal(entry.yearlyAllocation).toString())}"
+              data-leave-field="entitlement"
+            >
+          </div>
+          <div class="leave-update-row__field">
+            <label for="${escapeHtml(balanceId)}">Balance (can be negative)</label>
+            <input
+              id="${escapeHtml(balanceId)}"
+              class="md-input"
+              type="number"
+              step="0.5"
+              value="${escapeHtml(roundToOneDecimal(entry.balance).toString())}"
+              data-leave-field="balance"
+            >
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <article class="leave-update-card" data-employee-id="${escapeHtml(String(empId))}">
+        <div class="leave-update-card__header">
+          <h4 class="leave-update-card__title">${escapeHtml(name)}</h4>
+          <p class="leave-update-card__meta">${escapeHtml(metaLine)}</p>
+        </div>
+        <div class="leave-update-grid">
+          ${rows}
+        </div>
+        <div class="leave-update-card__actions">
+          <button class="md-button md-button--filled md-button--small" data-leave-save="${escapeHtml(String(empId))}">
+            <span class="material-symbols-rounded">save</span>
+            Update Leave
+          </button>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+async function loadLeaveUpdateData() {
+  leaveUpdateState.loading = true;
+  renderLeaveUpdateList();
+  try {
+    const employees = await getJSON('/employees');
+    leaveUpdateState.employees = Array.isArray(employees) ? employees : [];
+  } catch (err) {
+    console.error('Failed to load employees for leave updates', err);
+    leaveUpdateState.employees = [];
+    showToast('Unable to load leave balances.', 'error');
+  } finally {
+    leaveUpdateState.loading = false;
+    renderLeaveUpdateList();
+  }
+}
+
+function openLeaveUpdateModal() {
+  const modal = document.getElementById('leaveUpdateModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  leaveUpdateState.search = '';
+  const searchInput = document.getElementById('leaveUpdateSearch');
+  if (searchInput) {
+    searchInput.value = '';
+    setTimeout(() => searchInput.focus(), 50);
+  }
+  if (leaveUpdateKeydownHandler) {
+    document.removeEventListener('keydown', leaveUpdateKeydownHandler);
+  }
+  leaveUpdateKeydownHandler = ev => {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      closeLeaveUpdateModal();
+    }
+  };
+  document.addEventListener('keydown', leaveUpdateKeydownHandler);
+  loadLeaveUpdateData();
+}
+
+function closeLeaveUpdateModal() {
+  const modal = document.getElementById('leaveUpdateModal');
+  if (modal) modal.classList.add('hidden');
+  if (leaveUpdateKeydownHandler) {
+    document.removeEventListener('keydown', leaveUpdateKeydownHandler);
+    leaveUpdateKeydownHandler = null;
+  }
+}
+
+async function saveLeaveUpdatesForEmployee(employeeId, buttonEl) {
+  const employees = Array.isArray(leaveUpdateState.employees) ? leaveUpdateState.employees : [];
+  const employee = employees.find(emp => String(emp.id) === String(employeeId));
+  if (!employee) return;
+  const card = buttonEl instanceof HTMLElement ? buttonEl.closest('.leave-update-card') : null;
+  if (!card) return;
+  const updatedBalances = { ...(employee.leaveBalances || {}) };
+
+  SUPPORTED_LEAVE_TYPES.forEach(type => {
+    const row = card.querySelector(`[data-leave-type="${type}"]`);
+    const entitlementInput = row?.querySelector('[data-leave-field="entitlement"]');
+    const balanceInput = row?.querySelector('[data-leave-field="balance"]');
+    const entitlementValue = entitlementInput ? Number(entitlementInput.value) : NaN;
+    const balanceValue = balanceInput ? Number(balanceInput.value) : NaN;
+    const currentEntry = normalizeLeaveEntry(updatedBalances[type], type);
+    updatedBalances[type] = {
+      ...currentEntry,
+      yearlyAllocation: Number.isFinite(entitlementValue) ? entitlementValue : currentEntry.yearlyAllocation,
+      monthlyAccrual: currentEntry.monthlyAccrual,
+      balance: Number.isFinite(balanceValue) ? balanceValue : currentEntry.balance
+    };
+  });
+
+  setButtonLoading(buttonEl, true);
+  try {
+    const res = await apiFetch(`/employees/${employeeId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ leaveBalances: updatedBalances })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to update leave balances.');
+    }
+    const updatedEmployee = await res.json().catch(() => null);
+    if (updatedEmployee) {
+      leaveUpdateState.employees = employees.map(emp =>
+        String(emp.id) === String(employeeId) ? updatedEmployee : emp
+      );
+    }
+    showToast('Leave balances updated.', 'success');
+    renderLeaveUpdateList();
+    await loadEmployeesManage();
+    await loadEmployeesPortal();
+    if (document.getElementById('employeeSelect')?.value === String(employeeId)) {
+      await onEmployeeChange();
+    }
+  } catch (err) {
+    console.error('Failed to update leave balances', err);
+    showToast(err.message || 'Unable to update leave balances.', 'error');
+  } finally {
+    setButtonLoading(buttonEl, false);
+  }
+}
+
 function setBalanceValue(elementId, value) {
   const el = document.getElementById(elementId);
   if (!el) return;
@@ -8920,7 +9153,14 @@ let pendingApply = null;
 let editId = null;
 let drawerEditId = null;
 let empModalKeydownHandler = null;
+let leaveUpdateKeydownHandler = null;
 let currentLeaveBalances = {};
+const leaveUpdateState = {
+  employees: [],
+  search: '',
+  loading: false,
+  savingId: null
+};
 
 async function init() {
   document.getElementById('employeeSelect').addEventListener('change', onEmployeeChange);
@@ -9125,6 +9365,37 @@ async function init() {
     const fields = await getDynamicEmployeeFields();
     openEmpDrawer({title: 'Add Employee', fields});
   };
+  const leaveUpdateBtn = document.getElementById('leaveUpdateBtn');
+  if (leaveUpdateBtn) {
+    leaveUpdateBtn.addEventListener('click', () => {
+      openLeaveUpdateModal();
+    });
+  }
+  const leaveUpdateCloseBtn = document.getElementById('leaveUpdateCloseBtn');
+  if (leaveUpdateCloseBtn) {
+    leaveUpdateCloseBtn.addEventListener('click', closeLeaveUpdateModal);
+  }
+  const leaveUpdateDoneBtn = document.getElementById('leaveUpdateDoneBtn');
+  if (leaveUpdateDoneBtn) {
+    leaveUpdateDoneBtn.addEventListener('click', closeLeaveUpdateModal);
+  }
+  const leaveUpdateSearch = document.getElementById('leaveUpdateSearch');
+  if (leaveUpdateSearch) {
+    leaveUpdateSearch.addEventListener('input', event => {
+      leaveUpdateState.search = event.target.value;
+      renderLeaveUpdateList();
+    });
+  }
+  const leaveUpdateList = document.getElementById('leaveUpdateList');
+  if (leaveUpdateList) {
+    leaveUpdateList.addEventListener('click', event => {
+      const button = event.target.closest('[data-leave-save]');
+      if (!button) return;
+      const employeeId = button.getAttribute('data-leave-save');
+      if (!employeeId) return;
+      saveLeaveUpdatesForEmployee(employeeId, button);
+    });
+  }
   const csvBtn = document.getElementById('csvUploadBtn');
   const csvInput = document.getElementById('csvInput');
   if (csvBtn && csvInput) {
