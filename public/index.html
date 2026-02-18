@@ -4776,7 +4776,7 @@
             <span class="material-symbols-rounded">workspace_premium</span>
             People-first portal
           </p>
-          <h1 class="welcome-title">Brillar HR Portal</h1>
+          <h1 id="welcomePortalName" class="welcome-title">Brillar HR Portal</h1>
           <p class="welcome-copy">A cohesive workspace for leave, performance, recruitment, and talent experiences — all with Brillar's modern material-inspired feel.</p>
         </div>
         <div class="welcome-badges">
@@ -4798,9 +4798,9 @@
       </section>
 
       <div class="login-card">
-        <img src="logo.png" alt="Brillar Logo" class="brand-logo">
+        <img id="loginBrandLogo" src="logo.png" alt="Organization logo" class="brand-logo">
         <div>
-          <h1 class="login-title">Brillar HR Portal</h1>
+          <h1 id="loginPortalName" class="login-title">Brillar HR Portal</h1>
           <p class="login-subtitle">Sign in to manage leave, approvals, performance cycles, and talent workflows with confidence.</p>
         </div>
         <form id="loginForm" class="form-stack">
@@ -4837,9 +4837,9 @@
     <header class="top-app-bar">
       <div class="top-bar-shell">
         <div class="brand-cluster">
-          <img src="https://static.wixstatic.com/media/34647d_4924e46631c3463abed06f9e3147eba3~mv2.png" alt="Brillar Logo">
+          <img id="appBrandLogo" src="https://static.wixstatic.com/media/34647d_4924e46631c3463abed06f9e3147eba3~mv2.png" alt="Organization logo">
           <div class="brand-text">
-            <span class="brand-title">Brillar HR Portal</span>
+            <span id="appPortalName" class="brand-title">Brillar HR Portal</span>
             <span class="brand-tagline">Modern, people-first HR experiences</span>
           </div>
         </div>
@@ -6952,7 +6952,8 @@
         </div>
 
         <div class="settings-subtab-list" role="tablist" aria-label="Settings sections">
-          <button type="button" class="settings-subtab-button settings-subtab-button--active" data-settings-tab="holidays" role="tab" aria-selected="true">Holiday Calendar</button>
+          <button type="button" class="settings-subtab-button settings-subtab-button--active" data-settings-tab="organization" role="tab" aria-selected="true">Organization</button>
+          <button type="button" class="settings-subtab-button" data-settings-tab="holidays" role="tab" aria-selected="false">Holiday Calendar</button>
           <button type="button" class="settings-subtab-button" data-settings-tab="ai" role="tab" aria-selected="false">AI Configuration</button>
           <button type="button" id="roleAssignmentTab" class="settings-subtab-button hidden" data-settings-tab="roleAssignments" role="tab" aria-selected="false">Role Assignments</button>
           <button type="button" class="settings-subtab-button" data-settings-tab="chatWidget" role="tab" aria-selected="false">Chat Widget</button>
@@ -6961,7 +6962,45 @@
           <button type="button" class="settings-subtab-button" data-settings-tab="apiTools" role="tab" aria-selected="false">API Testing Tools</button>
         </div>
 
-        <div class="settings-subtab-panel settings-subtab-panel--active" data-settings-tab-panel="holidays">
+                <div class="settings-subtab-panel settings-subtab-panel--active" data-settings-tab-panel="organization">
+        <div class="md-card">
+          <div class="card-title">
+            <span class="material-symbols-rounded">domain</span>
+            Organization
+          </div>
+          <p class="card-subtitle">Customize your portal name and logo branding.</p>
+          <form id="organizationSettingsForm" class="settings-form">
+            <div class="settings-form__fields settings-form__fields--full">
+              <label class="md-label" for="organizationPortalName">Portal name</label>
+              <div class="md-input-wrapper">
+                <span class="material-symbols-rounded">badge</span>
+                <input type="text" id="organizationPortalName" class="md-input" placeholder="e.g., Brillar HR Portal" maxlength="80" required>
+              </div>
+            </div>
+
+            <div class="settings-form__fields settings-form__fields--full">
+              <label class="md-label" for="organizationLogoFile">Portal logo</label>
+              <div class="md-input-wrapper">
+                <span class="material-symbols-rounded">image</span>
+                <input type="file" id="organizationLogoFile" class="md-input" accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp">
+              </div>
+              <div class="settings-form__help">Upload PNG, JPG, SVG, or WEBP. Max size 2 MB.</div>
+            </div>
+
+            <div class="settings-form__fields settings-form__fields--full">
+              <img id="organizationLogoPreview" src="logo.png" alt="Organization logo preview" class="brand-logo" style="max-width: 180px; height: auto;">
+            </div>
+
+            <button type="submit" class="md-button md-button--filled md-button--small settings-form__submit">
+              <span class="material-symbols-rounded">save</span>
+              Save organization settings
+            </button>
+          </form>
+          <div id="organizationSettingsStatus" class="settings-status text-muted"></div>
+        </div>
+        </div>
+
+        <div class="settings-subtab-panel" data-settings-tab-panel="holidays">
         <div class="md-card">
           <div class="card-title">
             <span class="material-symbols-rounded">calendar_month</span>

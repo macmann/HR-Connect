@@ -1624,6 +1624,8 @@ const DEFAULT_CHAT_WIDGET_URL =
 const DEFAULT_POST_LOGIN_URL = 'https://api-qa.atenxion.ai/api/post-login/user-login';
 const DEFAULT_POST_LOGIN_AUTH =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiNjkwMDcxMjAzN2MwZWQwMzY4MjFiMzM0IiwidHlwZSI6Im11bHRpYWdlbnQiLCJpYXQiOjE3NjE2MzY2NDB9.-reLuknFL4cc26r2BGms92CZnSHj-J3riIgo7XM4ZcI';
+const DEFAULT_ORGANIZATION_PORTAL_NAME = 'Brillar HR Portal';
+const DEFAULT_ORGANIZATION_LOGO_URL = 'logo.png';
 
 function genToken() {
   return Math.random().toString(36).slice(2) + Date.now();
@@ -4036,6 +4038,74 @@ init().then(async () => {
   function normalizeChatWidgetUrl(value) {
     return normalizeExternalUrl(value);
   }
+
+  function normalizePortalName(value) {
+    if (typeof value !== 'string') return '';
+    return value.trim().slice(0, 80);
+  }
+
+  function normalizeOrganizationLogo(value) {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    const matchesDataUrl = /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(trimmed);
+    return matchesDataUrl ? trimmed : null;
+  }
+
+  // ---- ORGANIZATION SETTINGS ----
+  app.get('/settings/organization', authRequired, async (_req, res) => {
+    try {
+      await db.read();
+      const stored = db.data.settings?.organization;
+      const portalName = normalizePortalName(stored?.portalName) || DEFAULT_ORGANIZATION_PORTAL_NAME;
+      const logoUrl = typeof stored?.logoUrl === 'string' && stored.logoUrl.trim()
+        ? stored.logoUrl.trim()
+        : DEFAULT_ORGANIZATION_LOGO_URL;
+      res.json({
+        portalName,
+        logoUrl,
+        defaultPortalName: DEFAULT_ORGANIZATION_PORTAL_NAME,
+        defaultLogoUrl: DEFAULT_ORGANIZATION_LOGO_URL,
+        hasCustomLogo: logoUrl !== DEFAULT_ORGANIZATION_LOGO_URL
+      });
+    } catch (err) {
+      console.error('Failed to load organization settings', err);
+      res.status(500).json({ error: 'Unable to load organization settings.' });
+    }
+  });
+
+  app.put('/settings/organization', authRequired, managerOnly, async (req, res) => {
+    try {
+      const portalName = normalizePortalName(req.body?.portalName);
+      const logoUrl = normalizeOrganizationLogo(req.body?.logoUrl);
+
+      if (!portalName) {
+        return res.status(400).json({ error: 'Portal name is required.' });
+      }
+      if (logoUrl === null) {
+        return res.status(400).json({ error: 'Logo must be a valid image file.' });
+      }
+
+      await db.read();
+      db.data.settings = db.data.settings && typeof db.data.settings === 'object' ? db.data.settings : {};
+      db.data.settings.organization = {
+        portalName,
+        logoUrl: logoUrl || ''
+      };
+      await db.write();
+
+      res.json({
+        portalName,
+        logoUrl: logoUrl || DEFAULT_ORGANIZATION_LOGO_URL,
+        defaultPortalName: DEFAULT_ORGANIZATION_PORTAL_NAME,
+        defaultLogoUrl: DEFAULT_ORGANIZATION_LOGO_URL,
+        hasCustomLogo: Boolean(logoUrl)
+      });
+    } catch (err) {
+      console.error('Failed to save organization settings', err);
+      res.status(500).json({ error: 'Unable to save organization settings.' });
+    }
+  });
 
   // ---- CHAT WIDGET SETTINGS ----
   app.get('/settings/widget', authRequired, async (req, res) => {

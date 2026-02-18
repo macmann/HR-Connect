@@ -26,6 +26,8 @@ const DEFAULT_POST_LOGIN_AUTH =
 const POST_LOGIN_TIMEOUT_MS = 5000;
 const DEFAULT_CHAT_WIDGET_URL =
   'https://qa.atenxion.ai/chat-widget?agentchainId=6900712037c0ed036821b334';
+const DEFAULT_ORGANIZATION_NAME = 'Brillar HR Portal';
+const DEFAULT_ORGANIZATION_LOGO_URL = 'logo.png';
 const INACTIVE_EMPLOYEE_STATUSES = new Set(['inactive', 'deactivated', 'disabled', 'terminated']);
 const SUPPORTED_LEAVE_TYPES = ['annual', 'casual', 'medical'];
 const DEFAULT_LEAVE_BALANCE_CONFIG = {
@@ -960,7 +962,14 @@ let chatWidgetSettingsLoading = null;
 let postLoginSettings = null;
 let postLoginSettingsLoaded = false;
 let postLoginSettingsLoading = null;
-let settingsActiveSubtab = 'holidays';
+let organizationSettings = {
+  portalName: DEFAULT_ORGANIZATION_NAME,
+  logoUrl: DEFAULT_ORGANIZATION_LOGO_URL
+};
+let organizationSettingsLoaded = false;
+let organizationSettingsLoading = null;
+let organizationPendingLogoDataUrl = '';
+let settingsActiveSubtab = 'organization';
 let aiModelOptions = [
   { value: 'gpt-5', label: 'GPT5' },
   { value: 'gpt-5.1-mini', label: 'GPT5.1 mini' },
@@ -1025,6 +1034,7 @@ function adaptSearchResultToCandidate(result) {
 
 document.addEventListener('DOMContentLoaded', () => {
   setupTabGroupMenus();
+  applyOrganizationBranding();
   const params = new URLSearchParams(window.location.search);
   const aiScreeningPanel = document.getElementById('ai-cv-screening');
   if (aiScreeningPanel) {
@@ -1038,6 +1048,7 @@ document.addEventListener('DOMContentLoaded', () => {
       queuePostLoginSync(currentUser?.employeeId);
       loadChatWidgetSettings({ force: true, silent: true });
       loadPostLoginSettings({ force: true, silent: true });
+      loadOrganizationSettings({ force: true, silent: true });
     } catch {}
     window.history.replaceState({}, document.title, '/');
   }
@@ -1057,6 +1068,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch {}
     loadChatWidgetSettings({ force: true, silent: true });
     loadPostLoginSettings({ force: true, silent: true });
+    loadOrganizationSettings({ force: true, silent: true });
     toggleTabsByRole();
     init();
   }
@@ -1170,6 +1182,7 @@ const learningAdminTabPanels = {
 };
 const settingsSubtabButtons = document.querySelectorAll('[data-settings-tab]');
 const settingsSubtabPanels = {
+  organization: document.querySelector('[data-settings-tab-panel="organization"]'),
   holidays: document.querySelector('[data-settings-tab-panel="holidays"]'),
   ai: document.querySelector('[data-settings-tab-panel="ai"]'),
   roleAssignments: document.querySelector('[data-settings-tab-panel="roleAssignments"]'),
@@ -3299,7 +3312,7 @@ function updateRoleAssignmentVisibility() {
   if (roleAssignmentPanel) roleAssignmentPanel.classList.toggle('hidden', !canView);
 
   if (!canView && settingsActiveSubtab === 'roleAssignments') {
-    settingsActiveSubtab = 'holidays';
+    settingsActiveSubtab = 'organization';
   }
   if (canView) {
     loadRoleAssignmentEmployees();
@@ -4932,6 +4945,7 @@ function getVisibleSettingsSubtabs() {
 
 function loadSettingsSubtabData(name) {
   if (!isManagerRole(currentUser)) return;
+  if (name === 'organization') loadOrganizationSettings();
   if (name === 'holidays') loadHolidays();
   if (name === 'ai') loadAiSettingsConfig();
   if (name === 'chatWidget') loadChatWidgetSettings();
@@ -4939,7 +4953,7 @@ function loadSettingsSubtabData(name) {
   if (name === 'email') loadEmailSettingsConfig();
 }
 
-function updateSettingsSubtab(name = 'holidays') {
+function updateSettingsSubtab(name = 'organization') {
   const visibleTabs = getVisibleSettingsSubtabs();
   if (!visibleTabs.length) return;
   if (!name || !visibleTabs.includes(name)) {
@@ -6977,6 +6991,167 @@ async function onAiSettingsSubmit(ev) {
   } catch (err) {
     console.error('Failed to save AI settings', err);
     setAiSettingsStatus(err.message || 'Unable to save AI settings.', 'error');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+function setOrganizationSettingsStatus(message, type = 'info') {
+  const statusEl = document.getElementById('organizationSettingsStatus');
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('settings-status--error', 'settings-status--success');
+  if (!message) {
+    statusEl.classList.add('text-muted');
+    return;
+  }
+  statusEl.classList.remove('text-muted');
+  if (type === 'error') {
+    statusEl.classList.add('settings-status--error');
+  } else if (type === 'success') {
+    statusEl.classList.add('settings-status--success');
+  }
+}
+
+function applyOrganizationBranding() {
+  const portalName = organizationSettings?.portalName || DEFAULT_ORGANIZATION_NAME;
+  const logoUrl = organizationSettings?.logoUrl || DEFAULT_ORGANIZATION_LOGO_URL;
+  document.title = portalName;
+  const nameIds = ['welcomePortalName', 'loginPortalName', 'appPortalName'];
+  nameIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = portalName;
+  });
+  const logoIds = ['loginBrandLogo', 'appBrandLogo', 'organizationLogoPreview'];
+  logoIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.src = logoUrl;
+  });
+}
+
+function renderOrganizationSettingsForm() {
+  const nameInput = document.getElementById('organizationPortalName');
+  if (nameInput) {
+    nameInput.value = organizationSettings?.portalName || DEFAULT_ORGANIZATION_NAME;
+  }
+  const fileInput = document.getElementById('organizationLogoFile');
+  if (fileInput) {
+    fileInput.value = '';
+  }
+  organizationPendingLogoDataUrl = '';
+  applyOrganizationBranding();
+}
+
+async function fetchOrganizationSettings({ force = false } = {}) {
+  if (!force && organizationSettingsLoaded && !organizationSettingsLoading) {
+    return organizationSettings;
+  }
+  if (!force && organizationSettingsLoading) {
+    return organizationSettingsLoading;
+  }
+
+  const request = (async () => {
+    const res = await apiFetch('/settings/organization');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to load organization settings.');
+    }
+    return data;
+  })();
+
+  organizationSettingsLoading = request;
+
+  try {
+    const settings = await request;
+    organizationSettings = settings || {};
+    organizationSettingsLoaded = true;
+    return settings;
+  } finally {
+    organizationSettingsLoading = null;
+  }
+}
+
+async function loadOrganizationSettings({ force = false, silent = false } = {}) {
+  if (!currentUser) return null;
+  if (!force && organizationSettingsLoaded) {
+    renderOrganizationSettingsForm();
+    if (!silent) setOrganizationSettingsStatus('Organization settings loaded.');
+    return organizationSettings;
+  }
+  if (!silent) setOrganizationSettingsStatus('Loading organization settings...');
+  try {
+    const settings = await fetchOrganizationSettings({ force });
+    organizationSettings = settings || organizationSettings;
+    organizationSettingsLoaded = true;
+    renderOrganizationSettingsForm();
+    if (!silent) setOrganizationSettingsStatus('Organization settings loaded.');
+    return organizationSettings;
+  } catch (err) {
+    console.error('Unable to load organization settings', err);
+    if (!silent) {
+      setOrganizationSettingsStatus(err.message || 'Unable to load organization settings.', 'error');
+    }
+    return null;
+  }
+}
+
+function onOrganizationLogoFileChange(ev) {
+  const file = ev.target?.files?.[0];
+  if (!file) {
+    organizationPendingLogoDataUrl = '';
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    setOrganizationSettingsStatus('Logo file is too large. Please upload a file under 2 MB.', 'error');
+    ev.target.value = '';
+    organizationPendingLogoDataUrl = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    organizationPendingLogoDataUrl = typeof reader.result === 'string' ? reader.result : '';
+    if (organizationPendingLogoDataUrl) {
+      const preview = document.getElementById('organizationLogoPreview');
+      if (preview) preview.src = organizationPendingLogoDataUrl;
+      setOrganizationSettingsStatus('Logo selected. Click save to apply.', 'info');
+    }
+  };
+  reader.onerror = () => {
+    setOrganizationSettingsStatus('Unable to read the selected logo file.', 'error');
+    organizationPendingLogoDataUrl = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function onOrganizationSettingsSubmit(ev) {
+  ev.preventDefault();
+  if (!currentUser || !isManagerRole(currentUser)) return;
+  const form = ev.currentTarget;
+  const submitBtn = form?.querySelector('button[type="submit"]');
+  if (submitBtn) submitBtn.disabled = true;
+  setOrganizationSettingsStatus('Saving organization settings...');
+  try {
+    const nameInput = document.getElementById('organizationPortalName');
+    const payload = {
+      portalName: nameInput?.value ? nameInput.value.trim() : '',
+      logoUrl: organizationPendingLogoDataUrl || organizationSettings?.logoUrl || ''
+    };
+    const res = await apiFetch('/settings/organization', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to save organization settings.');
+    }
+    organizationSettings = data || payload;
+    organizationSettingsLoaded = true;
+    renderOrganizationSettingsForm();
+    setOrganizationSettingsStatus('Organization settings saved successfully.', 'success');
+  } catch (err) {
+    console.error('Failed to save organization settings', err);
+    setOrganizationSettingsStatus(err.message || 'Unable to save organization settings.', 'error');
   } finally {
     if (submitBtn) submitBtn.disabled = false;
   }
@@ -9371,7 +9546,7 @@ async function init() {
   if (settingsSubtabButtons.length) {
     settingsSubtabButtons.forEach(button => {
       button.addEventListener('click', () => {
-        updateSettingsSubtab(button.dataset.settingsTab || 'holidays');
+        updateSettingsSubtab(button.dataset.settingsTab || 'organization');
       });
     });
   }
@@ -9395,6 +9570,11 @@ async function init() {
 
   document.getElementById('empTableBody').addEventListener('click', onEmpTableClick);
   document.getElementById('empTableBody').addEventListener('change', onInternFlagChange);
+
+  const organizationForm = document.getElementById('organizationSettingsForm');
+  if (organizationForm) organizationForm.addEventListener('submit', onOrganizationSettingsSubmit);
+  const organizationLogoInput = document.getElementById('organizationLogoFile');
+  if (organizationLogoInput) organizationLogoInput.addEventListener('change', onOrganizationLogoFileChange);
 
   const emailForm = document.getElementById('emailSettingsForm');
   if (emailForm) emailForm.addEventListener('submit', onEmailSettingsSubmit);
