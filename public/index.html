@@ -5169,6 +5169,81 @@
               All Requests
             </div>
             <p class="card-subtitle">Managers can filter requests and update fulfillment details.</p>
+
+            <div class="kpi-grid" id="requestPortalMetricsKpiGrid">
+              <div class="kpi-card">
+                <div class="kpi-card__icon kpi-card__icon--info" aria-hidden="true">
+                  <span class="material-symbols-rounded">schedule</span>
+                </div>
+                <div class="kpi-card__content">
+                  <p class="kpi-card__label">Average turnaround</p>
+                  <p id="requestPortalMetricsAverageTurnaround" class="kpi-card__value">--</p>
+                  <p class="kpi-card__meta">Closed requests only</p>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-card__icon kpi-card__icon--success" aria-hidden="true">
+                  <span class="material-symbols-rounded">insights</span>
+                </div>
+                <div class="kpi-card__content">
+                  <p class="kpi-card__label">Median turnaround</p>
+                  <p id="requestPortalMetricsMedianTurnaround" class="kpi-card__value">--</p>
+                  <p class="kpi-card__meta">SLA baseline median</p>
+                </div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-card__icon kpi-card__icon--warning" aria-hidden="true">
+                  <span class="material-symbols-rounded">hourglass_top</span>
+                </div>
+                <div class="kpi-card__content">
+                  <p class="kpi-card__label">Open aging buckets</p>
+                  <p id="requestPortalMetricsOpenAging" class="kpi-card__value">0 / 0 / 0</p>
+                  <p class="kpi-card__meta">0-2d, 3-7d, &gt;7d</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="learning-report-grid" style="margin-bottom: 16px;">
+              <div class="md-card learning-report-card">
+                <div class="learning-report-card-header">
+                  <h4>Category SLA breakdown</h4>
+                </div>
+                <div class="request-portal-table-wrapper">
+                  <table class="data-grid-table request-portal-table">
+                    <thead>
+                      <tr>
+                        <th>Category</th>
+                        <th>Total</th>
+                        <th>Open</th>
+                        <th>In progress</th>
+                        <th>Closed</th>
+                        <th>Avg TAT</th>
+                        <th>Median TAT</th>
+                      </tr>
+                    </thead>
+                    <tbody id="requestPortalMetricsCategoryBody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="md-card learning-report-card">
+                <div class="learning-report-card-header">
+                  <h4>Status slices</h4>
+                </div>
+                <div class="request-portal-table-wrapper">
+                  <table class="data-grid-table request-portal-table">
+                    <thead>
+                      <tr>
+                        <th>Status</th>
+                        <th>Count</th>
+                        <th>Share</th>
+                      </tr>
+                    </thead>
+                    <tbody id="requestPortalMetricsStatusBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
             <div class="form-row two-col">
               <div>
                 <label class="md-label" for="requestPortalFilterStatus">Status</label>
@@ -5207,6 +5282,10 @@
                 <button type="button" id="requestPortalFilterResetBtn" class="md-button md-button--outlined md-button--small">
                   <span class="material-symbols-rounded">restart_alt</span>
                   Reset
+                </button>
+                <button type="button" id="requestPortalExportCsvBtn" class="md-button md-button--outlined md-button--small">
+                  <span class="material-symbols-rounded">download</span>
+                  Export SLA CSV
                 </button>
               </div>
             </div>

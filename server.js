@@ -1109,6 +1109,246 @@ function computeResolutionDurationHours(requestRecord) {
   return Number((durationMs / (1000 * 60 * 60)).toFixed(2));
 }
 
+function computeRequestTurnaroundMs(requestRecord) {
+  if (!requestRecord?.requestedAt || !requestRecord?.closedAt) {
+    return null;
+  }
+
+  const requestedAt = new Date(requestRecord.requestedAt);
+  const closedAt = new Date(requestRecord.closedAt);
+  if (Number.isNaN(requestedAt.getTime()) || Number.isNaN(closedAt.getTime())) {
+    return null;
+  }
+
+  const durationMs = closedAt.getTime() - requestedAt.getTime();
+  if (!Number.isFinite(durationMs) || durationMs < 0) {
+    return null;
+  }
+
+  return durationMs;
+}
+
+function normalizeRequestTimingFields(requestRecord, defaultIso = new Date().toISOString()) {
+  if (!requestRecord || typeof requestRecord !== 'object') {
+    return false;
+  }
+
+  let changed = false;
+  const normalizedStatus = normalizeRequestStatus(requestRecord.status) || 'open';
+  const requestedAtDate = new Date(requestRecord.requestedAt);
+  if (!requestRecord.requestedAt || Number.isNaN(requestedAtDate.getTime())) {
+    const fallbackRequestedAt = toNonEmptyString(requestRecord.updatedAt)
+      || toNonEmptyString(requestRecord?.audit?.[0]?.at)
+      || defaultIso;
+    if (requestRecord.requestedAt !== fallbackRequestedAt) {
+      requestRecord.requestedAt = fallbackRequestedAt;
+      changed = true;
+    }
+  }
+
+  if (normalizedStatus === 'closed') {
+    const closedAtDate = new Date(requestRecord.closedAt);
+    if (!requestRecord.closedAt || Number.isNaN(closedAtDate.getTime())) {
+      const fallbackClosedAt = toNonEmptyString(requestRecord.updatedAt)
+        || toNonEmptyString(requestRecord.requestedAt)
+        || defaultIso;
+      if (requestRecord.closedAt !== fallbackClosedAt) {
+        requestRecord.closedAt = fallbackClosedAt;
+        changed = true;
+      }
+    }
+  } else if (requestRecord.closedAt !== null) {
+    requestRecord.closedAt = null;
+    changed = true;
+  }
+
+  const turnaroundMs = computeRequestTurnaroundMs(requestRecord);
+  const normalizedTurnaroundMs = Number.isFinite(turnaroundMs) ? Number(turnaroundMs) : null;
+  if (requestRecord.turnaroundMs !== normalizedTurnaroundMs) {
+    requestRecord.turnaroundMs = normalizedTurnaroundMs;
+    changed = true;
+  }
+
+  const resolutionDurationHours = Number.isFinite(normalizedTurnaroundMs)
+    ? Number((normalizedTurnaroundMs / (1000 * 60 * 60)).toFixed(2))
+    : null;
+  if (requestRecord.resolutionDurationHours !== resolutionDurationHours) {
+    requestRecord.resolutionDurationHours = resolutionDurationHours;
+    changed = true;
+  }
+
+  return changed;
+}
+
+function normalizeRequestCollectionTiming(data = {}) {
+  const requests = ensureRequestsCollection(data);
+  const nowIso = new Date().toISOString();
+  let changed = false;
+  requests.forEach(requestRecord => {
+    changed = normalizeRequestTimingFields(requestRecord, nowIso) || changed;
+  });
+  return changed;
+}
+
+function computeRequestMetricsSummary(requests = []) {
+  const source = Array.isArray(requests) ? requests : [];
+  const nowMs = Date.now();
+  const closedTurnarounds = source
+    .map(item => Number(item?.turnaroundMs))
+    .filter(value => Number.isFinite(value) && value >= 0)
+    .sort((a, b) => a - b);
+
+  const averageTurnaroundMs = closedTurnarounds.length
+    ? Math.round(closedTurnarounds.reduce((sum, value) => sum + value, 0) / closedTurnarounds.length)
+    : null;
+  const medianTurnaroundMs = closedTurnarounds.length
+    ? (closedTurnarounds.length % 2 === 1
+      ? closedTurnarounds[Math.floor(closedTurnarounds.length / 2)]
+      : Math.round((closedTurnarounds[(closedTurnarounds.length / 2) - 1] + closedTurnarounds[closedTurnarounds.length / 2]) / 2))
+    : null;
+
+  const openAgingBuckets = {
+    '0-2d': 0,
+    '3-7d': 0,
+    '>7d': 0
+  };
+
+  const categoryMap = new Map();
+  const statusMap = new Map();
+
+  source.forEach(requestRecord => {
+    const status = normalizeRequestStatus(requestRecord?.status) || 'open';
+    const category = toNonEmptyString(requestRecord?.categoryName)
+      || toNonEmptyString(requestRecord?.categoryId)
+      || 'General';
+
+    const requestedAtMs = new Date(requestRecord?.requestedAt).getTime();
+    if (status !== 'closed' && Number.isFinite(requestedAtMs)) {
+      const ageDays = (nowMs - requestedAtMs) / (1000 * 60 * 60 * 24);
+      if (ageDays <= 2) openAgingBuckets['0-2d'] += 1;
+      else if (ageDays <= 7) openAgingBuckets['3-7d'] += 1;
+      else openAgingBuckets['>7d'] += 1;
+    }
+
+    const statusEntry = statusMap.get(status) || { status, count: 0 };
+    statusEntry.count += 1;
+    statusMap.set(status, statusEntry);
+
+    const categoryEntry = categoryMap.get(category) || {
+      category,
+      total: 0,
+      open: 0,
+      inProgress: 0,
+      closed: 0,
+      averageTurnaroundMs: null,
+      medianTurnaroundMs: null,
+      _turnarounds: []
+    };
+
+    categoryEntry.total += 1;
+    if (status === 'open') categoryEntry.open += 1;
+    else if (status === 'in_progress') categoryEntry.inProgress += 1;
+    else if (status === 'closed') categoryEntry.closed += 1;
+
+    const turnaroundMs = Number(requestRecord?.turnaroundMs);
+    if (Number.isFinite(turnaroundMs) && turnaroundMs >= 0) {
+      categoryEntry._turnarounds.push(turnaroundMs);
+    }
+
+    categoryMap.set(category, categoryEntry);
+  });
+
+  const byCategory = Array.from(categoryMap.values())
+    .map(entry => {
+      const values = entry._turnarounds.sort((a, b) => a - b);
+      const avg = values.length
+        ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+        : null;
+      const median = values.length
+        ? (values.length % 2 === 1
+          ? values[Math.floor(values.length / 2)]
+          : Math.round((values[(values.length / 2) - 1] + values[values.length / 2]) / 2))
+        : null;
+      return {
+        category: entry.category,
+        total: entry.total,
+        open: entry.open,
+        inProgress: entry.inProgress,
+        closed: entry.closed,
+        averageTurnaroundMs: avg,
+        medianTurnaroundMs: median
+      };
+    })
+    .sort((a, b) => b.total - a.total || a.category.localeCompare(b.category));
+
+  const statusBreakdown = Array.from(statusMap.values())
+    .sort((a, b) => b.count - a.count || a.status.localeCompare(b.status));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totalRequests: source.length,
+    closedRequests: closedTurnarounds.length,
+    openRequests: source.length - closedTurnarounds.length,
+    averageTurnaroundMs,
+    medianTurnaroundMs,
+    openAgingBuckets,
+    byCategory,
+    statusBreakdown
+  };
+}
+
+function toRequestSlaCsv(requests = []) {
+  const headers = [
+    'requestId',
+    'requesterEmployeeId',
+    'categoryId',
+    'categoryName',
+    'status',
+    'requestedAt',
+    'closedAt',
+    'turnaroundMs',
+    'turnaroundHours',
+    'openAgingBucket'
+  ];
+
+  const escapeCsv = value => {
+    if (value === null || typeof value === 'undefined') return '';
+    const raw = String(value);
+    return /[",\n]/.test(raw) ? `"${raw.replace(/"/g, '""')}"` : raw;
+  };
+
+  const nowMs = Date.now();
+  const rows = requests.map(requestRecord => {
+    const status = normalizeRequestStatus(requestRecord?.status) || 'open';
+    const requestedAtMs = new Date(requestRecord?.requestedAt).getTime();
+    let openAgingBucket = '';
+    if (status !== 'closed' && Number.isFinite(requestedAtMs)) {
+      const ageDays = (nowMs - requestedAtMs) / (1000 * 60 * 60 * 24);
+      if (ageDays <= 2) openAgingBucket = '0-2d';
+      else if (ageDays <= 7) openAgingBucket = '3-7d';
+      else openAgingBucket = '>7d';
+    }
+    const turnaroundMs = Number.isFinite(Number(requestRecord?.turnaroundMs))
+      ? Number(requestRecord.turnaroundMs)
+      : null;
+
+    return [
+      requestRecord?.id || '',
+      requestRecord?.requesterEmployeeId || '',
+      requestRecord?.categoryId || '',
+      requestRecord?.categoryName || '',
+      status,
+      requestRecord?.requestedAt || '',
+      requestRecord?.closedAt || '',
+      turnaroundMs ?? '',
+      Number.isFinite(turnaroundMs) ? Number((turnaroundMs / (1000 * 60 * 60)).toFixed(2)) : '',
+      openAgingBucket
+    ].map(escapeCsv).join(',');
+  });
+
+  return [headers.join(','), ...rows].join('\n');
+}
+
 function toDateFilterBoundary(value, endOfDay = false) {
   const normalized = toNonEmptyString(value);
   if (!normalized) return null;
@@ -1228,6 +1468,9 @@ async function sendRequestUpdateNotification(requestRecord, dbData = {}, options
 
 function toRequestResponse(requestRecord) {
   const normalizedStatus = normalizeRequestStatus(requestRecord?.status) || 'open';
+  const turnaroundMs = Number.isFinite(requestRecord?.turnaroundMs)
+    ? Number(requestRecord.turnaroundMs)
+    : computeRequestTurnaroundMs(requestRecord);
   const resolutionDurationHours = Number.isFinite(requestRecord?.resolutionDurationHours)
     ? Number(requestRecord.resolutionDurationHours)
     : computeResolutionDurationHours(requestRecord);
@@ -1244,6 +1487,7 @@ function toRequestResponse(requestRecord) {
     requestedAt: requestRecord.requestedAt || null,
     updatedAt: requestRecord.updatedAt || null,
     closedAt: requestRecord.closedAt || null,
+    turnaroundMs: turnaroundMs ?? null,
     result: requestRecord.result || null,
     audit: Array.isArray(requestRecord.audit) ? requestRecord.audit : [],
     resolutionDurationHours: resolutionDurationHours ?? null
@@ -6493,6 +6737,7 @@ init().then(async () => {
     db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
     db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
     ensureRequestsCollection(db.data);
+    normalizeRequestCollectionTiming(db.data);
 
     const manager = isManagerRole(req.user?.role);
     const currentEmployeeId = normalizeEmployeeId(req.user?.employeeId);
@@ -6529,6 +6774,7 @@ init().then(async () => {
       requestedAt: nowIso,
       updatedAt: nowIso,
       closedAt: null,
+      turnaroundMs: null,
       result: null,
       resolutionDurationHours: null
     };
@@ -6549,6 +6795,8 @@ init().then(async () => {
 
     await db.read();
     ensureRequestsCollection(db.data);
+    const didNormalize = normalizeRequestCollectionTiming(db.data);
+    if (didNormalize) await db.write();
 
     const requests = db.data.requests
       .filter(requestRecord => normalizeEmployeeId(requestRecord?.requesterEmployeeId) === requesterEmployeeId)
@@ -6556,6 +6804,46 @@ init().then(async () => {
       .map(toRequestResponse);
 
     return res.json(requests);
+  });
+
+  app.get('/api/requests/metrics', authRequired, managerOnly, async (req, res) => {
+    await db.read();
+    db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
+    db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
+    ensureRequestsCollection(db.data);
+    const didNormalize = normalizeRequestCollectionTiming(db.data);
+    if (didNormalize) await db.write();
+
+    const scope = toNonEmptyString(req.query?.scope).toLowerCase() === 'team' ? 'team' : 'org';
+    const visibleRequests = db.data.requests.filter(requestRecord => (
+      scope === 'team'
+        ? managerCanAccessRequest(requestRecord, req.user, db.data.employees, db.data.users)
+        : true
+    ));
+
+    return res.json(computeRequestMetricsSummary(visibleRequests));
+  });
+
+  app.get('/api/requests/metrics/export.csv', authRequired, managerOnly, async (req, res) => {
+    await db.read();
+    db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
+    db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
+    ensureRequestsCollection(db.data);
+    const didNormalize = normalizeRequestCollectionTiming(db.data);
+    if (didNormalize) await db.write();
+
+    const scope = toNonEmptyString(req.query?.scope).toLowerCase() === 'team' ? 'team' : 'org';
+    const visibleRequests = db.data.requests.filter(requestRecord => (
+      scope === 'team'
+        ? managerCanAccessRequest(requestRecord, req.user, db.data.employees, db.data.users)
+        : true
+    ));
+
+    const csv = toRequestSlaCsv(visibleRequests);
+    const filename = `request-sla-${scope}-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.status(200).send(csv);
   });
 
   app.get('/api/requests/:id', authRequired, async (req, res) => {
@@ -6568,6 +6856,8 @@ init().then(async () => {
     db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
     db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
     ensureRequestsCollection(db.data);
+    const didNormalize = normalizeRequestCollectionTiming(db.data);
+    if (didNormalize) await db.write();
 
     const requestRecord = db.data.requests.find(item => String(item?.id) === requestId);
     if (!requestRecord) {
@@ -6586,6 +6876,8 @@ init().then(async () => {
     db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
     db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
     ensureRequestsCollection(db.data);
+    const didNormalize = normalizeRequestCollectionTiming(db.data);
+    if (didNormalize) await db.write();
 
     const statusFilter = normalizeRequestStatus(req.query?.status);
     if (req.query?.status && !statusFilter) {
@@ -6648,6 +6940,8 @@ init().then(async () => {
     return res.json(filtered);
   });
 
+
+
   app.patch('/api/requests/:id/status', authRequired, managerOnly, async (req, res) => {
     const requestId = toNonEmptyString(req.params?.id);
     if (!requestId) {
@@ -6663,6 +6957,7 @@ init().then(async () => {
     db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
     db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
     ensureRequestsCollection(db.data);
+    normalizeRequestCollectionTiming(db.data);
 
     const requestRecord = db.data.requests.find(item => String(item?.id) === requestId);
     if (!requestRecord) {
@@ -6689,9 +6984,11 @@ init().then(async () => {
       if (!requestRecord.closedAt) {
         requestRecord.closedAt = nowIso;
       }
+      requestRecord.turnaroundMs = computeRequestTurnaroundMs(requestRecord);
       requestRecord.resolutionDurationHours = computeResolutionDurationHours(requestRecord);
     } else {
       requestRecord.closedAt = null;
+      requestRecord.turnaroundMs = null;
       requestRecord.resolutionDurationHours = null;
     }
 
@@ -6718,6 +7015,7 @@ init().then(async () => {
     db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
     db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
     ensureRequestsCollection(db.data);
+    normalizeRequestCollectionTiming(db.data);
 
     const requestRecord = db.data.requests.find(item => String(item?.id) === requestId);
     if (!requestRecord) {
