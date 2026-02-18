@@ -1638,9 +1638,10 @@ body {
 }
 
 #candidateDetailsModal {
-  align-items: stretch;
-  justify-content: stretch;
-  padding: 0;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
 }
 
 .employee-modal__fields {
@@ -1791,10 +1792,10 @@ body {
 
 .candidate-details-modal {
   width: 100%;
-  max-width: none;
-  height: 100%;
-  max-height: none;
-  border-radius: 0;
+  max-width: 1200px;
+  height: auto;
+  max-height: calc(100vh - 48px);
+  border-radius: 24px;
   padding: clamp(24px, 4vw, 40px);
   box-sizing: border-box;
   overflow-y: auto;
@@ -1963,8 +1964,13 @@ body {
 }
 
 @media (max-width: 900px) {
+  #candidateDetailsModal {
+    padding: 16px;
+  }
+
   .candidate-details-modal {
     padding: 24px 16px;
+    max-height: calc(100vh - 32px);
   }
 
   .candidate-details-grid {

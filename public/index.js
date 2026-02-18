@@ -8528,7 +8528,14 @@ function openCandidateDetailsModal(candidateId) {
   loadCandidateComments(candidate.id);
   loadCandidateCvPreview(candidate);
   const modal = document.getElementById('candidateDetailsModal');
-  if (modal) modal.classList.remove('hidden');
+  const modalCard = modal ? modal.querySelector('.candidate-details-modal') : null;
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.scrollTop = 0;
+  }
+  if (modalCard) modalCard.scrollTop = 0;
+  const commentsList = document.getElementById('commentsList');
+  if (commentsList) commentsList.scrollTop = 0;
   const textarea = document.getElementById('commentText');
   if (textarea) textarea.focus();
 }
