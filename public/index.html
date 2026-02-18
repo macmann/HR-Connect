@@ -636,10 +636,33 @@
       gap: 20px;
     }
 
+    .request-portal-metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
     .learning-report-card {
       display: flex;
       flex-direction: column;
       gap: 16px;
+    }
+
+    .request-portal-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .request-portal-form-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .request-portal-form-row .md-textarea {
+      min-height: 140px;
     }
 
     .learning-report-card-header {
@@ -5116,13 +5139,13 @@
                   </div>
                 </div>
               </div>
-              <div class="form-row">
+              <div class="request-portal-form-row">
                 <label class="md-label" for="requestPortalSubject">Subject</label>
                 <input type="text" id="requestPortalSubject" class="md-input" maxlength="160" placeholder="Brief summary of your request" required>
               </div>
-              <div class="form-row">
+              <div class="request-portal-form-row">
                 <label class="md-label" for="requestPortalDetails">Request details</label>
-                <textarea id="requestPortalDetails" class="md-textarea" rows="4" placeholder="Share context, dates, and expected outcomes." required></textarea>
+                <textarea id="requestPortalDetails" class="md-textarea" rows="6" placeholder="Share context, dates, and expected outcomes." required></textarea>
               </div>
               <div class="form-actions">
                 <button type="submit" id="requestPortalSubmitBtn" class="md-button md-button--filled">
@@ -5203,7 +5226,7 @@
               </div>
             </div>
 
-            <div class="learning-report-grid" style="margin-bottom: 16px;">
+            <div class="request-portal-metrics-grid">
               <div class="md-card learning-report-card">
                 <div class="learning-report-card-header">
                   <h4>Category SLA breakdown</h4>
