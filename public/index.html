@@ -4863,6 +4863,10 @@
                   <span class="material-symbols-rounded">workspace_premium</span>
                   <span>Performance Review</span>
                 </button>
+                <button id="tabRequestPortal" class="primary-more-item" type="button" role="menuitem">
+                  <span class="material-symbols-rounded">inbox_customize</span>
+                  <span>Request Portal</span>
+                </button>
               </div>
             </div>
           </div>
@@ -4872,6 +4876,7 @@
             <select id="primaryTabSelect">
               <option value="portal" selected>Leave Portal</option>
               <option value="performance">Performance Review</option>
+              <option value="requestPortal">Request Portal</option>
               <option value="profile">My Profile</option>
             </select>
           </label>
@@ -5066,6 +5071,32 @@
             </div>
             <p class="text-muted" style="font-style: italic;">Loading profile information...</p>
           </div>
+        </div>
+      </section>
+
+      <!-- Request Portal Panel -->
+      <section id="requestPortalPanel" class="panel hidden">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="material-symbols-rounded">inbox_customize</span>
+            Request Portal
+          </h2>
+          <p class="panel-subtitle">Raise employee service requests and track progress in one place.</p>
+        </div>
+
+        <div class="settings-subtabs" role="tablist" aria-label="Request Portal Views">
+          <button type="button" class="settings-subtab-button active" role="tab" aria-selected="true">My Requests</button>
+          <button type="button" class="settings-subtab-button" data-request-portal-manager-only role="tab" aria-selected="false">Team Requests</button>
+        </div>
+
+        <div class="md-card">
+          <div class="card-title">
+            <span class="material-symbols-rounded">assignment</span>
+            Request Dashboard
+          </div>
+          <p class="card-subtitle">Submit, review, and follow up on requests routed through HR workflows.</p>
+          <p class="text-muted" data-request-portal-employee-copy>Employees can create and monitor their own requests from this workspace.</p>
+          <p class="text-muted hidden" data-request-portal-manager-only>Managers can also review team requests and take action on escalations.</p>
         </div>
       </section>
 

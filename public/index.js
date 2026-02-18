@@ -1342,6 +1342,7 @@ function showPanel(name) {
   const profileBtn = document.getElementById('tabProfile');
   const portalBtn   = document.getElementById('tabPortal');
   const performanceBtn = document.getElementById('tabPerformance');
+  const requestPortalBtn = document.getElementById('tabRequestPortal');
   const learningHubBtn = document.getElementById('tabLearningHub');
   const learningReportsBtn = document.getElementById('tabLearningReports');
   const learningAdminBtn = document.getElementById('tabLearningAdmin');
@@ -1355,6 +1356,7 @@ function showPanel(name) {
   const profilePanel = document.getElementById('profilePanel');
   const portalPanel = document.getElementById('portalPanel');
   const performancePanel = document.getElementById('performancePanel');
+  const requestPortalPanel = document.getElementById('requestPortalPanel');
   const learningHubPanel = document.getElementById('learningHubPanel');
   const learningFocusPanel = document.getElementById('learningFocusPanel');
   const learningReportsPanel = document.getElementById('learningReportsPanel');
@@ -1367,12 +1369,13 @@ function showPanel(name) {
   const settingsPanel = document.getElementById('settingsPanel');
   const financePanel = document.getElementById('financePanel');
 
-  [profileBtn, portalBtn, performanceBtn, learningHubBtn, learningReportsBtn, learningAdminBtn, manageBtn, recruitmentBtn, managerBtn, reportBtn, locationBtn, settingsBtn, financeBtn].forEach(btn =>
+  [profileBtn, portalBtn, performanceBtn, requestPortalBtn, learningHubBtn, learningReportsBtn, learningAdminBtn, manageBtn, recruitmentBtn, managerBtn, reportBtn, locationBtn, settingsBtn, financeBtn].forEach(btn =>
  btn && btn.classList.remove('active-tab'));
 
   if (profilePanel) profilePanel.classList.add('hidden');
   portalPanel.classList.add('hidden');
   if (performancePanel) performancePanel.classList.add('hidden');
+  if (requestPortalPanel) requestPortalPanel.classList.add('hidden');
   if (learningHubPanel) learningHubPanel.classList.add('hidden');
   if (learningFocusPanel) learningFocusPanel.classList.add('hidden');
   if (learningReportsPanel) learningReportsPanel.classList.add('hidden');
@@ -1402,6 +1405,10 @@ function showPanel(name) {
     performancePanel.classList.remove('hidden');
     if (performanceBtn) performanceBtn.classList.add('active-tab');
     ensurePerformanceExperience();
+  }
+  if (name === 'requestPortal' && requestPortalPanel) {
+    requestPortalPanel.classList.remove('hidden');
+    if (requestPortalBtn) requestPortalBtn.classList.add('active-tab');
   }
   if (name === 'learningHub' && learningHubPanel) {
     learningHubPanel.classList.remove('hidden');
@@ -1477,13 +1484,21 @@ function showPanel(name) {
   }
 
   const primaryTabSelect = document.getElementById('primaryTabSelect');
-  if (primaryTabSelect && (name === 'profile' || name === 'portal' || name === 'performance')) {
+  if (primaryTabSelect && (name === 'profile' || name === 'portal' || name === 'performance' || name === 'requestPortal')) {
     primaryTabSelect.value = name;
   }
 
-  if (name !== 'performance') {
+  if (name !== 'performance' && name !== 'requestPortal') {
     setPrimaryMoreMenuOpen(false);
   }
+}
+
+function updateRequestPortalVisibility() {
+  const managerOnlyElements = document.querySelectorAll('[data-request-portal-manager-only]');
+  const managerVisible = isManagerRole(currentUser);
+  managerOnlyElements.forEach(element => {
+    element.classList.toggle('hidden', !managerVisible);
+  });
 }
 
 // Role-based tab display
@@ -1528,6 +1543,7 @@ function toggleTabsByRole() {
   }
 
   updateRoleAssignmentVisibility();
+  updateRequestPortalVisibility();
 
   refreshTabGroupVisibility();
 }
@@ -10104,6 +10120,8 @@ async function init() {
   document.getElementById('tabPortal').onclick = () => showPanel('portal');
   const performanceTab = document.getElementById('tabPerformance');
   if (performanceTab) performanceTab.onclick = () => showPanel('performance');
+  const requestPortalTab = document.getElementById('tabRequestPortal');
+  if (requestPortalTab) requestPortalTab.onclick = () => showPanel('requestPortal');
   const learningHubTab = document.getElementById('tabLearningHub');
   if (learningHubTab) learningHubTab.onclick = () => showPanel('learningHub');
   const learningReportsTab = document.getElementById('tabLearningReports');
