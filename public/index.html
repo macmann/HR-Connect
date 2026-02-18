@@ -2378,6 +2378,48 @@
   font-size: 0.9em;
 }
 
+.settings-subtab-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+
+.settings-subtab-button {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-subtab-button:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #1d4ed8;
+}
+
+.settings-subtab-button--active {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+}
+
+.settings-subtab-panel {
+  display: none;
+}
+
+.settings-subtab-panel--active {
+  display: block;
+}
+
+.settings-subtab-panel > .md-card + .md-card {
+  margin-top: 20px;
+}
+
 .form-actions {
   display: flex;
   align-items: center;
@@ -6909,6 +6951,17 @@
           <p class="panel-subtitle">Configure company holidays to ensure accurate leave balances.</p>
         </div>
 
+        <div class="settings-subtab-list" role="tablist" aria-label="Settings sections">
+          <button type="button" class="settings-subtab-button settings-subtab-button--active" data-settings-tab="holidays" role="tab" aria-selected="true">Holiday Calendar</button>
+          <button type="button" class="settings-subtab-button" data-settings-tab="ai" role="tab" aria-selected="false">AI Configuration</button>
+          <button type="button" id="roleAssignmentTab" class="settings-subtab-button hidden" data-settings-tab="roleAssignments" role="tab" aria-selected="false">Role Assignments</button>
+          <button type="button" class="settings-subtab-button" data-settings-tab="chatWidget" role="tab" aria-selected="false">Chat Widget</button>
+          <button type="button" class="settings-subtab-button" data-settings-tab="postLogin" role="tab" aria-selected="false">Post-login Sync</button>
+          <button type="button" class="settings-subtab-button" data-settings-tab="email" role="tab" aria-selected="false">Email Notifications</button>
+          <button type="button" class="settings-subtab-button" data-settings-tab="apiTools" role="tab" aria-selected="false">API Testing Tools</button>
+        </div>
+
+        <div class="settings-subtab-panel settings-subtab-panel--active" data-settings-tab-panel="holidays">
         <div class="md-card">
           <div class="card-title">
             <span class="material-symbols-rounded">calendar_month</span>
@@ -6937,7 +6990,9 @@
           </form>
           <div id="holidayList" class="holiday-list"></div>
         </div>
+        </div>
 
+        <div class="settings-subtab-panel" data-settings-tab-panel="ai">
         <div class="md-card">
           <div class="card-title">
             <span class="material-symbols-rounded">smart_toy</span>
@@ -6990,7 +7045,9 @@
           </form>
           <div id="aiSettingsStatus" class="settings-status text-muted"></div>
         </div>
+        </div>
 
+        <div id="roleAssignmentTabPanel" class="settings-subtab-panel hidden" data-settings-tab-panel="roleAssignments">
         <div id="roleAssignmentSection" class="md-card hidden">
           <div class="card-title">
             <span class="material-symbols-rounded">badge</span>
@@ -7022,7 +7079,9 @@
             </button>
           </form>
         </div>
+        </div>
 
+        <div class="settings-subtab-panel" data-settings-tab-panel="chatWidget">
         <div class="md-card">
           <div class="card-title">
             <span class="material-symbols-rounded">forum</span>
@@ -7054,7 +7113,9 @@
           </form>
           <div id="chatWidgetSettingsStatus" class="settings-status text-muted"></div>
         </div>
+        </div>
 
+        <div class="settings-subtab-panel" data-settings-tab-panel="postLogin">
         <div class="md-card">
           <div class="card-title">
             <span class="material-symbols-rounded">sync</span>
@@ -7089,7 +7150,9 @@
           </form>
           <div id="postLoginSettingsStatus" class="settings-status text-muted"></div>
         </div>
+        </div>
 
+        <div class="settings-subtab-panel" data-settings-tab-panel="email">
         <div class="md-card">
           <div class="card-title">
             <span class="material-symbols-rounded">mail</span>
@@ -7278,7 +7341,9 @@
           </form>
           <div id="emailSettingsStatus" class="settings-status text-muted"></div>
         </div>
+        </div>
 
+        <div class="settings-subtab-panel" data-settings-tab-panel="apiTools">
         <div class="md-card">
           <div class="card-title">
             <span class="material-symbols-rounded">terminal</span>
@@ -7294,6 +7359,7 @@
             <li>Send the token along with requests to protected routes such as <code>/api/me</code>.</li>
             <li>Copy the generated <code>curl</code> command to share with third parties embedding the widget.</li>
           </ol>
+        </div>
         </div>
       </section>
 

@@ -960,6 +960,7 @@ let chatWidgetSettingsLoading = null;
 let postLoginSettings = null;
 let postLoginSettingsLoaded = false;
 let postLoginSettingsLoading = null;
+let settingsActiveSubtab = 'holidays';
 let aiModelOptions = [
   { value: 'gpt-5', label: 'GPT5' },
   { value: 'gpt-5.1-mini', label: 'GPT5.1 mini' },
@@ -1166,6 +1167,16 @@ const learningAdminTabPanels = {
   courses: document.getElementById('learningAdminTabCourses'),
   modules: document.getElementById('learningAdminTabModules'),
   assets: document.getElementById('learningAdminTabAssets')
+};
+const settingsSubtabButtons = document.querySelectorAll('[data-settings-tab]');
+const settingsSubtabPanels = {
+  holidays: document.querySelector('[data-settings-tab-panel="holidays"]'),
+  ai: document.querySelector('[data-settings-tab-panel="ai"]'),
+  roleAssignments: document.querySelector('[data-settings-tab-panel="roleAssignments"]'),
+  chatWidget: document.querySelector('[data-settings-tab-panel="chatWidget"]'),
+  postLogin: document.querySelector('[data-settings-tab-panel="postLogin"]'),
+  email: document.querySelector('[data-settings-tab-panel="email"]'),
+  apiTools: document.querySelector('[data-settings-tab-panel="apiTools"]')
 };
 const payrollSummaryBody = document.getElementById('payrollSummaryBody');
 const payrollSummaryMonth = document.getElementById('payrollSummaryMonth');
@@ -1428,14 +1439,8 @@ function showPanel(name) {
   if (name === 'settings') {
     settingsPanel.classList.remove('hidden');
     if (settingsBtn) settingsBtn.classList.add('active-tab');
-    if (isManagerRole(currentUser)) {
-      loadHolidays();
-      loadEmailSettingsConfig();
-      loadAiSettingsConfig();
-      loadChatWidgetSettings();
-      loadPostLoginSettings();
-    }
     updateRoleAssignmentVisibility();
+    updateSettingsSubtab(settingsActiveSubtab);
   }
   if (name === 'finance' && financePanel) {
     financePanel.classList.remove('hidden');
@@ -3285,9 +3290,17 @@ function initRoleAssignmentUI() {
 
 function updateRoleAssignmentVisibility() {
   const section = document.getElementById('roleAssignmentSection');
-  if (!section) return;
+  const roleAssignmentTab = document.getElementById('roleAssignmentTab');
+  const roleAssignmentPanel = document.getElementById('roleAssignmentTabPanel');
   const canView = isSuperAdmin(currentUser);
-  section.classList.toggle('hidden', !canView);
+
+  if (section) section.classList.toggle('hidden', !canView);
+  if (roleAssignmentTab) roleAssignmentTab.classList.toggle('hidden', !canView);
+  if (roleAssignmentPanel) roleAssignmentPanel.classList.toggle('hidden', !canView);
+
+  if (!canView && settingsActiveSubtab === 'roleAssignments') {
+    settingsActiveSubtab = 'holidays';
+  }
   if (canView) {
     loadRoleAssignmentEmployees();
   }
@@ -4907,6 +4920,52 @@ function updateLearningAdminTab(name = 'courses') {
     panelEl.classList.toggle('hidden', !isActive);
     panelEl.classList.toggle('learning-admin-tab-panel--active', isActive);
   });
+}
+
+function getVisibleSettingsSubtabs() {
+  return Object.keys(settingsSubtabPanels).filter(name => {
+    const panel = settingsSubtabPanels[name];
+    if (!panel) return false;
+    return !panel.classList.contains('hidden');
+  });
+}
+
+function loadSettingsSubtabData(name) {
+  if (!isManagerRole(currentUser)) return;
+  if (name === 'holidays') loadHolidays();
+  if (name === 'ai') loadAiSettingsConfig();
+  if (name === 'chatWidget') loadChatWidgetSettings();
+  if (name === 'postLogin') loadPostLoginSettings();
+  if (name === 'email') loadEmailSettingsConfig();
+}
+
+function updateSettingsSubtab(name = 'holidays') {
+  const visibleTabs = getVisibleSettingsSubtabs();
+  if (!visibleTabs.length) return;
+  if (!name || !visibleTabs.includes(name)) {
+    name = visibleTabs[0];
+  }
+
+  settingsActiveSubtab = name;
+
+  settingsSubtabButtons.forEach(button => {
+    const tabName = button.dataset.settingsTab;
+    const isVisible = visibleTabs.includes(tabName);
+    const isActive = tabName === name && isVisible;
+    button.classList.toggle('hidden', !isVisible);
+    button.classList.toggle('settings-subtab-button--active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+
+  Object.entries(settingsSubtabPanels).forEach(([panelName, panelEl]) => {
+    if (!panelEl) return;
+    const isVisible = visibleTabs.includes(panelName);
+    const isActive = isVisible && panelName === name;
+    panelEl.classList.toggle('hidden', !isVisible);
+    panelEl.classList.toggle('settings-subtab-panel--active', isActive);
+  });
+
+  loadSettingsSubtabData(name);
 }
 
 function formatFinanceUpdatedAt(value) {
@@ -9309,6 +9368,13 @@ async function init() {
   if (settingsTab) settingsTab.onclick = () => showPanel('settings');
   const financeTab = document.getElementById('tabFinance');
   if (financeTab) financeTab.onclick = () => showPanel('finance');
+  if (settingsSubtabButtons.length) {
+    settingsSubtabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        updateSettingsSubtab(button.dataset.settingsTab || 'holidays');
+      });
+    });
+  }
   const primaryTabSelect = document.getElementById('primaryTabSelect');
   initPrimaryMoreMenu();
   const payslipBtn = document.getElementById('profilePayslipButton');
