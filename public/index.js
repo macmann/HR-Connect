@@ -6075,6 +6075,7 @@ async function onRequestCategoriesSave() {
     requestCategoriesDirty = false;
     requestCategoriesLoaded = true;
     renderRequestCategories();
+    renderRequestPortalCategories(requestCategories);
     resetRequestCategoryForm();
     setRequestCategoriesStatus('Request categories saved successfully.', 'success');
   } catch (err) {
