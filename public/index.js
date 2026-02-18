@@ -8360,8 +8360,14 @@ function renderAiCvScreening(application) {
 
   if (!fitLevelEl || !fitScoreEl || !summaryEl || !strengthsUl || !concernsUl || !rec) return;
 
-  fitLevelEl.innerText = r.fitLevel;
-  fitScoreEl.innerText = r.fitScore != null ? r.fitScore.toFixed(1) : '';
+  const fitLevel =
+    (typeof r.fitLevel === 'string' && r.fitLevel.trim()) ||
+    (typeof r.recommendation === 'string' && r.recommendation.trim()) ||
+    '-';
+  const fitScore = Number.isFinite(Number(r.fitScore)) ? Number(r.fitScore).toFixed(1) : '';
+
+  fitLevelEl.innerText = fitLevel;
+  fitScoreEl.innerText = fitScore;
 
   summaryEl.innerText = r.summary || '';
 
@@ -8373,13 +8379,14 @@ function renderAiCvScreening(application) {
   });
 
   concernsUl.innerHTML = '';
-  (r.concerns || []).forEach(c => {
+  const concerns = Array.isArray(r.concerns) ? r.concerns : (Array.isArray(r.risks) ? r.risks : []);
+  concerns.forEach(c => {
     const li = document.createElement('li');
     li.innerText = c;
     concernsUl.appendChild(li);
   });
 
-  rec.innerText = r.recommendation;
+  rec.innerText = typeof r.recommendation === 'string' ? r.recommendation : '';
   rec.classList.remove('bg-green-600', 'bg-yellow-600', 'bg-red-600');
   rec.classList.add(
     r.recommendation === 'proceed_to_ai_interview' ? 'bg-green-600' :
