@@ -977,6 +977,12 @@ let requestCategoriesLoaded = false;
 let requestCategoriesLoading = null;
 let requestCategoriesDirty = false;
 let requestCategoryEditingId = null;
+let requestPortalInitialized = false;
+let requestPortalLoading = null;
+let requestPortalActiveTab = 'new';
+let requestPortalCurrentUser = null;
+let requestPortalRequesterEmployee = null;
+let requestPortalMyRequests = [];
 let settingsActiveSubtab = 'organization';
 let aiModelOptions = [
   { value: 'gpt-5', label: 'GPT5' },
@@ -1409,6 +1415,7 @@ function showPanel(name) {
   if (name === 'requestPortal' && requestPortalPanel) {
     requestPortalPanel.classList.remove('hidden');
     if (requestPortalBtn) requestPortalBtn.classList.add('active-tab');
+    initializeRequestPortal();
   }
   if (name === 'learningHub' && learningHubPanel) {
     learningHubPanel.classList.remove('hidden');
@@ -1499,6 +1506,273 @@ function updateRequestPortalVisibility() {
   managerOnlyElements.forEach(element => {
     element.classList.toggle('hidden', !managerVisible);
   });
+}
+
+function formatRequestPortalDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatRequestPortalTurnaround(hours) {
+  if (!Number.isFinite(hours) || hours < 0) return '-';
+  if (hours < 24) return `${hours.toFixed(1)} hrs`;
+  const days = hours / 24;
+  return `${days.toFixed(1)} days`;
+}
+
+function formatRequestPortalStatus(status = '') {
+  const value = String(status || '').trim().toLowerCase();
+  if (!value) return 'Open';
+  return value.split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+function setRequestPortalFormStatus(message, type = 'info') {
+  const statusEl = document.getElementById('requestPortalFormStatus');
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('settings-status--error', 'settings-status--success');
+  if (type === 'error') statusEl.classList.add('settings-status--error');
+  if (type === 'success') statusEl.classList.add('settings-status--success');
+}
+
+function setRequestPortalMyRequestsStatus(message, type = 'info') {
+  const statusEl = document.getElementById('requestPortalMyRequestsStatus');
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('settings-status--error', 'settings-status--success');
+  if (type === 'error') statusEl.classList.add('settings-status--error');
+  if (type === 'success') statusEl.classList.add('settings-status--success');
+}
+
+function updateRequestPortalSubtab(name = 'new') {
+  requestPortalActiveTab = name === 'mine' ? 'mine' : 'new';
+  const buttons = document.querySelectorAll('[data-request-portal-tab]');
+  buttons.forEach(button => {
+    const isActive = button.dataset.requestPortalTab === requestPortalActiveTab;
+    button.classList.toggle('settings-subtab-button--active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+  });
+
+  const panels = document.querySelectorAll('[data-request-portal-panel]');
+  panels.forEach(panel => {
+    const isActive = panel.dataset.requestPortalPanel === requestPortalActiveTab;
+    panel.classList.toggle('hidden', !isActive);
+    panel.classList.toggle('request-portal-subtab-panel--active', isActive);
+  });
+}
+
+function renderRequestPortalCategories(categories = []) {
+  const select = document.getElementById('requestPortalCategory');
+  if (!select) return;
+  const activeCategories = (Array.isArray(categories) ? categories : []).filter(category => category?.active !== false);
+  select.innerHTML = '<option value="">Select a category</option>';
+  activeCategories.forEach(category => {
+    const option = document.createElement('option');
+    option.value = category.id || category.name || '';
+    option.textContent = category.name || 'Unnamed category';
+    option.dataset.categoryName = category.name || '';
+    select.appendChild(option);
+  });
+}
+
+function renderRequestPortalRequester() {
+  const requesterInput = document.getElementById('requestPortalRequester');
+  if (!requesterInput) return;
+  const employee = requestPortalRequesterEmployee;
+  const fallbackName = requestPortalCurrentUser?.email || currentUser?.email || 'Current user';
+  const employeeLabel = employee?.name
+    ? `${employee.name}${employee.id ? ` (ID: ${employee.id})` : ''}`
+    : fallbackName;
+  requesterInput.value = employeeLabel;
+  requesterInput.readOnly = true;
+}
+
+function getRequestResultAttachments(requestItem = {}) {
+  const attachments = requestItem?.result?.metadata?.attachments;
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .map(item => {
+      if (!item || typeof item !== 'object') return null;
+      const url = typeof item.url === 'string' ? item.url.trim() : '';
+      if (!url) return null;
+      return {
+        url,
+        name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : 'Attachment'
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderRequestPortalMyRequests() {
+  const tbody = document.getElementById('requestPortalMyRequestsBody');
+  if (!tbody) return;
+
+  if (!requestPortalMyRequests.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted">No requests submitted yet.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = requestPortalMyRequests.map(requestItem => {
+    const category = requestItem.categoryName || requestItem.categoryId || 'General';
+    const attachments = getRequestResultAttachments(requestItem);
+    const attachmentHtml = attachments.length
+      ? attachments.map(file => `
+          <a class="md-button md-button--outlined md-button--small" href="${escapeHtml(file.url)}" target="_blank" rel="noopener noreferrer" download>
+            <span class="material-symbols-rounded">download</span>
+            ${escapeHtml(file.name)}
+          </a>
+        `).join('')
+      : '<span class="text-muted">No result files</span>';
+
+    return `
+      <tr>
+        <td>${escapeHtml(requestItem.id || '-')}</td>
+        <td>${escapeHtml(category)}</td>
+        <td>${escapeHtml(formatRequestPortalDate(requestItem.requestedAt))}</td>
+        <td><span class="md-chip">${escapeHtml(formatRequestPortalStatus(requestItem.status))}</span></td>
+        <td>${escapeHtml(formatRequestPortalDate(requestItem.closedAt))}</td>
+        <td>${escapeHtml(formatRequestPortalTurnaround(requestItem.resolutionDurationHours))}</td>
+        <td><div class="request-portal-attachment-list">${attachmentHtml}</div></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function getRequestPortalRequesterEmployeeId() {
+  if (requestPortalRequesterEmployee?.id !== undefined && requestPortalRequesterEmployee?.id !== null) {
+    return String(requestPortalRequesterEmployee.id);
+  }
+  if (requestPortalCurrentUser?.employeeId !== undefined && requestPortalCurrentUser?.employeeId !== null) {
+    return String(requestPortalCurrentUser.employeeId);
+  }
+  if (currentUser?.employeeId !== undefined && currentUser?.employeeId !== null) {
+    return String(currentUser.employeeId);
+  }
+  return '';
+}
+
+async function loadRequestPortalMyRequests() {
+  setRequestPortalMyRequestsStatus('Loading your requests...');
+  try {
+    const res = await apiFetch('/api/requests/mine');
+    const data = await res.json().catch(() => []);
+    if (!res.ok) {
+      throw new Error(data?.error || 'Unable to load your requests.');
+    }
+    requestPortalMyRequests = Array.isArray(data) ? data : [];
+    renderRequestPortalMyRequests();
+    setRequestPortalMyRequestsStatus(requestPortalMyRequests.length ? 'Requests loaded.' : 'No requests submitted yet.');
+  } catch (err) {
+    console.error('Failed to load my requests', err);
+    requestPortalMyRequests = [];
+    renderRequestPortalMyRequests();
+    setRequestPortalMyRequestsStatus(err.message || 'Unable to load your requests.', 'error');
+  }
+}
+
+async function initializeRequestPortal({ force = false } = {}) {
+  if (requestPortalLoading && !force) return requestPortalLoading;
+  if (requestPortalInitialized && !force) {
+    return;
+  }
+
+  requestPortalLoading = (async () => {
+    const [meRes, employeesRes, categoriesRes] = await Promise.all([
+      apiFetch('/api/me'),
+      apiFetch('/employees'),
+      apiFetch('/settings/request-categories')
+    ]);
+    const meData = await meRes.json().catch(() => ({}));
+    const employeesData = await employeesRes.json().catch(() => []);
+    const categoriesData = await categoriesRes.json().catch(() => ({}));
+
+    if (!meRes.ok) throw new Error(meData.error || 'Unable to load current user.');
+    if (!categoriesRes.ok) throw new Error(categoriesData.error || 'Unable to load request categories.');
+
+    requestPortalCurrentUser = meData && typeof meData === 'object' ? meData : {};
+    const employees = Array.isArray(employeesData) ? employeesData : [];
+    const requesterEmployeeId = String(requestPortalCurrentUser.employeeId || currentUser?.employeeId || '').trim();
+    requestPortalRequesterEmployee = employees.find(employee => String(employee?.id) === requesterEmployeeId) || null;
+
+    const categories = Array.isArray(categoriesData?.categories) ? categoriesData.categories : [];
+    renderRequestPortalRequester();
+    renderRequestPortalCategories(categories);
+    await loadRequestPortalMyRequests();
+    requestPortalInitialized = true;
+    setRequestPortalFormStatus('Ready to submit your request.');
+  })();
+
+  try {
+    await requestPortalLoading;
+  } catch (err) {
+    console.error('Failed to initialize request portal', err);
+    setRequestPortalFormStatus(err.message || 'Unable to initialize request portal.', 'error');
+  } finally {
+    requestPortalLoading = null;
+  }
+}
+
+async function onRequestPortalSubmit(event) {
+  event.preventDefault();
+  const requesterEmployeeId = getRequestPortalRequesterEmployeeId();
+  if (!requesterEmployeeId) {
+    setRequestPortalFormStatus('Unable to determine requester employee profile.', 'error');
+    return;
+  }
+
+  const categorySelect = document.getElementById('requestPortalCategory');
+  const subjectInput = document.getElementById('requestPortalSubject');
+  const detailsInput = document.getElementById('requestPortalDetails');
+  const submitButton = document.getElementById('requestPortalSubmitBtn');
+
+  const categoryId = categorySelect?.value?.trim() || '';
+  const categoryName = categorySelect?.selectedOptions?.[0]?.dataset?.categoryName || '';
+  const subject = subjectInput?.value?.trim() || '';
+  const details = detailsInput?.value?.trim() || '';
+
+  if (!categoryId) {
+    setRequestPortalFormStatus('Please select a request category.', 'error');
+    categorySelect?.focus();
+    return;
+  }
+  if (!subject) {
+    setRequestPortalFormStatus('Please provide a request subject.', 'error');
+    subjectInput?.focus();
+    return;
+  }
+  if (!details) {
+    setRequestPortalFormStatus('Please provide request details.', 'error');
+    detailsInput?.focus();
+    return;
+  }
+
+  setButtonLoading(submitButton, true);
+  setRequestPortalFormStatus('Submitting request...');
+  try {
+    const res = await apiFetch('/api/requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requesterEmployeeId, categoryId, categoryName, subject, details })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error || 'Unable to submit request.');
+    }
+
+    if (subjectInput) subjectInput.value = '';
+    if (detailsInput) detailsInput.value = '';
+    if (categorySelect) categorySelect.value = '';
+
+    setRequestPortalFormStatus(`Request submitted successfully (ID: ${data?.id || 'generated'}).`, 'success');
+    updateRequestPortalSubtab('mine');
+    await loadRequestPortalMyRequests();
+  } catch (err) {
+    console.error('Failed to submit request', err);
+    setRequestPortalFormStatus(err.message || 'Unable to submit request.', 'error');
+  } finally {
+    setButtonLoading(submitButton, false);
+  }
 }
 
 // Role-based tab display
@@ -10122,6 +10396,20 @@ async function init() {
   if (performanceTab) performanceTab.onclick = () => showPanel('performance');
   const requestPortalTab = document.getElementById('tabRequestPortal');
   if (requestPortalTab) requestPortalTab.onclick = () => showPanel('requestPortal');
+  const requestPortalSubtabButtons = document.querySelectorAll('[data-request-portal-tab]');
+  if (requestPortalSubtabButtons.length) {
+    requestPortalSubtabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const nextTab = button.dataset.requestPortalTab || 'new';
+        updateRequestPortalSubtab(nextTab);
+        if (nextTab === 'mine') {
+          loadRequestPortalMyRequests();
+        }
+      });
+    });
+  }
+  const requestPortalForm = document.getElementById('requestPortalForm');
+  if (requestPortalForm) requestPortalForm.addEventListener('submit', onRequestPortalSubmit);
   const learningHubTab = document.getElementById('tabLearningHub');
   if (learningHubTab) learningHubTab.onclick = () => showPanel('learningHub');
   const learningReportsTab = document.getElementById('tabLearningReports');
@@ -10150,6 +10438,7 @@ async function init() {
   }
   const primaryTabSelect = document.getElementById('primaryTabSelect');
   initPrimaryMoreMenu();
+  updateRequestPortalSubtab('new');
   const payslipBtn = document.getElementById('profilePayslipButton');
   if (payslipBtn) payslipBtn.addEventListener('click', onGeneratePayslipClick);
   if (primaryTabSelect) {

@@ -5085,18 +5085,80 @@
         </div>
 
         <div class="settings-subtabs" role="tablist" aria-label="Request Portal Views">
-          <button type="button" class="settings-subtab-button active" role="tab" aria-selected="true">My Requests</button>
-          <button type="button" class="settings-subtab-button" data-request-portal-manager-only role="tab" aria-selected="false">Team Requests</button>
+          <button type="button" class="settings-subtab-button settings-subtab-button--active" data-request-portal-tab="new" role="tab" aria-selected="true">New Request</button>
+          <button type="button" class="settings-subtab-button" data-request-portal-tab="mine" role="tab" aria-selected="false">My Requests</button>
         </div>
 
-        <div class="md-card">
-          <div class="card-title">
-            <span class="material-symbols-rounded">assignment</span>
-            Request Dashboard
+        <div class="request-portal-subtab-panel request-portal-subtab-panel--active" data-request-portal-panel="new">
+          <div class="md-card">
+            <div class="card-title">
+              <span class="material-symbols-rounded">assignment_add</span>
+              New Employee Request
+            </div>
+            <p class="card-subtitle">Submit your request to the relevant HR service queue.</p>
+            <form id="requestPortalForm" class="request-portal-form">
+              <div class="form-row two-col">
+                <div>
+                  <label class="md-label" for="requestPortalRequester">Requester</label>
+                  <div class="md-input-wrapper">
+                    <span class="material-symbols-rounded">person</span>
+                    <input type="text" id="requestPortalRequester" class="md-input" readonly>
+                  </div>
+                </div>
+                <div>
+                  <label class="md-label" for="requestPortalCategory">Category</label>
+                  <div class="md-input-wrapper">
+                    <span class="material-symbols-rounded">category</span>
+                    <select id="requestPortalCategory" class="md-select" required>
+                      <option value="">Select a category</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="md-label" for="requestPortalSubject">Subject</label>
+                <input type="text" id="requestPortalSubject" class="md-input" maxlength="160" placeholder="Brief summary of your request" required>
+              </div>
+              <div class="form-row">
+                <label class="md-label" for="requestPortalDetails">Request details</label>
+                <textarea id="requestPortalDetails" class="md-textarea" rows="4" placeholder="Share context, dates, and expected outcomes." required></textarea>
+              </div>
+              <div class="form-actions">
+                <button type="submit" id="requestPortalSubmitBtn" class="md-button md-button--filled">
+                  <span class="material-symbols-rounded">send</span>
+                  Submit Request
+                </button>
+              </div>
+              <div id="requestPortalFormStatus" class="text-muted" aria-live="polite"></div>
+            </form>
           </div>
-          <p class="card-subtitle">Submit, review, and follow up on requests routed through HR workflows.</p>
-          <p class="text-muted" data-request-portal-employee-copy>Employees can create and monitor their own requests from this workspace.</p>
-          <p class="text-muted hidden" data-request-portal-manager-only>Managers can also review team requests and take action on escalations.</p>
+        </div>
+
+        <div class="request-portal-subtab-panel hidden" data-request-portal-panel="mine">
+          <div class="md-card">
+            <div class="card-title">
+              <span class="material-symbols-rounded">assignment</span>
+              My Requests
+            </div>
+            <p class="card-subtitle">Track your submitted requests and manager updates.</p>
+            <div id="requestPortalMyRequestsStatus" class="text-muted">Loading your requests...</div>
+            <div class="request-portal-table-wrapper">
+              <table class="data-grid-table request-portal-table">
+                <thead>
+                  <tr>
+                    <th>Request ID</th>
+                    <th>Category</th>
+                    <th>Requested Date</th>
+                    <th>Status</th>
+                    <th>Closed Date</th>
+                    <th>Turnaround</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody id="requestPortalMyRequestsBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
