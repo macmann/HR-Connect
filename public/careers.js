@@ -1,6 +1,7 @@
 const jobListEl = document.getElementById('job-list');
 const jobDetailEl = document.getElementById('job-detail');
 const careersBrandLogoEl = document.getElementById('careersBrandLogo');
+const DEFAULT_ORGANIZATION_NAME = 'HR Connect';
 const DEFAULT_ORGANIZATION_LOGO_URL = '/logo.png';
 
 const careerCustomHeaderEl = document.getElementById('careerCustomHeader');
@@ -29,11 +30,16 @@ async function loadOrganizationBranding() {
 
   try {
     const settings = await fetchJson('/public/settings/organization');
+    const organizationName = typeof settings?.portalName === 'string' && settings.portalName.trim()
+      ? settings.portalName.trim()
+      : DEFAULT_ORGANIZATION_NAME;
     const logoUrl = typeof settings?.logoUrl === 'string' && settings.logoUrl.trim()
       ? settings.logoUrl.trim()
       : DEFAULT_ORGANIZATION_LOGO_URL;
+    document.title = `${organizationName} Careers`;
     careersBrandLogoEl.src = logoUrl;
   } catch (_error) {
+    document.title = `${DEFAULT_ORGANIZATION_NAME} Careers`;
     careersBrandLogoEl.src = DEFAULT_ORGANIZATION_LOGO_URL;
   }
 }
