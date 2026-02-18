@@ -4052,6 +4052,21 @@ init().then(async () => {
     return matchesDataUrl ? trimmed : null;
   }
 
+  function normalizeCareerPageHtml(value, maxLength = 40000) {
+    if (typeof value !== 'string') return '';
+    return value.trim().slice(0, maxLength);
+  }
+
+  function getCareerPageSettingsPayload(stored) {
+    const source = stored && typeof stored === 'object' ? stored : {};
+    return {
+      header: normalizeCareerPageHtml(source.header),
+      updates: normalizeCareerPageHtml(source.updates),
+      content: normalizeCareerPageHtml(source.content),
+      footer: normalizeCareerPageHtml(source.footer)
+    };
+  }
+
   // ---- ORGANIZATION SETTINGS ----
   app.get('/public/settings/organization', async (_req, res) => {
     try {
@@ -4125,6 +4140,50 @@ init().then(async () => {
     } catch (err) {
       console.error('Failed to save organization settings', err);
       res.status(500).json({ error: 'Unable to save organization settings.' });
+    }
+  });
+
+  // ---- CAREER PAGE BUILDER SETTINGS ----
+  app.get('/public/settings/career-page', async (_req, res) => {
+    try {
+      await db.read();
+      const stored = db.data.settings?.careerPage;
+      res.json(getCareerPageSettingsPayload(stored));
+    } catch (err) {
+      console.error('Failed to load public career page settings', err);
+      res.status(500).json({ error: 'Unable to load career page settings.' });
+    }
+  });
+
+  app.get('/settings/career-page', authRequired, async (_req, res) => {
+    try {
+      await db.read();
+      const stored = db.data.settings?.careerPage;
+      res.json(getCareerPageSettingsPayload(stored));
+    } catch (err) {
+      console.error('Failed to load career page settings', err);
+      res.status(500).json({ error: 'Unable to load career page settings.' });
+    }
+  });
+
+  app.put('/settings/career-page', authRequired, managerOnly, async (req, res) => {
+    try {
+      const payload = {
+        header: normalizeCareerPageHtml(req.body?.header),
+        updates: normalizeCareerPageHtml(req.body?.updates),
+        content: normalizeCareerPageHtml(req.body?.content),
+        footer: normalizeCareerPageHtml(req.body?.footer)
+      };
+
+      await db.read();
+      db.data.settings = db.data.settings && typeof db.data.settings === 'object' ? db.data.settings : {};
+      db.data.settings.careerPage = payload;
+      await db.write();
+
+      res.json(payload);
+    } catch (err) {
+      console.error('Failed to save career page settings', err);
+      res.status(500).json({ error: 'Unable to save career page settings.' });
     }
   });
 

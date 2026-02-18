@@ -969,6 +969,9 @@ let organizationSettings = {
 let organizationSettingsLoaded = false;
 let organizationSettingsLoading = null;
 let organizationPendingLogoDataUrl = '';
+let careerPageSettings = null;
+let careerPageSettingsLoaded = false;
+let careerPageSettingsLoading = null;
 let settingsActiveSubtab = 'organization';
 let aiModelOptions = [
   { value: 'gpt-5', label: 'GPT5' },
@@ -1191,6 +1194,7 @@ const settingsSubtabPanels = {
   chatWidget: document.querySelector('[data-settings-tab-panel="chatWidget"]'),
   postLogin: document.querySelector('[data-settings-tab-panel="postLogin"]'),
   email: document.querySelector('[data-settings-tab-panel="email"]'),
+  careerPage: document.querySelector('[data-settings-tab-panel="careerPage"]'),
   apiTools: document.querySelector('[data-settings-tab-panel="apiTools"]')
 };
 const payrollSummaryBody = document.getElementById('payrollSummaryBody');
@@ -4953,6 +4957,7 @@ function loadSettingsSubtabData(name) {
   if (name === 'chatWidget') loadChatWidgetSettings();
   if (name === 'postLogin') loadPostLoginSettings();
   if (name === 'email') loadEmailSettingsConfig();
+  if (name === 'careerPage') loadCareerPageSettings();
 }
 
 function updateSettingsSubtab(name = 'organization') {
@@ -4982,6 +4987,128 @@ function updateSettingsSubtab(name = 'organization') {
   });
 
   loadSettingsSubtabData(name);
+}
+
+function getCareerPageBuilderTemplate(settings = {}) {
+  const header = typeof settings?.header === 'string' ? settings.header : '';
+  const updates = typeof settings?.updates === 'string' ? settings.updates : '';
+  const content = typeof settings?.content === 'string' ? settings.content : '';
+  const footer = typeof settings?.footer === 'string' ? settings.footer : '';
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body { font-family: Inter, Arial, sans-serif; margin: 0; color: #1f2937; background: #f8fafc; }
+    .career-preview-section { max-width: 960px; margin: 16px auto; padding: 16px; background: #ffffff; border-radius: 12px; }
+  </style>
+</head>
+<body>
+  <section class="career-preview-section">${header || '<p><em>No header HTML</em></p>'}</section>
+  <section class="career-preview-section">${updates || '<p><em>No updates HTML</em></p>'}</section>
+  <section class="career-preview-section">${content || '<p><em>No content HTML</em></p>'}</section>
+  <section class="career-preview-section">${footer || '<p><em>No footer HTML</em></p>'}</section>
+</body>
+</html>`;
+}
+
+function setCareerPageSettingsStatus(message, type = 'info') {
+  const statusEl = document.getElementById('careerPageSettingsStatus');
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.classList.remove('settings-status--error', 'settings-status--success');
+  if (type === 'error') statusEl.classList.add('settings-status--error');
+  if (type === 'success') statusEl.classList.add('settings-status--success');
+}
+
+function renderCareerPageSettingsForm() {
+  const headerInput = document.getElementById('careerPageHeaderHtml');
+  const updatesInput = document.getElementById('careerPageUpdatesHtml');
+  const contentInput = document.getElementById('careerPageContentHtml');
+  const footerInput = document.getElementById('careerPageFooterHtml');
+  if (headerInput) headerInput.value = careerPageSettings?.header || '';
+  if (updatesInput) updatesInput.value = careerPageSettings?.updates || '';
+  if (contentInput) contentInput.value = careerPageSettings?.content || '';
+  if (footerInput) footerInput.value = careerPageSettings?.footer || '';
+  updateCareerPagePreview();
+}
+
+function updateCareerPagePreview() {
+  const previewEl = document.getElementById('careerPageBuilderPreview');
+  if (!previewEl) return;
+  const headerInput = document.getElementById('careerPageHeaderHtml');
+  const updatesInput = document.getElementById('careerPageUpdatesHtml');
+  const contentInput = document.getElementById('careerPageContentHtml');
+  const footerInput = document.getElementById('careerPageFooterHtml');
+  const previewSettings = {
+    header: headerInput?.value || '',
+    updates: updatesInput?.value || '',
+    content: contentInput?.value || '',
+    footer: footerInput?.value || ''
+  };
+  previewEl.srcdoc = getCareerPageBuilderTemplate(previewSettings);
+}
+
+async function fetchCareerPageSettings({ force = false } = {}) {
+  if (!force && careerPageSettingsLoaded && !careerPageSettingsLoading) return careerPageSettings;
+  if (!force && careerPageSettingsLoading) return careerPageSettingsLoading;
+
+  const request = (async () => {
+    const res = await apiFetch('/settings/career-page');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Unable to load career page settings.');
+    careerPageSettings = data || {};
+    careerPageSettingsLoaded = true;
+    return careerPageSettings;
+  })();
+
+  careerPageSettingsLoading = request;
+  try {
+    return await request;
+  } finally {
+    careerPageSettingsLoading = null;
+  }
+}
+
+async function loadCareerPageSettings({ force = false, silent = false } = {}) {
+  if (!silent) setCareerPageSettingsStatus('Loading career page settings...');
+  try {
+    await fetchCareerPageSettings({ force });
+    renderCareerPageSettingsForm();
+    if (!silent) setCareerPageSettingsStatus('Career page settings loaded.');
+  } catch (err) {
+    console.error('Unable to load career page settings', err);
+    if (!silent) setCareerPageSettingsStatus(err.message || 'Unable to load career page settings.', 'error');
+  }
+}
+
+async function onCareerPageSettingsSubmit(ev) {
+  ev.preventDefault();
+  const payload = {
+    header: document.getElementById('careerPageHeaderHtml')?.value || '',
+    updates: document.getElementById('careerPageUpdatesHtml')?.value || '',
+    content: document.getElementById('careerPageContentHtml')?.value || '',
+    footer: document.getElementById('careerPageFooterHtml')?.value || ''
+  };
+
+  setCareerPageSettingsStatus('Saving career page settings...');
+  try {
+    const res = await apiFetch('/settings/career-page', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Unable to save career page settings.');
+    careerPageSettings = data || payload;
+    careerPageSettingsLoaded = true;
+    renderCareerPageSettingsForm();
+    setCareerPageSettingsStatus('Career page settings saved successfully.', 'success');
+  } catch (err) {
+    console.error('Unable to save career page settings', err);
+    setCareerPageSettingsStatus(err.message || 'Unable to save career page settings.', 'error');
+  }
 }
 
 function formatFinanceUpdatedAt(value) {
@@ -9636,6 +9763,12 @@ async function init() {
   if (chatWidgetDefaultBtn) chatWidgetDefaultBtn.addEventListener('click', resetChatWidgetUrlToDefault);
   const postLoginForm = document.getElementById('postLoginSettingsForm');
   if (postLoginForm) postLoginForm.addEventListener('submit', onPostLoginSettingsSubmit);
+  const careerPageForm = document.getElementById('careerPageSettingsForm');
+  if (careerPageForm) careerPageForm.addEventListener('submit', onCareerPageSettingsSubmit);
+  ['careerPageHeaderHtml', 'careerPageUpdatesHtml', 'careerPageContentHtml', 'careerPageFooterHtml'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.addEventListener('input', updateCareerPagePreview);
+  });
   const postLoginDefaultBtn = document.getElementById('postLoginUseDefault');
   if (postLoginDefaultBtn) postLoginDefaultBtn.addEventListener('click', resetPostLoginSettingsToDefault);
   const emailProviderSelect = document.getElementById('emailProvider');

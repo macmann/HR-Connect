@@ -3,6 +3,11 @@ const jobDetailEl = document.getElementById('job-detail');
 const careersBrandLogoEl = document.getElementById('careersBrandLogo');
 const DEFAULT_ORGANIZATION_LOGO_URL = '/logo.png';
 
+const careerCustomHeaderEl = document.getElementById('careerCustomHeader');
+const careerCustomUpdatesEl = document.getElementById('careerCustomUpdates');
+const careerCustomContentEl = document.getElementById('careerCustomContent');
+const careerCustomFooterEl = document.getElementById('careerCustomFooter');
+
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, options);
   if (!res.ok) {
@@ -24,6 +29,26 @@ async function loadOrganizationBranding() {
     careersBrandLogoEl.src = logoUrl;
   } catch (_error) {
     careersBrandLogoEl.src = DEFAULT_ORGANIZATION_LOGO_URL;
+  }
+}
+
+
+function applyCustomCareerSection(element, html) {
+  if (!element || typeof html !== 'string') return;
+  const trimmed = html.trim();
+  if (!trimmed) return;
+  element.innerHTML = trimmed;
+}
+
+async function loadCareerPageBuilderSettings() {
+  try {
+    const settings = await fetchJson('/public/settings/career-page');
+    applyCustomCareerSection(careerCustomHeaderEl, settings?.header);
+    applyCustomCareerSection(careerCustomUpdatesEl, settings?.updates);
+    applyCustomCareerSection(careerCustomContentEl, settings?.content);
+    applyCustomCareerSection(careerCustomFooterEl, settings?.footer);
+  } catch (_error) {
+    // Keep default careers layout when custom builder settings are unavailable.
   }
 }
 
@@ -192,4 +217,5 @@ if (openPositionsButton) {
 }
 
 loadOrganizationBranding();
+loadCareerPageBuilderSettings();
 loadPositions();

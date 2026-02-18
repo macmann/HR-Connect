@@ -6959,6 +6959,7 @@
           <button type="button" class="settings-subtab-button" data-settings-tab="chatWidget" role="tab" aria-selected="false">Chat Widget</button>
           <button type="button" class="settings-subtab-button" data-settings-tab="postLogin" role="tab" aria-selected="false">Post-login Sync</button>
           <button type="button" class="settings-subtab-button" data-settings-tab="email" role="tab" aria-selected="false">Email Notifications</button>
+          <button type="button" class="settings-subtab-button" data-settings-tab="careerPage" role="tab" aria-selected="false">Career Page</button>
           <button type="button" class="settings-subtab-button" data-settings-tab="apiTools" role="tab" aria-selected="false">API Testing Tools</button>
         </div>
 
@@ -7188,6 +7189,58 @@
             </button>
           </form>
           <div id="postLoginSettingsStatus" class="settings-status text-muted"></div>
+        </div>
+        </div>
+
+
+        <div class="settings-subtab-panel" data-settings-tab-panel="careerPage">
+        <div class="md-card">
+          <div class="card-title">
+            <span class="material-symbols-rounded">build</span>
+            Career Page Builder
+          </div>
+          <p class="card-subtitle">Build custom HTML sections for your careers page header, updates, content, and footer.</p>
+          <form id="careerPageSettingsForm" class="settings-form">
+            <div class="settings-form__fields settings-form__fields--full">
+              <label class="md-label" for="careerPageHeaderHtml">Header HTML</label>
+              <div class="md-input-wrapper md-input-wrapper--textarea">
+                <span class="material-symbols-rounded">vertical_align_top</span>
+                <textarea id="careerPageHeaderHtml" class="md-input md-input--textarea" rows="6" placeholder="Add custom HTML for the top of the careers page"></textarea>
+              </div>
+            </div>
+
+            <div class="settings-form__fields settings-form__fields--full">
+              <label class="md-label" for="careerPageUpdatesHtml">Updates HTML</label>
+              <div class="md-input-wrapper md-input-wrapper--textarea">
+                <span class="material-symbols-rounded">campaign</span>
+                <textarea id="careerPageUpdatesHtml" class="md-input md-input--textarea" rows="6" placeholder="Add custom HTML for career updates or announcements"></textarea>
+              </div>
+            </div>
+
+            <div class="settings-form__fields settings-form__fields--full">
+              <label class="md-label" for="careerPageContentHtml">Content HTML</label>
+              <div class="md-input-wrapper md-input-wrapper--textarea">
+                <span class="material-symbols-rounded">article</span>
+                <textarea id="careerPageContentHtml" class="md-input md-input--textarea" rows="8" placeholder="Add main careers page HTML content"></textarea>
+              </div>
+            </div>
+
+            <div class="settings-form__fields settings-form__fields--full">
+              <label class="md-label" for="careerPageFooterHtml">Footer HTML</label>
+              <div class="md-input-wrapper md-input-wrapper--textarea">
+                <span class="material-symbols-rounded">vertical_align_bottom</span>
+                <textarea id="careerPageFooterHtml" class="md-input md-input--textarea" rows="6" placeholder="Add custom HTML for the careers page footer"></textarea>
+              </div>
+            </div>
+
+            <button type="submit" class="md-button md-button--filled md-button--small settings-form__submit">
+              <span class="material-symbols-rounded">save</span>
+              Save career page
+            </button>
+          </form>
+          <div id="careerPageSettingsStatus" class="settings-status text-muted"></div>
+          <div class="settings-form__help" style="margin-top: 12px;">Preview</div>
+          <iframe id="careerPageBuilderPreview" title="Career page preview" style="width: 100%; min-height: 320px; border: 1px solid var(--md-outline, #d0d7de); border-radius: 12px; background: #fff;"></iframe>
         </div>
         </div>
 
