@@ -991,6 +991,8 @@ let requestPortalRequesterEmployee = null;
 let requestPortalMyRequests = [];
 let requestPortalAllRequests = [];
 let requestPortalAllRequestsLoaded = false;
+let requestPortalMetrics = null;
+let requestPortalMetricsLoading = null;
 let settingsActiveSubtab = 'organization';
 let aiModelOptions = [
   { value: 'gpt-5', label: 'GPT5' },
@@ -1533,6 +1535,12 @@ function formatRequestPortalTurnaround(hours) {
   return `${days.toFixed(1)} days`;
 }
 
+function formatRequestPortalDurationMs(durationMs) {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return '--';
+  const hours = durationMs / (1000 * 60 * 60);
+  return formatRequestPortalTurnaround(hours);
+}
+
 function formatRequestPortalStatus(status = '') {
   const value = String(status || '').trim().toLowerCase();
   if (!value) return 'Open';
@@ -1740,6 +1748,120 @@ function renderRequestPortalAllRequests() {
   }).join('');
 }
 
+function renderRequestPortalMetrics(metrics = null) {
+  const averageEl = document.getElementById('requestPortalMetricsAverageTurnaround');
+  const medianEl = document.getElementById('requestPortalMetricsMedianTurnaround');
+  const openAgingEl = document.getElementById('requestPortalMetricsOpenAging');
+  const categoryBody = document.getElementById('requestPortalMetricsCategoryBody');
+  const statusBody = document.getElementById('requestPortalMetricsStatusBody');
+
+  const safeMetrics = metrics && typeof metrics === 'object' ? metrics : {};
+  const buckets = safeMetrics.openAgingBuckets || {};
+  if (averageEl) averageEl.textContent = formatRequestPortalDurationMs(Number(safeMetrics.averageTurnaroundMs));
+  if (medianEl) medianEl.textContent = formatRequestPortalDurationMs(Number(safeMetrics.medianTurnaroundMs));
+  if (openAgingEl) {
+    openAgingEl.textContent = `${Number(buckets['0-2d'] || 0)} / ${Number(buckets['3-7d'] || 0)} / ${Number(buckets['>7d'] || 0)}`;
+  }
+
+  const categoryRows = Array.isArray(safeMetrics.byCategory) ? safeMetrics.byCategory : [];
+  if (categoryBody) {
+    if (!categoryRows.length) {
+      categoryBody.innerHTML = '<tr><td colspan="7" class="text-muted">No category metrics available.</td></tr>';
+    } else {
+      categoryBody.innerHTML = categoryRows.map(entry => `
+        <tr>
+          <td>${escapeHtml(entry.category || 'General')}</td>
+          <td>${Number(entry.total || 0)}</td>
+          <td>${Number(entry.open || 0)}</td>
+          <td>${Number(entry.inProgress || 0)}</td>
+          <td>${Number(entry.closed || 0)}</td>
+          <td>${escapeHtml(formatRequestPortalDurationMs(Number(entry.averageTurnaroundMs)))}</td>
+          <td>${escapeHtml(formatRequestPortalDurationMs(Number(entry.medianTurnaroundMs)))}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  const statusRows = Array.isArray(safeMetrics.statusBreakdown) ? safeMetrics.statusBreakdown : [];
+  const total = Number(safeMetrics.totalRequests || 0);
+  if (statusBody) {
+    if (!statusRows.length) {
+      statusBody.innerHTML = '<tr><td colspan="3" class="text-muted">No status slices available.</td></tr>';
+    } else {
+      statusBody.innerHTML = statusRows.map(entry => {
+        const count = Number(entry.count || 0);
+        const share = total > 0 ? `${((count / total) * 100).toFixed(1)}%` : '0.0%';
+        return `
+          <tr>
+            <td>${escapeHtml(formatRequestPortalStatus(entry.status))}</td>
+            <td>${count}</td>
+            <td>${share}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+}
+
+async function loadRequestPortalMetrics({ silent = false } = {}) {
+  if (!isManagerRole(currentUser)) return;
+  if (requestPortalMetricsLoading) return requestPortalMetricsLoading;
+
+  requestPortalMetricsLoading = (async () => {
+    try {
+      const res = await apiFetch('/api/requests/metrics');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Unable to load request metrics.');
+      }
+      requestPortalMetrics = data && typeof data === 'object' ? data : {};
+      renderRequestPortalMetrics(requestPortalMetrics);
+      if (!silent) {
+        setRequestPortalAllRequestsStatus('Request metrics refreshed.', 'success');
+      }
+    } catch (err) {
+      console.error('Failed to load request portal metrics', err);
+      requestPortalMetrics = null;
+      renderRequestPortalMetrics(null);
+      if (!silent) {
+        setRequestPortalAllRequestsStatus(err.message || 'Unable to load request metrics.', 'error');
+      }
+    } finally {
+      requestPortalMetricsLoading = null;
+    }
+  })();
+
+  return requestPortalMetricsLoading;
+}
+
+async function exportRequestPortalSlaCsv() {
+  if (!isManagerRole(currentUser)) return;
+  const exportButton = document.getElementById('requestPortalExportCsvBtn');
+  setButtonLoading(exportButton, true);
+  try {
+    const res = await apiFetch('/api/requests/metrics/export.csv');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData?.error || 'Unable to export SLA CSV.');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `request-sla-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast('Request SLA CSV export downloaded.', 'success');
+  } catch (err) {
+    console.error('Failed to export request SLA CSV', err);
+    setRequestPortalAllRequestsStatus(err.message || 'Unable to export SLA CSV.', 'error');
+  } finally {
+    setButtonLoading(exportButton, false);
+  }
+}
+
 function getRequestPortalRequesterEmployeeId() {
   if (requestPortalRequesterEmployee?.id !== undefined && requestPortalRequesterEmployee?.id !== null) {
     return String(requestPortalRequesterEmployee.id);
@@ -1786,6 +1908,7 @@ async function loadRequestPortalAllRequests({ silent = false } = {}) {
     requestPortalAllRequestsLoaded = true;
     renderRequestPortalAllRequests();
     setRequestPortalAllRequestsStatus(requestPortalAllRequests.length ? 'Requests loaded.' : 'No requests match the current filters.');
+    await loadRequestPortalMetrics({ silent: true });
   } catch (err) {
     console.error('Failed to load all requests', err);
     requestPortalAllRequests = [];
@@ -1843,6 +1966,7 @@ async function onRequestPortalManagerSave(requestId) {
     showToast('Request updated successfully.', 'success');
     await Promise.all([
       loadRequestPortalAllRequests({ silent: true }),
+      loadRequestPortalMetrics({ silent: true }),
       loadRequestPortalMyRequests()
     ]);
   } catch (err) {
@@ -1881,6 +2005,7 @@ async function initializeRequestPortal({ force = false } = {}) {
     await loadRequestPortalMyRequests();
     if (isManagerRole(currentUser)) {
       await loadRequestPortalAllRequests({ silent: true });
+      await loadRequestPortalMetrics({ silent: true });
     }
     requestPortalInitialized = true;
     setRequestPortalFormStatus('Ready to submit your request.');
@@ -10643,6 +10768,12 @@ async function init() {
         if (input) input.value = '';
       });
       loadRequestPortalAllRequests();
+    });
+  }
+  const requestPortalExportCsvBtn = document.getElementById('requestPortalExportCsvBtn');
+  if (requestPortalExportCsvBtn) {
+    requestPortalExportCsvBtn.addEventListener('click', () => {
+      exportRequestPortalSlaCsv();
     });
   }
   const requestPortalAllRequestsBody = document.getElementById('requestPortalAllRequestsBody');
