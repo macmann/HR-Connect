@@ -1035,6 +1035,8 @@ function adaptSearchResultToCandidate(result) {
 document.addEventListener('DOMContentLoaded', () => {
   setupTabGroupMenus();
   applyOrganizationBranding();
+  loadPublicOrganizationBranding();
+  loadPublicChatWidgetSettings();
   const params = new URLSearchParams(window.location.search);
   const aiScreeningPanel = document.getElementById('ai-cv-screening');
   if (aiScreeningPanel) {
@@ -7029,6 +7031,27 @@ function applyOrganizationBranding() {
   });
 }
 
+
+async function loadPublicOrganizationBranding() {
+  try {
+    const res = await fetch('/public/settings/organization', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to load organization branding.');
+    }
+    organizationSettings = data || organizationSettings;
+    applyOrganizationBranding();
+    return organizationSettings;
+  } catch (err) {
+    console.error('Unable to load public organization branding', err);
+    return organizationSettings;
+  }
+}
+
 function renderOrganizationSettingsForm() {
   const nameInput = document.getElementById('organizationPortalName');
   if (nameInput) {
@@ -7198,6 +7221,28 @@ function resetChatWidgetUrlToDefault() {
     urlInput.placeholder = chatWidgetSettings?.defaultUrl || DEFAULT_CHAT_WIDGET_URL;
   }
   setChatWidgetSettingsStatus('Default widget URL will be used after saving.');
+}
+
+async function loadPublicChatWidgetSettings() {
+  try {
+    const res = await fetch('/public/settings/widget', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Unable to load chat widget settings.');
+    }
+    chatWidgetSettings = data || chatWidgetSettings;
+    chatWidgetSettingsLoaded = true;
+    updateChatWidgetUser(currentUser?.employeeId);
+    return chatWidgetSettings;
+  } catch (err) {
+    console.error('Unable to load public chat widget settings', err);
+    updateChatWidgetUser(currentUser?.employeeId);
+    return chatWidgetSettings;
+  }
 }
 
 async function fetchChatWidgetSettings({ force = false } = {}) {

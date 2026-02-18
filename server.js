@@ -4053,6 +4053,27 @@ init().then(async () => {
   }
 
   // ---- ORGANIZATION SETTINGS ----
+  app.get('/public/settings/organization', async (_req, res) => {
+    try {
+      await db.read();
+      const stored = db.data.settings?.organization;
+      const portalName = normalizePortalName(stored?.portalName) || DEFAULT_ORGANIZATION_PORTAL_NAME;
+      const logoUrl = typeof stored?.logoUrl === 'string' && stored.logoUrl.trim()
+        ? stored.logoUrl.trim()
+        : DEFAULT_ORGANIZATION_LOGO_URL;
+      res.json({
+        portalName,
+        logoUrl,
+        defaultPortalName: DEFAULT_ORGANIZATION_PORTAL_NAME,
+        defaultLogoUrl: DEFAULT_ORGANIZATION_LOGO_URL,
+        hasCustomLogo: logoUrl !== DEFAULT_ORGANIZATION_LOGO_URL
+      });
+    } catch (err) {
+      console.error('Failed to load public organization settings', err);
+      res.status(500).json({ error: 'Unable to load organization settings.' });
+    }
+  });
+
   app.get('/settings/organization', authRequired, async (_req, res) => {
     try {
       await db.read();
@@ -4108,6 +4129,24 @@ init().then(async () => {
   });
 
   // ---- CHAT WIDGET SETTINGS ----
+  app.get('/public/settings/widget', async (_req, res) => {
+    try {
+      await db.read();
+      const stored = db.data.settings?.chatWidget;
+      const storedUrl = typeof stored?.url === 'string' ? stored.url.trim() : '';
+      const enabled = typeof stored?.enabled === 'boolean' ? stored.enabled : true;
+      res.json({
+        url: storedUrl || DEFAULT_CHAT_WIDGET_URL,
+        defaultUrl: DEFAULT_CHAT_WIDGET_URL,
+        hasCustom: Boolean(storedUrl),
+        enabled
+      });
+    } catch (err) {
+      console.error('Failed to load public chat widget settings', err);
+      res.status(500).json({ error: 'Unable to load chat widget settings.' });
+    }
+  });
+
   app.get('/settings/widget', authRequired, async (req, res) => {
     try {
       await db.read();
