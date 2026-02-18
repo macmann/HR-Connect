@@ -4057,7 +4057,14 @@ init().then(async () => {
     return value.trim().slice(0, maxLength);
   }
 
+  function normalizeCareerPageColor(value) {
+    if (typeof value !== 'string') return '';
+    const normalized = value.trim();
+    return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized.toLowerCase() : '';
+  }
+
   const DEFAULT_CAREER_PAGE_TEMPLATE = {
+    headerBackgroundColor: '#1e3a8a',
     header: `<div class="max-w-5xl mx-auto px-6 py-16">
   <p class="text-sm uppercase tracking-widest text-blue-100">Brillar Careers</p>
   <h1 class="text-4xl sm:text-5xl font-bold mt-4">Your Digital Transformation Partner</h1>
@@ -4083,6 +4090,7 @@ init().then(async () => {
   function getCareerPageSettingsPayload(stored) {
     const source = stored && typeof stored === 'object' ? stored : {};
     return {
+      headerBackgroundColor: normalizeCareerPageColor(source.headerBackgroundColor) || DEFAULT_CAREER_PAGE_TEMPLATE.headerBackgroundColor,
       header: normalizeCareerPageHtml(source.header) || DEFAULT_CAREER_PAGE_TEMPLATE.header,
       updates: normalizeCareerPageHtml(source.updates) || DEFAULT_CAREER_PAGE_TEMPLATE.updates,
       content: normalizeCareerPageHtml(source.content) || DEFAULT_CAREER_PAGE_TEMPLATE.content,
@@ -4192,6 +4200,7 @@ init().then(async () => {
   app.put('/settings/career-page', authRequired, managerOnly, async (req, res) => {
     try {
       const payload = {
+        headerBackgroundColor: normalizeCareerPageColor(req.body?.headerBackgroundColor) || DEFAULT_CAREER_PAGE_TEMPLATE.headerBackgroundColor,
         header: normalizeCareerPageHtml(req.body?.header),
         updates: normalizeCareerPageHtml(req.body?.updates),
         content: normalizeCareerPageHtml(req.body?.content),

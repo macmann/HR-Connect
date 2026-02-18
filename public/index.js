@@ -4990,6 +4990,9 @@ function updateSettingsSubtab(name = 'organization') {
 }
 
 function getCareerPageBuilderTemplate(settings = {}) {
+  const headerBackgroundColor = typeof settings?.headerBackgroundColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(settings.headerBackgroundColor)
+    ? settings.headerBackgroundColor
+    : '#1e3a8a';
   const header = typeof settings?.header === 'string' ? settings.header : '';
   const updates = typeof settings?.updates === 'string' ? settings.updates : '';
   const content = typeof settings?.content === 'string' ? settings.content : '';
@@ -5006,7 +5009,7 @@ function getCareerPageBuilderTemplate(settings = {}) {
 </head>
 <body class="bg-gray-50 text-gray-900">
   <main>
-    <section class="bg-gradient-to-r from-blue-900 via-blue-700 to-blue-500 text-white">
+    <section class="text-white" style="background-color: ${headerBackgroundColor};">
       ${header || '<div class="max-w-5xl mx-auto px-6 py-16"><p><em>No header HTML</em></p></div>'}
     </section>
     <section class="max-w-5xl mx-auto px-6 -mt-10">
@@ -5041,10 +5044,12 @@ function setCareerPageSettingsStatus(message, type = 'info') {
 }
 
 function renderCareerPageSettingsForm() {
+  const headerBgColorInput = document.getElementById('careerPageHeaderBackgroundColor');
   const headerInput = document.getElementById('careerPageHeaderHtml');
   const updatesInput = document.getElementById('careerPageUpdatesHtml');
   const contentInput = document.getElementById('careerPageContentHtml');
   const footerInput = document.getElementById('careerPageFooterHtml');
+  if (headerBgColorInput) headerBgColorInput.value = careerPageSettings?.headerBackgroundColor || '#1e3a8a';
   if (headerInput) headerInput.value = careerPageSettings?.header || '';
   if (updatesInput) updatesInput.value = careerPageSettings?.updates || '';
   if (contentInput) contentInput.value = careerPageSettings?.content || '';
@@ -5055,11 +5060,13 @@ function renderCareerPageSettingsForm() {
 function updateCareerPagePreview() {
   const previewEl = document.getElementById('careerPageBuilderPreview');
   if (!previewEl) return;
+  const headerBgColorInput = document.getElementById('careerPageHeaderBackgroundColor');
   const headerInput = document.getElementById('careerPageHeaderHtml');
   const updatesInput = document.getElementById('careerPageUpdatesHtml');
   const contentInput = document.getElementById('careerPageContentHtml');
   const footerInput = document.getElementById('careerPageFooterHtml');
   const previewSettings = {
+    headerBackgroundColor: headerBgColorInput?.value || '#1e3a8a',
     header: headerInput?.value || '',
     updates: updatesInput?.value || '',
     content: contentInput?.value || '',
@@ -5104,6 +5111,7 @@ async function loadCareerPageSettings({ force = false, silent = false } = {}) {
 async function onCareerPageSettingsSubmit(ev) {
   ev.preventDefault();
   const payload = {
+    headerBackgroundColor: document.getElementById('careerPageHeaderBackgroundColor')?.value || '#1e3a8a',
     header: document.getElementById('careerPageHeaderHtml')?.value || '',
     updates: document.getElementById('careerPageUpdatesHtml')?.value || '',
     content: document.getElementById('careerPageContentHtml')?.value || '',
@@ -9783,7 +9791,7 @@ async function init() {
   if (postLoginForm) postLoginForm.addEventListener('submit', onPostLoginSettingsSubmit);
   const careerPageForm = document.getElementById('careerPageSettingsForm');
   if (careerPageForm) careerPageForm.addEventListener('submit', onCareerPageSettingsSubmit);
-  ['careerPageHeaderHtml', 'careerPageUpdatesHtml', 'careerPageContentHtml', 'careerPageFooterHtml'].forEach(id => {
+  ['careerPageHeaderBackgroundColor', 'careerPageHeaderHtml', 'careerPageUpdatesHtml', 'careerPageContentHtml', 'careerPageFooterHtml'].forEach(id => {
     const input = document.getElementById(id);
     if (input) input.addEventListener('input', updateCareerPagePreview);
   });

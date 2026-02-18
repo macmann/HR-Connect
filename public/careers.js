@@ -8,6 +8,12 @@ const careerCustomUpdatesEl = document.getElementById('careerCustomUpdates');
 const careerCustomContentEl = document.getElementById('careerCustomContent');
 const careerCustomFooterEl = document.getElementById('careerCustomFooter');
 
+function normalizeHeaderBannerColor(value) {
+  if (typeof value !== 'string') return '';
+  const normalized = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(normalized) ? normalized : '';
+}
+
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, options);
   if (!res.ok) {
@@ -43,6 +49,8 @@ function applyCustomCareerSection(element, html) {
 async function loadCareerPageBuilderSettings() {
   try {
     const settings = await fetchJson('/public/settings/career-page');
+    const headerBackgroundColor = normalizeHeaderBannerColor(settings?.headerBackgroundColor) || '#1e3a8a';
+    if (careerCustomHeaderEl) careerCustomHeaderEl.style.backgroundColor = headerBackgroundColor;
     applyCustomCareerSection(careerCustomHeaderEl, settings?.header);
     applyCustomCareerSection(careerCustomUpdatesEl, settings?.updates);
     applyCustomCareerSection(careerCustomContentEl, settings?.content);
