@@ -1260,6 +1260,47 @@ function escapeHtml(str) {
   }[ch] || ch));
 }
 
+function setPrimaryMoreMenuOpen(isOpen) {
+  const toggle = document.getElementById('primaryMoreToggle');
+  const menu = document.getElementById('primaryMoreMenu');
+  if (!toggle || !menu) return;
+  toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  menu.classList.toggle('is-open', isOpen);
+}
+
+function initPrimaryMoreMenu() {
+  const container = document.querySelector('[data-primary-more]');
+  const toggle = document.getElementById('primaryMoreToggle');
+  const menu = document.getElementById('primaryMoreMenu');
+  if (!container || !toggle || !menu) return;
+
+  toggle.addEventListener('click', event => {
+    event.stopPropagation();
+    const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+    setPrimaryMoreMenuOpen(!isOpen);
+  });
+
+  menu.addEventListener('click', event => {
+    event.stopPropagation();
+    const menuItem = event.target.closest('button');
+    if (menuItem) {
+      setPrimaryMoreMenuOpen(false);
+    }
+  });
+
+  document.addEventListener('click', event => {
+    if (!container.contains(event.target)) {
+      setPrimaryMoreMenuOpen(false);
+    }
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      setPrimaryMoreMenuOpen(false);
+    }
+  });
+}
+
 // Tab switching logic
 function showPanel(name) {
   const profileBtn = document.getElementById('tabProfile');
@@ -1408,6 +1449,10 @@ function showPanel(name) {
   const primaryTabSelect = document.getElementById('primaryTabSelect');
   if (primaryTabSelect && (name === 'profile' || name === 'portal' || name === 'performance')) {
     primaryTabSelect.value = name;
+  }
+
+  if (name !== 'performance') {
+    setPrimaryMoreMenuOpen(false);
   }
 }
 
@@ -9265,6 +9310,7 @@ async function init() {
   const financeTab = document.getElementById('tabFinance');
   if (financeTab) financeTab.onclick = () => showPanel('finance');
   const primaryTabSelect = document.getElementById('primaryTabSelect');
+  initPrimaryMoreMenu();
   const payslipBtn = document.getElementById('profilePayslipButton');
   if (payslipBtn) payslipBtn.addEventListener('click', onGeneratePayslipClick);
   if (primaryTabSelect) {
