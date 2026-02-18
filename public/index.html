@@ -4366,7 +4366,19 @@
 .data-grid-table .sticky-actions {
   position: sticky;
   z-index: 5;
-  background: inherit;
+  background: #ffffff;
+}
+
+.data-grid-table thead .sticky-name,
+.data-grid-table thead .sticky-status,
+.data-grid-table thead .sticky-actions {
+  background: #f8fafc;
+}
+
+.data-grid-table tbody tr:hover .sticky-name,
+.data-grid-table tbody tr:hover .sticky-status,
+.data-grid-table tbody tr:hover .sticky-actions {
+  background: #f8fafc;
 }
 
 .data-grid-table .sticky-name { left: 0; z-index: 7; }
