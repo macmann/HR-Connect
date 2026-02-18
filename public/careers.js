@@ -1,5 +1,7 @@
 const jobListEl = document.getElementById('job-list');
 const jobDetailEl = document.getElementById('job-detail');
+const careersBrandLogoEl = document.getElementById('careersBrandLogo');
+const DEFAULT_ORGANIZATION_LOGO_URL = '/logo.png';
 
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, options);
@@ -9,6 +11,20 @@ async function fetchJson(url, options = {}) {
     throw error;
   }
   return res.json();
+}
+
+async function loadOrganizationBranding() {
+  if (!careersBrandLogoEl) return;
+
+  try {
+    const settings = await fetchJson('/public/settings/organization');
+    const logoUrl = typeof settings?.logoUrl === 'string' && settings.logoUrl.trim()
+      ? settings.logoUrl.trim()
+      : DEFAULT_ORGANIZATION_LOGO_URL;
+    careersBrandLogoEl.src = logoUrl;
+  } catch (_error) {
+    careersBrandLogoEl.src = DEFAULT_ORGANIZATION_LOGO_URL;
+  }
 }
 
 function renderPositions(positions = []) {
@@ -175,4 +191,5 @@ if (openPositionsButton) {
   });
 }
 
+loadOrganizationBranding();
 loadPositions();
