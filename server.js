@@ -4043,10 +4043,12 @@ init().then(async () => {
       await db.read();
       const stored = db.data.settings?.chatWidget;
       const storedUrl = typeof stored?.url === 'string' ? stored.url.trim() : '';
+      const enabled = typeof stored?.enabled === 'boolean' ? stored.enabled : true;
       res.json({
         url: storedUrl || DEFAULT_CHAT_WIDGET_URL,
         defaultUrl: DEFAULT_CHAT_WIDGET_URL,
-        hasCustom: Boolean(storedUrl)
+        hasCustom: Boolean(storedUrl),
+        enabled
       });
     } catch (err) {
       console.error('Failed to load chat widget settings', err);
@@ -4057,19 +4059,28 @@ init().then(async () => {
   app.put('/settings/widget', authRequired, managerOnly, async (req, res) => {
     try {
       const incomingUrl = normalizeChatWidgetUrl(req.body?.url);
+      const incomingEnabled = req.body?.enabled;
       if (incomingUrl === null) {
         return res.status(400).json({ error: 'Chat widget URL must be a valid URL.' });
+      }
+      if (incomingEnabled !== undefined && typeof incomingEnabled !== 'boolean') {
+        return res.status(400).json({ error: 'Chat widget enabled flag must be a boolean.' });
       }
 
       await db.read();
       db.data.settings = db.data.settings && typeof db.data.settings === 'object' ? db.data.settings : {};
-      db.data.settings.chatWidget = { url: incomingUrl || '' };
+      const previousEnabled = typeof db.data.settings.chatWidget?.enabled === 'boolean'
+        ? db.data.settings.chatWidget.enabled
+        : true;
+      const enabled = typeof incomingEnabled === 'boolean' ? incomingEnabled : previousEnabled;
+      db.data.settings.chatWidget = { url: incomingUrl || '', enabled };
       await db.write();
 
       res.json({
         url: incomingUrl || DEFAULT_CHAT_WIDGET_URL,
         defaultUrl: DEFAULT_CHAT_WIDGET_URL,
-        hasCustom: Boolean(incomingUrl)
+        hasCustom: Boolean(incomingUrl),
+        enabled
       });
     } catch (err) {
       console.error('Failed to save chat widget settings', err);

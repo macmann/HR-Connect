@@ -524,9 +524,25 @@ function getChatWidgetBaseUrl() {
   return configuredUrl || DEFAULT_CHAT_WIDGET_URL;
 }
 
+function isChatWidgetEnabled() {
+  return chatWidgetSettings?.enabled !== false;
+}
+
+function syncChatWidgetVisibility() {
+  const iframe = document.getElementById('chatWidgetIframe');
+  if (!iframe) return;
+  const enabled = isChatWidgetEnabled();
+  iframe.style.display = enabled ? '' : 'none';
+  if (!enabled) {
+    iframe.src = 'about:blank';
+  }
+}
+
 function updateChatWidgetUser(employeeId) {
   const iframe = document.getElementById('chatWidgetIframe');
   if (!iframe || typeof URL !== 'function') return;
+  syncChatWidgetVisibility();
+  if (!isChatWidgetEnabled()) return;
   const baseUrl = getChatWidgetBaseUrl();
   if (!baseUrl) return;
   let widgetUrl;
@@ -6882,9 +6898,13 @@ function setChatWidgetSettingsStatus(message, type = 'info') {
 function renderChatWidgetSettingsForm() {
   const urlInput = document.getElementById('chatWidgetUrl');
   const helpText = document.getElementById('chatWidgetUrlHelp');
+  const enabledToggle = document.getElementById('chatWidgetEnabled');
   if (urlInput) {
     urlInput.value = chatWidgetSettings?.hasCustom ? chatWidgetSettings.url : '';
     urlInput.placeholder = chatWidgetSettings?.defaultUrl || DEFAULT_CHAT_WIDGET_URL;
+  }
+  if (enabledToggle) {
+    enabledToggle.checked = isChatWidgetEnabled();
   }
   if (helpText) {
     const defaultUrl = chatWidgetSettings?.defaultUrl || DEFAULT_CHAT_WIDGET_URL;
@@ -6964,8 +6984,12 @@ async function onChatWidgetSettingsSubmit(ev) {
   setChatWidgetSettingsStatus('Saving chat widget settings...');
   try {
     const urlInput = document.getElementById('chatWidgetUrl');
+    const enabledToggle = document.getElementById('chatWidgetEnabled');
     const urlValue = urlInput?.value ? urlInput.value.trim() : '';
-    const payload = { url: urlValue };
+    const payload = {
+      url: urlValue,
+      enabled: enabledToggle?.checked !== false
+    };
     const res = await apiFetch('/settings/widget', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

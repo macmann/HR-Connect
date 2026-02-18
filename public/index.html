@@ -6929,8 +6929,12 @@
             <span class="material-symbols-rounded">forum</span>
             Chat Widget
           </div>
-          <p class="card-subtitle">Update the embedded chat widget URL used in the portal.</p>
+          <p class="card-subtitle">Enable or disable the embedded chat widget and update its URL.</p>
           <form id="chatWidgetSettingsForm" class="settings-form">
+            <div class="settings-form__toggle">
+              <input type="checkbox" id="chatWidgetEnabled" checked>
+              <label for="chatWidgetEnabled" class="md-label">Enable chat widget</label>
+            </div>
             <div class="settings-form__fields settings-form__fields--full">
               <label class="md-label" for="chatWidgetUrl">Widget URL</label>
               <div class="md-input-wrapper">
