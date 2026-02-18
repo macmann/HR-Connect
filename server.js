@@ -135,6 +135,13 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@brillar.io';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
 
 const MANAGER_ROLES = new Set(['manager', 'superadmin']);
+const REQUEST_STATUS_VALUES = ['open', 'in_progress', 'closed'];
+const REQUEST_STATUS_SET = new Set(REQUEST_STATUS_VALUES);
+const REQUEST_STATUS_TRANSITIONS = {
+  open: 'in_progress',
+  in_progress: 'closed',
+  closed: null
+};
 const INACTIVE_EMPLOYEE_STATUSES = new Set([
   'inactive',
   'deactivated',
@@ -1002,6 +1009,125 @@ function assignEmployeeNumber(employee, employees = []) {
   employee[preferredKey] = nextNumber;
 }
 
+function ensureRequestsCollection(data = {}) {
+  if (!Array.isArray(data.requests)) {
+    data.requests = [];
+  }
+  return data.requests;
+}
+
+function normalizeRequestStatus(status) {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  return REQUEST_STATUS_SET.has(normalized) ? normalized : '';
+}
+
+function toNonEmptyString(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim();
+}
+
+function normalizeRequestPayload(payload = {}) {
+  return {
+    requesterEmployeeId: normalizeEmployeeId(payload.requesterEmployeeId),
+    categoryId: toNonEmptyString(payload.categoryId),
+    categoryName: toNonEmptyString(payload.categoryName),
+    subject: toNonEmptyString(payload.subject),
+    details: toNonEmptyString(payload.details)
+  };
+}
+
+function validateRequestPayload(payload = {}) {
+  const normalized = normalizeRequestPayload(payload);
+
+  if (!normalized.requesterEmployeeId) {
+    return { error: 'requesterEmployeeId is required.' };
+  }
+
+  if (!normalized.categoryId && !normalized.categoryName) {
+    return { error: 'categoryId or categoryName is required.' };
+  }
+
+  if (!normalized.subject) {
+    return { error: 'subject is required.' };
+  }
+
+  if (!normalized.details) {
+    return { error: 'details is required.' };
+  }
+
+  return { value: normalized };
+}
+
+function computeResolutionDurationHours(requestRecord) {
+  if (!requestRecord?.requestedAt || !requestRecord?.closedAt) {
+    return null;
+  }
+
+  const requestedAt = new Date(requestRecord.requestedAt);
+  const closedAt = new Date(requestRecord.closedAt);
+  if (Number.isNaN(requestedAt.getTime()) || Number.isNaN(closedAt.getTime())) {
+    return null;
+  }
+
+  const durationMs = closedAt.getTime() - requestedAt.getTime();
+  if (!Number.isFinite(durationMs) || durationMs < 0) {
+    return null;
+  }
+
+  return Number((durationMs / (1000 * 60 * 60)).toFixed(2));
+}
+
+function toRequestResponse(requestRecord) {
+  const normalizedStatus = normalizeRequestStatus(requestRecord?.status) || 'open';
+  const resolutionDurationHours = Number.isFinite(requestRecord?.resolutionDurationHours)
+    ? Number(requestRecord.resolutionDurationHours)
+    : computeResolutionDurationHours(requestRecord);
+
+  return {
+    id: requestRecord.id,
+    requesterEmployeeId: normalizeEmployeeId(requestRecord.requesterEmployeeId)
+      || requestRecord.requesterEmployeeId,
+    categoryId: requestRecord.categoryId || null,
+    categoryName: requestRecord.categoryName || null,
+    subject: requestRecord.subject || '',
+    details: requestRecord.details || '',
+    status: normalizedStatus,
+    requestedAt: requestRecord.requestedAt || null,
+    updatedAt: requestRecord.updatedAt || null,
+    closedAt: requestRecord.closedAt || null,
+    result: requestRecord.result || null,
+    resolutionDurationHours: resolutionDurationHours ?? null
+  };
+}
+
+function managerCanAccessRequest(requestRecord, currentUser, employees = [], users = []) {
+  if (!requestRecord || !currentUser) return false;
+  if (!isManagerRole(currentUser.role)) return false;
+
+  const managerEmployeeId = normalizeEmployeeId(currentUser.employeeId);
+  if (!managerEmployeeId) return true;
+  if (normalizeEmployeeId(requestRecord.requesterEmployeeId) === managerEmployeeId) return true;
+
+  const requester = employees.find(
+    employee => normalizeEmployeeId(employee?.id) === normalizeEmployeeId(requestRecord.requesterEmployeeId)
+  );
+  if (!requester) return true;
+
+  const managers = resolveEmployeeManagers(requester, { employees, users });
+  return managers.some(manager => normalizeEmployeeId(manager?.employeeId) === managerEmployeeId);
+}
+
+function canViewRequest(requestRecord, currentUser, employees = [], users = []) {
+  if (!requestRecord || !currentUser) return false;
+
+  const requesterEmployeeId = normalizeEmployeeId(requestRecord.requesterEmployeeId);
+  if (normalizeEmployeeId(currentUser.employeeId) === requesterEmployeeId) {
+    return true;
+  }
+
+  return managerCanAccessRequest(requestRecord, currentUser, employees, users);
+}
+
 function normalizeLeaveBalanceEntry(entry, defaults) {
   const baseDefaults =
     defaults || { balance: 0, yearlyAllocation: 0, monthlyAccrual: 0, accrued: 0, taken: 0 };
@@ -1581,6 +1707,225 @@ function buildLeaveApplicationPaths() {
           },
           400: { description: 'Validation error' },
           403: { description: 'Forbidden' }
+        }
+      }
+    }
+  };
+}
+
+function buildRequestTicketSchemas() {
+  return {
+    RequestTicketStatus: {
+      type: 'string',
+      enum: REQUEST_STATUS_VALUES
+    },
+    RequestTicket: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        requesterEmployeeId: { type: 'string' },
+        categoryId: { type: ['string', 'null'] },
+        categoryName: { type: ['string', 'null'] },
+        subject: { type: 'string' },
+        details: { type: 'string' },
+        status: { $ref: '#/components/schemas/RequestTicketStatus' },
+        requestedAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+        closedAt: { type: ['string', 'null'], format: 'date-time' },
+        result: { type: ['object', 'null'], additionalProperties: true },
+        resolutionDurationHours: { type: ['number', 'null'], format: 'float' }
+      }
+    },
+    CreateRequestTicket: {
+      type: 'object',
+      required: ['subject', 'details'],
+      properties: {
+        requesterEmployeeId: { type: 'string' },
+        categoryId: { type: 'string' },
+        categoryName: { type: 'string' },
+        subject: { type: 'string' },
+        details: { type: 'string' }
+      }
+    },
+    UpdateRequestTicketStatus: {
+      type: 'object',
+      required: ['status'],
+      properties: {
+        status: { $ref: '#/components/schemas/RequestTicketStatus' }
+      }
+    },
+    UpdateRequestTicketResult: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        metadata: { type: 'object', additionalProperties: true }
+      }
+    },
+    RequestTicketListResponse: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/RequestTicket' }
+    }
+  };
+}
+
+function buildRequestTicketPaths() {
+  return {
+    '/api/requests': {
+      post: {
+        summary: 'Create a service request ticket',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/CreateRequestTicket' }
+            }
+          }
+        },
+        responses: {
+          201: {
+            description: 'Request ticket created',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RequestTicket' }
+              }
+            }
+          },
+          400: { description: 'Validation error' },
+          403: { description: 'Forbidden' }
+        }
+      },
+      get: {
+        summary: 'List request tickets for manager scope',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: 'query', name: 'status', schema: { $ref: '#/components/schemas/RequestTicketStatus' } },
+          { in: 'query', name: 'requesterEmployeeId', schema: { type: 'string' } },
+          { in: 'query', name: 'categoryId', schema: { type: 'string' } },
+          { in: 'query', name: 'scope', schema: { type: 'string', enum: ['org', 'team'] } },
+          { in: 'query', name: 'q', schema: { type: 'string' } }
+        ],
+        responses: {
+          200: {
+            description: 'Request tickets in manager scope',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RequestTicketListResponse' }
+              }
+            }
+          },
+          403: { description: 'Manager access required' }
+        }
+      }
+    },
+    '/api/requests/mine': {
+      get: {
+        summary: 'List current employee request tickets',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Current employee request tickets',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RequestTicketListResponse' }
+              }
+            }
+          }
+        }
+      }
+    },
+    '/api/requests/{id}': {
+      get: {
+        summary: 'Get a request ticket by id',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'string' }
+          }
+        ],
+        responses: {
+          200: {
+            description: 'Request ticket details',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RequestTicket' }
+              }
+            }
+          },
+          403: { description: 'Forbidden' },
+          404: { description: 'Request not found' }
+        }
+      }
+    },
+    '/api/requests/{id}/status': {
+      patch: {
+        summary: 'Update request ticket status',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'string' }
+          }
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UpdateRequestTicketStatus' }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Request ticket with updated status',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RequestTicket' }
+              }
+            }
+          },
+          400: { description: 'Invalid transition or payload' },
+          403: { description: 'Manager access required' },
+          404: { description: 'Request not found' }
+        }
+      }
+    },
+    '/api/requests/{id}/result': {
+      patch: {
+        summary: 'Attach fulfillment result to a request ticket',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            in: 'path',
+            name: 'id',
+            required: true,
+            schema: { type: 'string' }
+          }
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UpdateRequestTicketResult' }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: 'Request ticket with updated result',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/RequestTicket' }
+              }
+            }
+          },
+          403: { description: 'Manager access required' },
+          404: { description: 'Request not found' }
         }
       }
     }
@@ -2250,6 +2595,7 @@ async function ensureUsersForExistingEmployees() {
   if (!Array.isArray(db.data.salaries)) {
     db.data.salaries = [];
   }
+  ensureRequestsCollection(db.data);
   let changed = false;
   db.data.employees.forEach(emp => {
     if (normalizeEmployeeEmail(emp)) changed = true;
@@ -5865,6 +6211,226 @@ init().then(async () => {
   app.post('/api/leaves', handleLeaveApplicationRequest);
   app.post('/api/apply-leave', handleLeaveApplicationRequest);
 
+  app.post('/api/requests', authRequired, async (req, res) => {
+    await db.read();
+    db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
+    db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
+    ensureRequestsCollection(db.data);
+
+    const manager = isManagerRole(req.user?.role);
+    const currentEmployeeId = normalizeEmployeeId(req.user?.employeeId);
+    const providedRequesterId = normalizeEmployeeId(req.body?.requesterEmployeeId);
+
+    if (manager && providedRequesterId && currentEmployeeId && providedRequesterId !== currentEmployeeId) {
+      return res.status(403).json({ error: 'Managers can only create request tickets for themselves.' });
+    }
+
+    const requesterEmployeeId = manager
+      ? (providedRequesterId || currentEmployeeId)
+      : currentEmployeeId;
+
+    const validation = validateRequestPayload({
+      ...req.body,
+      requesterEmployeeId
+    });
+    if (validation.error) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const requesterEmployee = db.data.employees.find(
+      employee => normalizeEmployeeId(employee?.id) === validation.value.requesterEmployeeId
+    );
+    if (!requesterEmployee) {
+      return res.status(404).json({ error: 'Requester employee not found.' });
+    }
+
+    const nowIso = new Date().toISOString();
+    const requestRecord = {
+      id: crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(12).toString('hex'),
+      ...validation.value,
+      status: 'open',
+      requestedAt: nowIso,
+      updatedAt: nowIso,
+      closedAt: null,
+      result: null,
+      resolutionDurationHours: null
+    };
+
+    db.data.requests.push(requestRecord);
+    await db.write();
+
+    return res.status(201).json(toRequestResponse(requestRecord));
+  });
+
+  app.get('/api/requests/mine', authRequired, async (req, res) => {
+    const requesterEmployeeId = normalizeEmployeeId(req.user?.employeeId);
+    if (!requesterEmployeeId) {
+      return res.status(400).json({ error: 'Current user does not have an employeeId.' });
+    }
+
+    await db.read();
+    ensureRequestsCollection(db.data);
+
+    const requests = db.data.requests
+      .filter(requestRecord => normalizeEmployeeId(requestRecord?.requesterEmployeeId) === requesterEmployeeId)
+      .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
+      .map(toRequestResponse);
+
+    return res.json(requests);
+  });
+
+  app.get('/api/requests/:id', authRequired, async (req, res) => {
+    const requestId = toNonEmptyString(req.params?.id);
+    if (!requestId) {
+      return res.status(400).json({ error: 'Request id is required.' });
+    }
+
+    await db.read();
+    db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
+    db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
+    ensureRequestsCollection(db.data);
+
+    const requestRecord = db.data.requests.find(item => String(item?.id) === requestId);
+    if (!requestRecord) {
+      return res.status(404).json({ error: 'Request not found.' });
+    }
+
+    if (!canViewRequest(requestRecord, req.user, db.data.employees, db.data.users)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    return res.json(toRequestResponse(requestRecord));
+  });
+
+  app.get('/api/requests', authRequired, managerOnly, async (req, res) => {
+    await db.read();
+    db.data.employees = Array.isArray(db.data.employees) ? db.data.employees : [];
+    db.data.users = Array.isArray(db.data.users) ? db.data.users : [];
+    ensureRequestsCollection(db.data);
+
+    const statusFilter = normalizeRequestStatus(req.query?.status);
+    if (req.query?.status && !statusFilter) {
+      return res.status(400).json({ error: `status must be one of: ${REQUEST_STATUS_VALUES.join(', ')}` });
+    }
+
+    const requesterFilter = normalizeEmployeeId(req.query?.requesterEmployeeId);
+    const categoryFilter = toNonEmptyString(req.query?.categoryId).toLowerCase();
+    const queryFilter = toNonEmptyString(req.query?.q).toLowerCase();
+    const scope = toNonEmptyString(req.query?.scope).toLowerCase() === 'team' ? 'team' : 'org';
+
+    const visibleRequests = db.data.requests.filter(requestRecord => {
+      if (scope === 'team' && !managerCanAccessRequest(requestRecord, req.user, db.data.employees, db.data.users)) {
+        return false;
+      }
+      return true;
+    });
+
+    const filtered = visibleRequests
+      .filter(requestRecord => !statusFilter || normalizeRequestStatus(requestRecord?.status) === statusFilter)
+      .filter(requestRecord => !requesterFilter || normalizeEmployeeId(requestRecord?.requesterEmployeeId) === requesterFilter)
+      .filter(requestRecord => {
+        if (!categoryFilter) return true;
+        const categoryId = toNonEmptyString(requestRecord?.categoryId).toLowerCase();
+        const categoryName = toNonEmptyString(requestRecord?.categoryName).toLowerCase();
+        return categoryId === categoryFilter || categoryName === categoryFilter;
+      })
+      .filter(requestRecord => {
+        if (!queryFilter) return true;
+        const haystack = [
+          requestRecord?.subject,
+          requestRecord?.details,
+          requestRecord?.categoryName,
+          requestRecord?.categoryId,
+          requestRecord?.requesterEmployeeId
+        ]
+          .map(value => toNonEmptyString(value).toLowerCase())
+          .join(' ');
+        return haystack.includes(queryFilter);
+      })
+      .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
+      .map(toRequestResponse);
+
+    return res.json(filtered);
+  });
+
+  app.patch('/api/requests/:id/status', authRequired, managerOnly, async (req, res) => {
+    const requestId = toNonEmptyString(req.params?.id);
+    if (!requestId) {
+      return res.status(400).json({ error: 'Request id is required.' });
+    }
+
+    const nextStatus = normalizeRequestStatus(req.body?.status);
+    if (!nextStatus) {
+      return res.status(400).json({ error: `status must be one of: ${REQUEST_STATUS_VALUES.join(', ')}` });
+    }
+
+    await db.read();
+    ensureRequestsCollection(db.data);
+
+    const requestRecord = db.data.requests.find(item => String(item?.id) === requestId);
+    if (!requestRecord) {
+      return res.status(404).json({ error: 'Request not found.' });
+    }
+
+    const currentStatus = normalizeRequestStatus(requestRecord.status) || 'open';
+    const expectedNextStatus = REQUEST_STATUS_TRANSITIONS[currentStatus];
+    if (nextStatus !== currentStatus && nextStatus !== expectedNextStatus) {
+      return res.status(400).json({
+        error: `Invalid transition. Allowed transition: ${currentStatus} -> ${expectedNextStatus || 'none'}.`
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    requestRecord.status = nextStatus;
+    requestRecord.updatedAt = nowIso;
+
+    if (nextStatus === 'closed') {
+      if (!requestRecord.closedAt) {
+        requestRecord.closedAt = nowIso;
+      }
+      requestRecord.resolutionDurationHours = computeResolutionDurationHours(requestRecord);
+    } else {
+      requestRecord.closedAt = null;
+      requestRecord.resolutionDurationHours = null;
+    }
+
+    await db.write();
+    return res.json(toRequestResponse(requestRecord));
+  });
+
+  app.patch('/api/requests/:id/result', authRequired, managerOnly, async (req, res) => {
+    const requestId = toNonEmptyString(req.params?.id);
+    if (!requestId) {
+      return res.status(400).json({ error: 'Request id is required.' });
+    }
+
+    await db.read();
+    ensureRequestsCollection(db.data);
+
+    const requestRecord = db.data.requests.find(item => String(item?.id) === requestId);
+    if (!requestRecord) {
+      return res.status(404).json({ error: 'Request not found.' });
+    }
+
+    const nowIso = new Date().toISOString();
+    const message = toNonEmptyString(req.body?.message);
+    const metadata = req.body?.metadata && typeof req.body.metadata === 'object' && !Array.isArray(req.body.metadata)
+      ? req.body.metadata
+      : undefined;
+
+    requestRecord.result = {
+      ...(requestRecord.result && typeof requestRecord.result === 'object' ? requestRecord.result : {}),
+      ...(message ? { message } : {}),
+      ...(metadata ? { metadata } : {}),
+      updatedAt: nowIso,
+      updatedByEmployeeId: normalizeEmployeeId(req.user?.employeeId) || null
+    };
+    requestRecord.updatedAt = nowIso;
+
+    await db.write();
+    return res.json(toRequestResponse(requestRecord));
+  });
+
   app.get('/api/management/overview', async (req, res) => {
     const access = await resolveManagerAccess(req.query?.employeeId);
     if (access?.error) {
@@ -6199,6 +6765,8 @@ init().then(async () => {
   });
 
   app.get('/api/managementopenapi', (req, res) => {
+    const requestTicketSchemas = buildRequestTicketSchemas();
+    const requestTicketPaths = buildRequestTicketPaths();
     const managementOpenApi = {
       openapi: '3.0.0',
       info: {
@@ -6295,7 +6863,11 @@ init().then(async () => {
               403: { description: 'The supplied employee identifier does not belong to a manager.' }
             }
           }
-        }
+        },
+        '/api/requests': requestTicketPaths['/api/requests'],
+        '/api/requests/{id}': requestTicketPaths['/api/requests/{id}'],
+        '/api/requests/{id}/status': requestTicketPaths['/api/requests/{id}/status'],
+        '/api/requests/{id}/result': requestTicketPaths['/api/requests/{id}/result']
       },
       components: {
         schemas: {
@@ -6370,7 +6942,8 @@ init().then(async () => {
                 items: { $ref: '#/components/schemas/ManagementEmployeeSummary' }
               }
             }
-          }
+          },
+          ...requestTicketSchemas
         }
       }
     };
@@ -6392,6 +6965,8 @@ init().then(async () => {
     const userInfoSchemas = buildUserInfoOpenApiSchemas();
     const leaveApplicationSchemas = buildLeaveApplicationSchemas();
     const leaveApplicationPaths = buildLeaveApplicationPaths();
+    const requestTicketSchemas = buildRequestTicketSchemas();
+    const requestTicketPaths = buildRequestTicketPaths();
     const openApiSpec = {
       openapi: '3.0.0',
       info: {
@@ -6421,6 +6996,7 @@ init().then(async () => {
         '/api/users/{id}': buildUserInfoOpenApiPath(),
         '/api/users': buildUserInfoLookupOpenApiPath(),
         ...leaveApplicationPaths,
+        ...requestTicketPaths,
         '/api/leave-summary': {
           get: {
             summary: 'Retrieve leave balances and historical usage',
@@ -6576,6 +7152,7 @@ init().then(async () => {
             }
           },
           ...leaveApplicationSchemas,
+          ...requestTicketSchemas,
           ...userInfoSchemas
         }
       }
