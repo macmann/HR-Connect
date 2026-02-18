@@ -234,6 +234,7 @@ const db = {
       const [
         employees,
         applications,
+        requests,
         users,
         positions,
         candidates,
@@ -251,6 +252,7 @@ const db = {
       ] = await Promise.all([
         fetchCollection('employees'),
         fetchCollection('applications'),
+        fetchCollection('requests'),
         fetchCollection('users'),
         fetchCollection('positions'),
         fetchCollection('candidates'),
@@ -281,6 +283,7 @@ const db = {
       this.data = {
         employees,
         applications: leaveApplications,
+        requests,
         recruitmentApplications,
         users,
         positions,
@@ -315,6 +318,7 @@ const db = {
     const {
       employees = [],
       applications = [],
+      requests = [],
       recruitmentApplications = [],
       users = [],
       positions = [],
@@ -340,6 +344,7 @@ const db = {
     await Promise.all([
       syncCollection('employees', employees),
       syncCollection('applications', mergedApplications),
+      syncCollection('requests', requests),
       syncCollection('users', users),
       syncCollection('positions', positions),
       syncCollection('candidates', candidates),
