@@ -137,6 +137,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
 const MANAGER_ROLES = new Set(['manager', 'superadmin']);
 const REQUEST_STATUS_VALUES = ['open', 'in_progress', 'closed'];
 const REQUEST_STATUS_SET = new Set(REQUEST_STATUS_VALUES);
+const REQUEST_ACTIVITY_TYPES = ['created', 'status_changed', 'attachment_added', 'comment_added', 'closed'];
+const REQUEST_ACTIVITY_TYPE_SET = new Set(REQUEST_ACTIVITY_TYPES);
 const REQUEST_STATUS_TRANSITIONS = {
   open: 'in_progress',
   in_progress: 'closed',
@@ -1186,6 +1188,7 @@ function normalizeRequestCollectionTiming(data = {}) {
   let changed = false;
   requests.forEach(requestRecord => {
     changed = normalizeRequestTimingFields(requestRecord, nowIso) || changed;
+    changed = ensureRequestActivities(requestRecord, nowIso) || changed;
   });
   return changed;
 }
@@ -1384,6 +1387,89 @@ function normalizeRequestAttachments(input) {
     .filter(Boolean);
 }
 
+function sanitizeActivityMeta(meta) {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return {};
+  const safeMeta = {};
+  Object.entries(meta).forEach(([key, value]) => {
+    if (typeof key !== 'string' || !key.trim()) return;
+    if (value === null) {
+      safeMeta[key] = null;
+      return;
+    }
+    if (['string', 'number', 'boolean'].includes(typeof value)) {
+      safeMeta[key] = value;
+      return;
+    }
+    if (Array.isArray(value)) {
+      safeMeta[key] = value
+        .filter(item => item === null || ['string', 'number', 'boolean'].includes(typeof item) || (item && typeof item === 'object'))
+        .slice(0, 20);
+      return;
+    }
+    if (typeof value === 'object') {
+      safeMeta[key] = value;
+    }
+  });
+  return safeMeta;
+}
+
+function normalizeRequestActivity(activity = {}) {
+  if (!activity || typeof activity !== 'object') return null;
+  const type = toNonEmptyString(activity.type).toLowerCase();
+  if (!REQUEST_ACTIVITY_TYPE_SET.has(type)) return null;
+
+  const timestamp = toNonEmptyString(activity.timestamp);
+  const parsedTimestamp = new Date(timestamp);
+  const actorEmployeeId = normalizeEmployeeId(activity.actorEmployeeId) || null;
+  const actorEmail = toNonEmptyString(activity.actorEmail).toLowerCase() || null;
+
+  return {
+    type,
+    actorEmployeeId,
+    actorEmail,
+    timestamp: Number.isNaN(parsedTimestamp.getTime()) ? new Date().toISOString() : parsedTimestamp.toISOString(),
+    meta: sanitizeActivityMeta(activity.meta)
+  };
+}
+
+function ensureRequestActivities(requestRecord = {}, defaultTimestamp = new Date().toISOString()) {
+  if (!requestRecord || typeof requestRecord !== 'object') return false;
+  const existingActivities = Array.isArray(requestRecord.activities)
+    ? requestRecord.activities.map(normalizeRequestActivity).filter(Boolean)
+    : [];
+  const createdAt = toNonEmptyString(requestRecord.requestedAt) || defaultTimestamp;
+
+  if (!existingActivities.length) {
+    const normalizedCreatedAt = Number.isNaN(new Date(createdAt).getTime())
+      ? defaultTimestamp
+      : new Date(createdAt).toISOString();
+    existingActivities.push({
+      type: 'created',
+      actorEmployeeId: normalizeEmployeeId(requestRecord.requesterEmployeeId) || null,
+      actorEmail: null,
+      timestamp: normalizedCreatedAt,
+      meta: {
+        status: normalizeRequestStatus(requestRecord.status) || 'open',
+        categoryId: requestRecord.categoryId || null,
+        categoryName: requestRecord.categoryName || null
+      }
+    });
+  }
+
+  existingActivities.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const changed = JSON.stringify(existingActivities) !== JSON.stringify(requestRecord.activities || []);
+  requestRecord.activities = existingActivities;
+  return changed;
+}
+
+function appendRequestActivity(requestRecord, activity = {}) {
+  if (!requestRecord || typeof requestRecord !== 'object') return;
+  ensureRequestActivities(requestRecord);
+  const normalized = normalizeRequestActivity(activity);
+  if (!normalized) return;
+  requestRecord.activities.push(normalized);
+}
+
 function appendRequestAuditEntry(requestRecord, entry = {}) {
   if (!requestRecord || typeof requestRecord !== 'object') return;
   requestRecord.audit = Array.isArray(requestRecord.audit) ? requestRecord.audit : [];
@@ -1490,6 +1576,9 @@ function toRequestResponse(requestRecord) {
     turnaroundMs: turnaroundMs ?? null,
     result: requestRecord.result || null,
     audit: Array.isArray(requestRecord.audit) ? requestRecord.audit : [],
+    activities: Array.isArray(requestRecord.activities)
+      ? requestRecord.activities.map(normalizeRequestActivity).filter(Boolean)
+      : [],
     resolutionDurationHours: resolutionDurationHours ?? null
   };
 }
@@ -6767,6 +6856,8 @@ init().then(async () => {
     }
 
     const nowIso = new Date().toISOString();
+    const actorEmployeeId = normalizeEmployeeId(req.user?.employeeId) || validation.value.requesterEmployeeId || null;
+    const actorEmail = toNonEmptyString(req.user?.email).toLowerCase() || null;
     const requestRecord = {
       id: crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(12).toString('hex'),
       ...validation.value,
@@ -6776,7 +6867,18 @@ init().then(async () => {
       closedAt: null,
       turnaroundMs: null,
       result: null,
-      resolutionDurationHours: null
+      resolutionDurationHours: null,
+      activities: [{
+        type: 'created',
+        actorEmployeeId,
+        actorEmail,
+        timestamp: nowIso,
+        meta: {
+          status: 'open',
+          categoryId: validation.value.categoryId || null,
+          categoryName: validation.value.categoryName || null
+        }
+      }]
     };
 
     db.data.requests.push(requestRecord);
@@ -6992,12 +7094,24 @@ init().then(async () => {
       requestRecord.resolutionDurationHours = null;
     }
 
+    const actorEmployeeId = normalizeEmployeeId(req.user?.employeeId) || null;
+    const actorEmail = toNonEmptyString(req.user?.email).toLowerCase() || null;
     appendRequestAuditEntry(requestRecord, {
       type: previousStatus === 'closed' && nextStatus === 'in_progress' ? 'reopened' : 'status_changed',
       fromStatus: previousStatus,
       toStatus: nextStatus,
       at: nowIso,
-      actorEmployeeId: normalizeEmployeeId(req.user?.employeeId) || null
+      actorEmployeeId
+    });
+    appendRequestActivity(requestRecord, {
+      type: nextStatus === 'closed' ? 'closed' : 'status_changed',
+      actorEmployeeId,
+      actorEmail,
+      timestamp: nowIso,
+      meta: {
+        fromStatus: previousStatus,
+        toStatus: nextStatus
+      }
     });
 
     await db.write();
@@ -7046,13 +7160,40 @@ init().then(async () => {
     };
     requestRecord.updatedAt = nowIso;
 
+    const actorEmployeeId = normalizeEmployeeId(req.user?.employeeId) || null;
+    const actorEmail = toNonEmptyString(req.user?.email).toLowerCase() || null;
     appendRequestAuditEntry(requestRecord, {
       type: 'result_updated',
       at: nowIso,
-      actorEmployeeId: normalizeEmployeeId(req.user?.employeeId) || null,
+      actorEmployeeId,
       hasMessage: Boolean(message),
       attachmentCount: attachmentMetadata.length
     });
+
+    if (message) {
+      appendRequestActivity(requestRecord, {
+        type: 'comment_added',
+        actorEmployeeId,
+        actorEmail,
+        timestamp: nowIso,
+        meta: {
+          message
+        }
+      });
+    }
+
+    if (attachmentMetadata.length) {
+      appendRequestActivity(requestRecord, {
+        type: 'attachment_added',
+        actorEmployeeId,
+        actorEmail,
+        timestamp: nowIso,
+        meta: {
+          attachments: attachmentMetadata,
+          attachmentCount: attachmentMetadata.length
+        }
+      });
+    }
 
     await db.write();
     await sendRequestUpdateNotification(requestRecord, db.data, { managerNote: message });

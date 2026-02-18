@@ -1655,6 +1655,117 @@ function getRequestResultAttachments(requestItem = {}) {
     .filter(Boolean);
 }
 
+function ensureRequestTimelineModal() {
+  let modal = document.getElementById('requestTimelineModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'requestTimelineModal';
+  modal.className = 'modal hidden';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width: 760px;">
+      <button type="button" class="close-btn" data-request-timeline-close>&times;</button>
+      <h2 class="section-title">Request Activity Timeline</h2>
+      <p id="requestTimelineSummary" class="text-muted"></p>
+      <div id="requestTimelineStatus" class="text-muted" aria-live="polite"></div>
+      <div id="requestTimelineBody" class="card-list" style="margin-top: 12px;"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', event => {
+    if (event.target === modal || event.target.closest('[data-request-timeline-close]')) {
+      modal.classList.add('hidden');
+    }
+  });
+
+  return modal;
+}
+
+function sanitizeTimelineMeta(meta, depth = 0) {
+  if (depth > 3) return '[truncated]';
+  if (meta === null) return null;
+  if (['string', 'number', 'boolean'].includes(typeof meta)) return meta;
+  if (Array.isArray(meta)) return meta.slice(0, 20).map(item => sanitizeTimelineMeta(item, depth + 1));
+  if (!meta || typeof meta !== 'object') return null;
+  const safe = {};
+  Object.entries(meta).forEach(([key, value]) => {
+    const cleanKey = String(key || '').replace(/[^a-z0-9_\- ]/gi, '').trim();
+    if (!cleanKey) return;
+    safe[cleanKey] = sanitizeTimelineMeta(value, depth + 1);
+  });
+  return safe;
+}
+
+function formatRequestTimelineType(type = '') {
+  const map = {
+    created: 'Request created',
+    status_changed: 'Status changed',
+    attachment_added: 'Attachment added',
+    comment_added: 'Comment added',
+    closed: 'Request closed'
+  };
+  return map[String(type || '').trim().toLowerCase()] || 'Activity';
+}
+
+function formatRequestTimelineActor(activity = {}) {
+  if (activity.actorEmployeeId) return `Employee ${activity.actorEmployeeId}`;
+  if (activity.actorEmail) return activity.actorEmail;
+  return 'System';
+}
+
+function renderRequestTimelineActivities(activities = []) {
+  if (!Array.isArray(activities) || !activities.length) {
+    return '<div class="text-muted">No timeline entries yet.</div>';
+  }
+
+  const sorted = [...activities].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  return sorted.map(item => {
+    const safeMeta = sanitizeTimelineMeta(item?.meta);
+    const metaText = safeMeta && Object.keys(safeMeta).length
+      ? escapeHtml(JSON.stringify(safeMeta, null, 2))
+      : '';
+    return `
+      <article class="card" style="padding: 12px; margin-bottom: 8px;">
+        <div style="display:flex; justify-content:space-between; gap: 12px; flex-wrap: wrap;">
+          <strong>${escapeHtml(formatRequestTimelineType(item?.type))}</strong>
+          <span class="text-muted">${escapeHtml(formatRequestPortalDate(item?.timestamp))}</span>
+        </div>
+        <div class="text-muted" style="margin-top: 4px;">By: ${escapeHtml(formatRequestTimelineActor(item || {}))}</div>
+        ${metaText ? `<pre style="margin-top:8px; white-space:pre-wrap;">${metaText}</pre>` : ''}
+      </article>
+    `;
+  }).join('');
+}
+
+async function openRequestTimelineModal(requestId = '') {
+  const modal = ensureRequestTimelineModal();
+  const statusEl = document.getElementById('requestTimelineStatus');
+  const summaryEl = document.getElementById('requestTimelineSummary');
+  const bodyEl = document.getElementById('requestTimelineBody');
+  if (!modal || !statusEl || !summaryEl || !bodyEl) return;
+
+  modal.classList.remove('hidden');
+  statusEl.textContent = 'Loading request details...';
+  summaryEl.textContent = '';
+  bodyEl.innerHTML = '';
+
+  try {
+    const res = await apiFetch(`/api/requests/${encodeURIComponent(requestId)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || 'Unable to load request details.');
+
+    const category = data?.categoryName || data?.categoryId || 'General';
+    summaryEl.textContent = `${data?.subject || requestId} • ${category} • ${formatRequestPortalStatus(data?.status)}`;
+    bodyEl.innerHTML = renderRequestTimelineActivities(Array.isArray(data?.activities) ? data.activities : []);
+    statusEl.textContent = 'Timeline loaded.';
+  } catch (err) {
+    console.error('Failed to load request timeline', err);
+    statusEl.textContent = err.message || 'Unable to load request timeline.';
+    bodyEl.innerHTML = '<div class="text-muted">Could not load activity timeline.</div>';
+  }
+}
+
 function renderRequestPortalMyRequests() {
   const tbody = document.getElementById('requestPortalMyRequestsBody');
   if (!tbody) return;
@@ -1678,7 +1789,10 @@ function renderRequestPortalMyRequests() {
 
     return `
       <tr>
-        <td>${escapeHtml(requestItem.id || '-')}</td>
+        <td>
+          <div>${escapeHtml(requestItem.id || '-')}</div>
+          <button type="button" class="md-button md-button--text md-button--small" data-request-view="${escapeHtml(requestItem.id || '')}">View timeline</button>
+        </td>
         <td>${escapeHtml(category)}</td>
         <td>${escapeHtml(formatRequestPortalDate(requestItem.requestedAt))}</td>
         <td><span class="md-chip">${escapeHtml(formatRequestPortalStatus(requestItem.status))}</span></td>
@@ -1721,6 +1835,7 @@ function renderRequestPortalAllRequests() {
         <td>
           <div><strong>${escapeHtml(requestItem.subject || requestItem.id || '-')}</strong></div>
           <div class="text-muted">${escapeHtml(requestItem.id || '-')}</div>
+          <button type="button" class="md-button md-button--text md-button--small" data-request-view="${escapeHtml(requestItem.id || '')}">View timeline</button>
         </td>
         <td>
           <div>${escapeHtml(requestItem.requesterEmployeeId || '-')}</div>
@@ -10779,10 +10894,25 @@ async function init() {
   const requestPortalAllRequestsBody = document.getElementById('requestPortalAllRequestsBody');
   if (requestPortalAllRequestsBody) {
     requestPortalAllRequestsBody.addEventListener('click', event => {
+      const timelineButton = event.target.closest('[data-request-view]');
+      if (timelineButton) {
+        const requestId = timelineButton.dataset.requestView || '';
+        openRequestTimelineModal(requestId);
+        return;
+      }
       const button = event.target.closest('[data-request-manager-save]');
       if (!button) return;
       const requestId = button.dataset.requestManagerSave || '';
       onRequestPortalManagerSave(requestId);
+    });
+  }
+  const requestPortalMyRequestsBody = document.getElementById('requestPortalMyRequestsBody');
+  if (requestPortalMyRequestsBody) {
+    requestPortalMyRequestsBody.addEventListener('click', event => {
+      const timelineButton = event.target.closest('[data-request-view]');
+      if (!timelineButton) return;
+      const requestId = timelineButton.dataset.requestView || '';
+      openRequestTimelineModal(requestId);
     });
   }
   const learningHubTab = document.getElementById('tabLearningHub');
@@ -10814,6 +10944,7 @@ async function init() {
   const primaryTabSelect = document.getElementById('primaryTabSelect');
   initPrimaryMoreMenu();
   updateRequestPortalSubtab('new');
+  ensureRequestTimelineModal();
   const payslipBtn = document.getElementById('profilePayslipButton');
   if (payslipBtn) payslipBtn.addEventListener('click', onGeneratePayslipClick);
   if (primaryTabSelect) {
