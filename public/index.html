@@ -2285,8 +2285,14 @@
 .profile-section-grid {
   display: grid;
   gap: 24px;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .profile-section-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .profile-section-grid .md-card {
@@ -3844,19 +3850,23 @@
 }
 
 .recruitment-pipeline-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 20px;
   align-items: stretch;
 }
 
 .recruitment-pipeline-grid .md-card {
-  flex: 1 1 320px;
+  width: 100%;
   min-width: 0;
 }
 
 .recruitment-pipeline-grid .md-card:first-child {
-  flex: 0 1 420px;
+  width: 100%;
+}
+
+#recruitmentPositionsSection .card-grid {
+  grid-template-columns: 1fr;
 }
 
 .recruitment-table-card {
