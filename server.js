@@ -3093,6 +3093,12 @@ async function ensureUsersForExistingEmployees() {
 init().then(async () => {
   await ensureUsersForExistingEmployees();
   await ensurePairingIndexes();
+  const leaveRecalculationResult = await recalculateLeaveBalancesForCycle(new Date());
+  if (leaveRecalculationResult.updated > 0) {
+    console.log(
+      `[LEAVE] Recalculated leave balances on startup: ${leaveRecalculationResult.updated}/${leaveRecalculationResult.processed} employees updated.`
+    );
+  }
   // ========== MICROSOFT SSO ==========
   const oauthStates = new Set();
 

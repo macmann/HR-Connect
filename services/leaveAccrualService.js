@@ -331,7 +331,8 @@ function calculateLeaveTakenForEmployee(employeeId, applications, cycleRange, as
     if (!app || app.employeeId != employeeId) return;
     const status = String(app.status || '').toLowerCase();
     if (status !== 'approved') return;
-    if (!SUPPORTED_LEAVE_TYPES.includes(app.type)) return;
+    const leaveType = String(app.type || '').toLowerCase();
+    if (!SUPPORTED_LEAVE_TYPES.includes(leaveType)) return;
 
     const from = new Date(app.from);
     const to = new Date(app.to);
@@ -339,7 +340,7 @@ function calculateLeaveTakenForEmployee(employeeId, applications, cycleRange, as
     if (to < startBoundary || from > endBoundary) return;
 
     const days = getLeaveDaysWithin(app, startBoundary, endBoundary, holidaySet);
-    totals[app.type] = roundToOneDecimal((totals[app.type] || 0) + days);
+    totals[leaveType] = roundToOneDecimal((totals[leaveType] || 0) + days);
   });
 
   return totals;
