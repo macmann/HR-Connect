@@ -73,6 +73,17 @@ test('Full cycle accrual with taken leave reduces balances', () => {
   assert.equal(balances.medical.balance, 14);
 });
 
+test('Taken leave calculation supports mixed-case leave types', () => {
+  const asOfDate = new Date('2025-06-30');
+  const employee = createEmployee(new Date('2020-01-01'));
+  const apps = [leaveApplication(employee.id, 'Annual', '2024-10-07', '2024-10-08')];
+
+  const balances = runState(employee, apps, asOfDate);
+
+  assert.equal(balances.annual.taken, 2);
+  assert.equal(balances.annual.balance, 8);
+});
+
 test('Mid-cycle joining only accrues for active months', () => {
   const asOfDate = new Date('2025-06-30');
   const employee = createEmployee(new Date('2024-11-15'));
