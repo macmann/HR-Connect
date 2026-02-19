@@ -3,6 +3,37 @@
   const token = window.location.pathname.split('/').pop();
   const draftKey = `ai_interview_${token}`;
 
+  const DEFAULT_ORGANIZATION_NAME = 'HR Connect';
+  const DEFAULT_ORGANIZATION_LOGO_URL = '/logo.png';
+
+  async function applyOrganizationBranding() {
+    try {
+      const response = await fetch('/public/settings/organization');
+      if (!response.ok) return;
+      const settings = await response.json();
+      const organizationName = typeof settings?.portalName === 'string' && settings.portalName.trim()
+        ? settings.portalName.trim()
+        : DEFAULT_ORGANIZATION_NAME;
+      const logoUrl = typeof settings?.logoUrl === 'string' && settings.logoUrl.trim()
+        ? settings.logoUrl.trim()
+        : DEFAULT_ORGANIZATION_LOGO_URL;
+
+      document.title = `${organizationName} AI Interview`;
+      const logoEl = document.getElementById('careersBrandLogo');
+      if (logoEl) logoEl.src = logoUrl;
+      const portalNameEl = document.getElementById('organizationPortalName');
+      if (portalNameEl) portalNameEl.textContent = organizationName;
+      const taglineEl = document.getElementById('interviewBrandTagline');
+      if (taglineEl) taglineEl.textContent = `${organizationName} AI Interview`;
+      const guidedByEl = document.getElementById('interviewBrandGuidedBy');
+      if (guidedByEl) guidedByEl.textContent = `Guided by ${organizationName}`;
+      const footerEl = document.getElementById('interviewFooterText');
+      if (footerEl) footerEl.textContent = `© ${organizationName}. All rights reserved.`;
+    } catch (err) {
+      // Fall back to defaults if settings are unavailable
+    }
+  }
+
   function renderMessage(title, description) {
     root.innerHTML = `
       <div class="space-y-3 text-center">
@@ -75,7 +106,7 @@
 
     const greeting = `Hi ${session.candidateName || 'there'}, welcome to your written interview for ${
       session.positionTitle || 'this role'
-    } at Brillar.`;
+    } at ${document.getElementById('organizationPortalName')?.textContent || DEFAULT_ORGANIZATION_NAME}.`;
 
     root.innerHTML = `
       <div class="space-y-8">
@@ -221,6 +252,7 @@
   }
 
   async function init() {
+    await applyOrganizationBranding();
     if (!token) {
       renderMessage('Invalid link', 'This interview link appears to be missing.');
       return;

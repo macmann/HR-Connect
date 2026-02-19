@@ -3,49 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Brillar AI Interview</title>
+  <title>HR Connect AI Interview</title>
   <link rel="icon" href="/logo.png" />
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 text-gray-900">
   <header class="sticky top-0 z-20">
     <nav class="bg-white shadow px-8 py-4 flex items-center justify-between max-w-6xl mx-auto">
-      <a href="https://www.brillar.io" class="flex items-center space-x-2">
-        <img
-          fetchpriority="high"
-          sizes="131px"
-          srcset="https://static.wixstatic.com/media/34647d_4924e46631c3463abed06f9e3147eba3~mv2.png/v1/fill/w_131,h_57,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Screen%20Shot%202019-07-09%20at%2010_05_edited_p.png 1x,
-                  https://static.wixstatic.com/media/34647d_4924e46631c3463abed06f9e3147eba3~mv2.png/v1/fill/w_262,h_114,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Screen%20Shot%202019-07-09%20at%2010_05_edited_p.png 2x"
-          id="img_comp-k2yn8cmg"
-          src="https://static.wixstatic.com/media/34647d_4924e46631c3463abed06f9e3147eba3~mv2.png/v1/fill/w_131,h_57,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/Screen%20Shot%202019-07-09%20at%2010_05_edited_p.png"
-          alt="Brillar Logo"
-          style="object-fit:cover"
-          class="BI8PVQ Tj01hh h-12 w-auto"
-          width="131"
-          height="57"
-        />
-      </a>
-      <div class="flex items-center space-x-6 text-sm font-medium text-gray-700">
-        <a href="https://www.brillar.io/" class="hover:text-blue-600">Home</a>
-        <a href="https://www.brillar.io/#about" class="hover:text-blue-600">About</a>
-        <a href="https://www.brillar.io/#solutions" class="hover:text-blue-600">Solutions</a>
-        <a href="https://www.brillar.io/#partners" class="hover:text-blue-600">Partners</a>
-        <a href="https://www.brillar.io/#contact" class="hover:text-blue-600">Contact</a>
-        <a href="https://hr.brillar.ai/careers" class="text-blue-600">Careers</a>
+      <div class="flex items-center space-x-3">
+        <img id="careersBrandLogo" src="/logo.png" alt="Organization logo" class="h-12 w-auto" />
+        <p id="organizationPortalName" class="text-base sm:text-lg font-semibold text-gray-900">HR Connect</p>
       </div>
+      <a href="/careers" class="text-sm font-medium text-blue-600 hover:text-blue-700">Careers</a>
     </nav>
   </header>
 
   <main>
     <section class="bg-gradient-to-r from-blue-900 via-blue-700 to-blue-500 text-white">
       <div class="max-w-5xl mx-auto px-6 py-16">
-        <p class="text-sm uppercase tracking-widest text-blue-100">Brillar AI Interview</p>
+        <p id="interviewBrandTagline" class="text-sm uppercase tracking-widest text-blue-100">HR Connect AI Interview</p>
         <h1 class="text-4xl sm:text-5xl font-bold mt-4">Your Digital Interview Experience</h1>
-        <h2 class="text-2xl sm:text-3xl font-semibold mt-2 text-blue-100">Guided by Brillar</h2>
+        <h2 id="interviewBrandGuidedBy" class="text-2xl sm:text-3xl font-semibold mt-2 text-blue-100">Guided by HR Connect</h2>
         <p class="mt-4 max-w-3xl text-lg text-blue-100">Share your expertise through our AI-assisted interview. Complete each question at your own pace and submit when you're ready.</p>
         <div class="mt-8 flex flex-wrap gap-4">
           <a href="#interview" class="inline-block px-6 py-3 bg-white text-blue-700 font-semibold rounded-md shadow hover:bg-blue-50">Start Interview</a>
-          <a href="https://www.brillar.io/#contact" class="inline-block px-6 py-3 bg-transparent border border-white text-white font-semibold rounded-md hover:bg-white hover:text-blue-700">Need Help?</a>
         </div>
       </div>
     </section>
@@ -54,12 +35,6 @@
       <div class="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
         <h3 class="text-2xl font-semibold text-gray-900">Welcome to your interview</h3>
         <p class="mt-3 text-gray-600">Thank you for taking the time to complete your written interview. We'll guide you through each question with clear prompts and save your drafts locally so you can review before submitting.</p>
-        <ul class="mt-4 grid gap-3 sm:grid-cols-2 text-sm text-gray-700">
-          <li class="flex items-start space-x-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-600"></span><span>Answer questions one at a time with autosave for drafts.</span></li>
-          <li class="flex items-start space-x-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-600"></span><span>Navigate freely between questions before submitting.</span></li>
-          <li class="flex items-start space-x-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-600"></span><span>Your responses are securely submitted directly to our team.</span></li>
-          <li class="flex items-start space-x-2"><span class="mt-1 h-2 w-2 rounded-full bg-blue-600"></span><span>Reach out anytime if you need assistance.</span></li>
-        </ul>
       </div>
     </section>
 
@@ -72,7 +47,7 @@
 
   <footer class="bg-gray-900 text-gray-300 text-sm py-6 mt-10">
     <div class="max-w-5xl mx-auto px-6 text-center space-y-1">
-      <p>© Brillar. All rights reserved.</p>
+      <p id="interviewFooterText">© HR Connect. All rights reserved.</p>
     </div>
   </footer>
 

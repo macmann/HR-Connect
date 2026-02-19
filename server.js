@@ -2533,7 +2533,7 @@ const DEFAULT_CHAT_WIDGET_URL =
 const DEFAULT_POST_LOGIN_URL = 'https://api-qa.atenxion.ai/api/post-login/user-login';
 const DEFAULT_POST_LOGIN_AUTH =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiNjkwMDcxMjAzN2MwZWQwMzY4MjFiMzM0IiwidHlwZSI6Im11bHRpYWdlbnQiLCJpYXQiOjE3NjE2MzY2NDB9.-reLuknFL4cc26r2BGms92CZnSHj-J3riIgo7XM4ZcI';
-const DEFAULT_ORGANIZATION_PORTAL_NAME = 'Brillar HR Portal';
+const DEFAULT_ORGANIZATION_PORTAL_NAME = 'HR Connect';
 const DEFAULT_ORGANIZATION_LOGO_URL = 'logo.png';
 
 function genToken() {
