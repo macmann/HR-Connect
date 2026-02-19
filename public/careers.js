@@ -1,5 +1,5 @@
 const jobListEl = document.getElementById('job-list');
-const jobDetailEl = document.getElementById('job-detail');
+let jobDetailEl = document.getElementById('job-detail');
 const careersBrandLogoEl = document.getElementById('careersBrandLogo');
 const DEFAULT_ORGANIZATION_NAME = 'HR Connect';
 const DEFAULT_ORGANIZATION_LOGO_URL = '/logo.png';
@@ -52,6 +52,25 @@ function applyCustomCareerSection(element, html) {
   element.innerHTML = trimmed;
 }
 
+function ensureJobDetailContainer() {
+  if (jobDetailEl && document.body.contains(jobDetailEl)) return jobDetailEl;
+
+  jobDetailEl = document.getElementById('job-detail');
+  if (jobDetailEl) return jobDetailEl;
+  if (!careerCustomContentEl) return null;
+
+  const container = document.createElement('div');
+  container.id = 'job-detail';
+  container.className = 'bg-white rounded-xl shadow p-6 sm:p-8';
+  container.innerHTML = `
+    <h3 class="text-xl font-semibold text-gray-900">Explore our openings</h3>
+    <p class="text-gray-600 mt-2">Select a role to view details and apply.</p>
+  `;
+  careerCustomContentEl.appendChild(container);
+  jobDetailEl = container;
+  return jobDetailEl;
+}
+
 async function loadCareerPageBuilderSettings() {
   try {
     const settings = await fetchJson('/public/settings/career-page');
@@ -66,6 +85,7 @@ async function loadCareerPageBuilderSettings() {
     applyCustomCareerSection(careerCustomUpdatesEl, settings?.updates);
     applyCustomCareerSection(careerCustomContentEl, settings?.content);
     applyCustomCareerSection(careerCustomFooterEl, settings?.footer);
+    ensureJobDetailContainer();
   } catch (_error) {
     // Keep default careers layout when custom builder settings are unavailable.
   }
@@ -101,10 +121,11 @@ function renderPositions(positions = []) {
 }
 
 function renderDetail(position) {
-  if (!jobDetailEl) return;
+  const detailEl = ensureJobDetailContainer();
+  if (!detailEl) return;
   const description = position.description || 'No description provided.';
   const meta = [position.department, position.location].filter(Boolean).join(' · ');
-  jobDetailEl.innerHTML = `
+  detailEl.innerHTML = `
     <div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
       <div>
         <h3 class="text-3xl font-bold text-gray-900">${position.title}</h3>
@@ -163,13 +184,14 @@ async function loadPositions() {
 }
 
 async function loadPositionDetail(id) {
-  if (!jobDetailEl) return;
-  jobDetailEl.innerHTML = '<p class="text-gray-600">Loading position...</p>';
+  const detailEl = ensureJobDetailContainer();
+  if (!detailEl) return;
+  detailEl.innerHTML = '<p class="text-gray-600">Loading position...</p>';
   try {
     const position = await fetchJson(`/api/public/positions/${id}`);
     renderDetail(position);
   } catch (error) {
-    jobDetailEl.innerHTML = '<p class="text-red-600">Unable to load this position.</p>';
+    detailEl.innerHTML = '<p class="text-red-600">Unable to load this position.</p>';
   }
 }
 
@@ -216,13 +238,11 @@ if (jobListEl) {
   });
 }
 
-if (jobDetailEl) {
-  jobDetailEl.addEventListener('submit', event => {
-    if (event.target && event.target.id === 'apply-form') {
-      submitApplication(event);
-    }
-  });
-}
+document.addEventListener('submit', event => {
+  if (event.target && event.target.id === 'apply-form') {
+    submitApplication(event);
+  }
+});
 
 const openPositionsButton = document.getElementById('view-open-positions');
 if (openPositionsButton) {
