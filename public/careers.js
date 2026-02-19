@@ -164,8 +164,8 @@ function renderDetail(position) {
             <label class="block text-sm font-medium text-gray-700 mb-1">Cover Letter</label>
             <textarea name="coverLetterText" rows="4" class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Optional"></textarea>
           </div>
-          <div id="apply-message" class="text-sm"></div>
-          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 focus:outline-none">Submit Application</button>
+          <div id="apply-message" class="text-sm" role="status" aria-live="polite"></div>
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 focus:outline-none disabled:opacity-70 disabled:cursor-not-allowed">Submit Application</button>
         </form>
       </div>
     </div>
@@ -202,9 +202,17 @@ async function submitApplication(event) {
   if (!positionId) return;
 
   const messageEl = document.getElementById('apply-message');
+  const submitButton = form.querySelector('button[type="submit"]');
+  const originalButtonLabel = submitButton?.textContent || 'Submit Application';
   if (messageEl) {
     messageEl.textContent = '';
     messageEl.className = 'text-sm';
+  }
+
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = 'Submitting application...';
+    submitButton.setAttribute('aria-busy', 'true');
   }
 
   const formData = new FormData(form);
@@ -217,14 +225,20 @@ async function submitApplication(event) {
     if (!res.ok) throw new Error('failed');
     await res.json();
     if (messageEl) {
-      messageEl.textContent = 'Application received! Our team will be in touch soon.';
-      messageEl.className = 'text-sm text-green-600';
+      messageEl.textContent = '✅ Application submitted successfully! Our team will be in touch soon.';
+      messageEl.className = 'text-sm font-semibold text-green-700';
     }
     form.reset();
   } catch (error) {
     if (messageEl) {
       messageEl.textContent = 'Could not submit application. Please check your details and try again.';
       messageEl.className = 'text-sm text-red-600';
+    }
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = originalButtonLabel;
+      submitButton.removeAttribute('aria-busy');
     }
   }
 }
