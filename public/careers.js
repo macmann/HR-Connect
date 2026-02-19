@@ -2,7 +2,7 @@ const jobListEl = document.getElementById('job-list');
 let jobDetailEl = document.getElementById('job-detail');
 const careersBrandLogoEl = document.getElementById('careersBrandLogo');
 const DEFAULT_ORGANIZATION_NAME = 'HR Connect';
-const DEFAULT_ORGANIZATION_LOGO_URL = '/logo.png';
+const DEFAULT_ORGANIZATION_LOGO_URL = '';
 
 const careerCustomHeaderEl = document.getElementById('careerCustomHeader');
 const careerCustomUpdatesEl = document.getElementById('careerCustomUpdates');
@@ -37,10 +37,17 @@ async function loadOrganizationBranding() {
       ? settings.logoUrl.trim()
       : DEFAULT_ORGANIZATION_LOGO_URL;
     document.title = `${organizationName} Careers`;
-    careersBrandLogoEl.src = logoUrl;
+    if (logoUrl) {
+      careersBrandLogoEl.src = logoUrl;
+      careersBrandLogoEl.style.removeProperty('display');
+    } else {
+      careersBrandLogoEl.removeAttribute('src');
+      careersBrandLogoEl.style.display = 'none';
+    }
   } catch (_error) {
     document.title = `${DEFAULT_ORGANIZATION_NAME} Careers`;
-    careersBrandLogoEl.src = DEFAULT_ORGANIZATION_LOGO_URL;
+    careersBrandLogoEl.removeAttribute('src');
+    careersBrandLogoEl.style.display = 'none';
   }
 }
 

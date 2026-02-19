@@ -26,8 +26,8 @@ const DEFAULT_POST_LOGIN_AUTH =
 const POST_LOGIN_TIMEOUT_MS = 5000;
 const DEFAULT_CHAT_WIDGET_URL =
   'https://qa.atenxion.ai/chat-widget?agentchainId=6900712037c0ed036821b334';
-const DEFAULT_ORGANIZATION_NAME = 'Brillar HR Portal';
-const DEFAULT_ORGANIZATION_LOGO_URL = 'logo.png';
+const DEFAULT_ORGANIZATION_NAME = 'HR Connect';
+const DEFAULT_ORGANIZATION_LOGO_URL = '';
 const INACTIVE_EMPLOYEE_STATUSES = new Set(['inactive', 'deactivated', 'disabled', 'terminated']);
 const SUPPORTED_LEAVE_TYPES = ['annual', 'casual', 'medical'];
 const DEFAULT_LEAVE_BALANCE_CONFIG = {
@@ -8301,7 +8301,14 @@ function applyOrganizationBranding() {
   const logoIds = ['loginBrandLogo', 'appBrandLogo', 'organizationLogoPreview'];
   logoIds.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.src = logoUrl;
+    if (!el) return;
+    if (logoUrl) {
+      el.src = logoUrl;
+      el.style.removeProperty('display');
+    } else {
+      el.removeAttribute('src');
+      el.style.display = 'none';
+    }
   });
 }
 

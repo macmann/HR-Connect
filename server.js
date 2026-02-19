@@ -131,7 +131,7 @@ app.options(
 const BODY_LIMIT = process.env.BODY_LIMIT || '3mb';
 
 // Default admin credentials (can be overridden with env vars)
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@brillar.io';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@hrconnet.site';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin';
 
 const MANAGER_ROLES = new Set(['manager', 'superadmin']);
@@ -2533,8 +2533,8 @@ const DEFAULT_CHAT_WIDGET_URL =
 const DEFAULT_POST_LOGIN_URL = 'https://api-qa.atenxion.ai/api/post-login/user-login';
 const DEFAULT_POST_LOGIN_AUTH =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZ2VudElkIjoiNjkwMDcxMjAzN2MwZWQwMzY4MjFiMzM0IiwidHlwZSI6Im11bHRpYWdlbnQiLCJpYXQiOjE3NjE2MzY2NDB9.-reLuknFL4cc26r2BGms92CZnSHj-J3riIgo7XM4ZcI';
-const DEFAULT_ORGANIZATION_PORTAL_NAME = 'Brillar HR Portal';
-const DEFAULT_ORGANIZATION_LOGO_URL = 'logo.png';
+const DEFAULT_ORGANIZATION_PORTAL_NAME = 'HR Connect';
+const DEFAULT_ORGANIZATION_LOGO_URL = '';
 
 function genToken() {
   return Math.random().toString(36).slice(2) + Date.now();
@@ -3046,7 +3046,7 @@ async function authRequired(req, res, next) {
 
   req.user = {
     id: 'public-admin',
-    email: ADMIN_EMAIL || 'public@brillar.io',
+    email: ADMIN_EMAIL || 'public@hrconnet.site',
     role: 'manager',
     employeeId: null
   };
