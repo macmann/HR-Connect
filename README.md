@@ -82,6 +82,32 @@ It supports employee lifecycle workflows such as:
 
 ---
 
+## New Features
+
+- **Unified Request Center**
+  - Added standardized request APIs (`/api/requests`) for cross-category employee requests.
+  - Includes manager-facing metrics endpoints and CSV export for operational reporting.
+
+- **Expanded Recruitment AI Tooling**
+  - Added AI screening trigger endpoint for applications (`/applications/:applicationId/ai-screening/run`).
+  - Added AI-generated interview question workflow per position (`/positions/:id/ai-questions/generate`).
+  - Added dedicated AI interview session APIs for HR and public interview handoff.
+
+- **Learning Hub Authoring + Assignment Ops**
+  - Added protected course CRUD and role-assignment CRUD APIs under `/api/learning-hub`.
+  - Added on-demand role assignment reconciliation endpoint and scheduled sync support.
+  - Added learning asset playback tracking service support for learner progress telemetry.
+
+- **Organization + Career Branding Settings**
+  - Added public/private settings endpoints for organization profile, career page, and widget config.
+  - Supports runtime-managed branding and recruitment page content without redeploying.
+
+- **OpenAPI/Integration Discoverability**
+  - Added API documentation endpoints including `/api/openapi`, `/api/recruitmentopenAI`, and recruitment JSON docs.
+  - Improves integration with external tools, assistants, and internal automation workflows.
+
+---
+
 ## Project Structure
 
 ```text
