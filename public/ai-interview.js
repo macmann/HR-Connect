@@ -82,6 +82,17 @@
         return null;
       }
 
+      if (response.status === 400) {
+        const error = await response.json().catch(() => ({}));
+        if (error.error === 'session_mode_mismatch') {
+          renderMessage(
+            'Incorrect interview link',
+            'This invite is for a voice interview. Please use the correct link.'
+          );
+          return null;
+        }
+      }
+
       if (!response.ok) {
         renderMessage('Unable to load interview', 'Please refresh the page or try again later.');
         return null;
@@ -233,6 +244,8 @@
           const message =
             error.error === 'session_already_completed'
               ? 'This interview has already been submitted.'
+              : error.error === 'session_mode_mismatch'
+                ? 'This invite is for a voice interview. Please use the correct link.'
               : 'Unable to submit your interview. Please try again.';
           messageBox.textContent = message;
           messageBox.classList.remove('hidden');

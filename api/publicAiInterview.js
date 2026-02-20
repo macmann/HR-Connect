@@ -125,6 +125,10 @@ router.get('/ai-interview/:token', async (req, res) => {
       return res.status(404).json({ error: 'session_not_found' });
     }
 
+    if (normalizeSessionMode(session.mode) !== 'text') {
+      return res.status(400).json({ error: 'session_mode_mismatch' });
+    }
+
     let candidate = null;
     let position = null;
 
@@ -170,6 +174,10 @@ router.post('/ai-interview/:token/submit', async (req, res) => {
 
     if (!session) {
       return res.status(404).json({ error: 'session_not_found' });
+    }
+
+    if (normalizeSessionMode(session.mode) !== 'text') {
+      return res.status(400).json({ error: 'session_mode_mismatch' });
     }
 
     if (session.status === 'completed') {
