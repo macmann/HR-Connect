@@ -151,7 +151,13 @@
       method: 'POST'
     });
 
-    if (!response.ok) throw new Error('failed_to_fetch_realtime_session');
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const err = new Error('failed_to_fetch_realtime_session');
+      err.status = response.status;
+      err.apiError = payload?.error || null;
+      throw err;
+    }
     return response.json();
   }
 
@@ -305,9 +311,15 @@
       setStatus('listening', 'Connected. Start speaking when ready.');
     } catch (err) {
       console.error('Failed to start voice interview', err);
-      if (err?.code === 'unsupported_transport') {
+      if (err && err.name === 'NotAllowedError') {
+        setStatus('error', 'Microphone access is required. Please allow microphone permissions and retry.');
+      } else if (err?.code === 'unsupported_transport') {
         const transportLabel = err.transport || 'unknown';
         setStatus('error', `This interview transport (${transportLabel}) is not supported in this browser session. Please contact support.`);
+      } else if (err?.apiError === 'realtime_not_available') {
+        setStatus('error', 'Voice interview is temporarily unavailable. Please try again shortly or contact support.');
+      } else if (err?.apiError === 'realtime_session_rate_limited' || err?.status === 429) {
+        setStatus('error', 'Too many attempts to start the voice session. Please wait a minute and retry.');
       } else {
         setStatus('error', 'Unable to start voice interview. Please refresh and try again.');
       }

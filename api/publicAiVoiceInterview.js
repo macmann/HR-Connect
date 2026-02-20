@@ -277,32 +277,52 @@ async function createRealtimeSession() {
     throw err;
   }
 
-  const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: REALTIME_CONFIG.model,
-      voice: REALTIME_CONFIG.voice,
-      expires_in: 120,
-      modalities: ['audio', 'text'],
-      input_audio_transcription: {
-        model: REALTIME_CONFIG.transcriptionModel
-      }
-    })
-  });
+  const fallbackModels = String(process.env.OPENAI_REALTIME_FALLBACK_MODELS || 'gpt-4o-realtime-preview,gpt-realtime')
+    .split(',')
+    .map(model => model.trim())
+    .filter(Boolean);
 
-  if (!response.ok) {
+  const modelsToTry = [REALTIME_CONFIG.model, ...fallbackModels.filter(model => model !== REALTIME_CONFIG.model)];
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+        'OpenAI-Beta': 'realtime=v1'
+      },
+      body: JSON.stringify({
+        model,
+        voice: REALTIME_CONFIG.voice,
+        expires_in: 120,
+        modalities: ['audio', 'text'],
+        input_audio_transcription: {
+          model: REALTIME_CONFIG.transcriptionModel
+        }
+      })
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+
     const body = await response.text();
-    const err = new Error('failed_to_create_realtime_session');
-    err.code = 'realtime_session_create_failed';
-    err.details = body;
-    throw err;
+    const errorDetails = `${response.status} ${response.statusText} - ${body}`;
+    lastError = new Error('failed_to_create_realtime_session');
+    lastError.code = 'realtime_session_create_failed';
+    lastError.details = errorDetails;
+    lastError.status = response.status;
+
+    if (response.status === 401 || response.status === 403) {
+      throw lastError;
+    }
+
+    console.warn(`[voice-interview] Realtime session creation failed for model "${model}": ${errorDetails}`);
   }
 
-  return await response.json();
+  throw lastError || new Error('failed_to_create_realtime_session');
 }
 
 async function enqueueFinalAnalysisAndNotification(req, sessionId) {
@@ -441,6 +461,11 @@ router.post('/ai-voice-interview/:token/realtime-session', async (req, res) => {
       realtimeSession = await createRealtimeSession();
     } catch (err) {
       if (err.code === 'openai_not_configured') {
+        return res.status(503).json({ error: 'realtime_not_available' });
+      }
+
+      if (err.status === 401 || err.status === 403) {
+        console.error('Realtime session rejected due to OpenAI authentication/authorization error:', err?.details || err);
         return res.status(503).json({ error: 'realtime_not_available' });
       }
 
