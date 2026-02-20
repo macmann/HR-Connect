@@ -9234,7 +9234,7 @@ function renderRecruitmentCandidates() {
       : '';
     const aiInterviewButton = candidate.applicationId && candidate.positionId
       ? `
-            <button type="button" class="md-button md-button--text md-button--small" data-action="send-ai-interview" data-application-id="${candidate.applicationId}" data-candidate-id="${candidate.id}">
+            <button type="button" class="md-button md-button--text md-button--small" data-action="send-ai-interview" data-ai-interview-mode="text" data-application-id="${candidate.applicationId}" data-candidate-id="${candidate.id}">
               <span class="material-symbols-rounded">smart_toy</span>
               Send AI Interview
             </button>`
@@ -9735,6 +9735,14 @@ function normalizeAiInterviewFeatureConfig(payload) {
   };
 }
 
+function getValidatedAiInterviewMode(preferredMode) {
+  const normalizedPreferredMode = String(preferredMode || '').toLowerCase();
+  if (normalizedPreferredMode === 'voice' && aiInterviewFeatureConfig?.voiceInterviewEnabled) {
+    return 'voice';
+  }
+  return 'text';
+}
+
 async function loadAiInterviewFeatureConfig(options = {}) {
   const { force = false } = options;
 
@@ -9766,30 +9774,16 @@ async function loadAiInterviewFeatureConfig(options = {}) {
   return aiInterviewFeatureConfigLoading;
 }
 
-async function resolveAiInterviewMode(preferredMode) {
-  const normalizedPreferredMode = String(preferredMode || '').toLowerCase();
-  if (normalizedPreferredMode === 'text' || normalizedPreferredMode === 'voice') {
-    return normalizedPreferredMode;
-  }
-
-  const config = await loadAiInterviewFeatureConfig();
-  if (!config?.voiceInterviewEnabled) {
-    return 'text';
-  }
-
-  const wantsVoice = window.confirm('Send a voice AI interview?\n\nSelect OK for Voice interview, or Cancel for Text interview.');
-  return wantsVoice ? 'voice' : 'text';
-}
-
 async function createAiInterviewSession(applicationId, triggerButton, candidateId, preferredMode) {
   if (!applicationId) return;
   const button = triggerButton || null;
   if (button) button.disabled = true;
   try {
+    await loadAiInterviewFeatureConfig();
     const res = await apiFetch('/api/hr/ai-interview/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ applicationId, mode: await resolveAiInterviewMode(preferredMode) })
+      body: JSON.stringify({ applicationId, mode: getValidatedAiInterviewMode(preferredMode) })
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
@@ -9843,7 +9837,9 @@ async function onCandidateAiPanelClick(ev) {
     const applicationId = sendBtn.getAttribute('data-application-id');
     const candidateId = sendBtn.getAttribute('data-candidate-id');
     if (applicationId) {
-      await createAiInterviewSession(applicationId, sendBtn, candidateId, sendBtn.getAttribute('data-ai-interview-mode'));
+      const modeSelect = sendBtn.closest('[data-ai-interview-compose]')?.querySelector('[data-ai-interview-mode-select]');
+      const selectedMode = modeSelect ? modeSelect.value : 'text';
+      await createAiInterviewSession(applicationId, sendBtn, candidateId, selectedMode);
     }
     return;
   }
@@ -10403,25 +10399,30 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
   const actions = [];
 
   if (!data || data.hasSession === false) {
+    const voiceAvailable = aiInterviewFeatureConfig?.voiceInterviewEnabled === true;
+    const voiceUnavailableReason = aiInterviewFeatureConfig?.voiceInterviewFeatureFlagEnabled === false
+      ? 'Voice mode is disabled by feature flag.'
+      : aiInterviewFeatureConfig?.voiceInterviewOpenAiConfigured === false
+      ? 'Voice mode requires OpenAI configuration.'
+      : 'Voice mode is currently unavailable.';
     contentEl.innerHTML = '<p class="text-xs text-gray-700">AI Interview not sent yet.</p>';
     actions.push(
-      `<button type="button" class="md-button md-button--filled md-button--small" data-action="ai-send-interview" data-ai-interview-mode="text" data-application-id="${
-        candidate.applicationId
-      }" data-candidate-id="${candidate.id}">
-        <span class="material-symbols-rounded">smart_toy</span>
-        Send Text AI Interview
-      </button>`
-    );
-
-    if (aiInterviewFeatureConfig?.voiceInterviewEnabled) {
-      actions.push(
-        `<button type="button" class="md-button md-button--outlined md-button--small" data-action="ai-send-interview" data-ai-interview-mode="voice" data-application-id="${
+      `<div class="flex flex-wrap items-end gap-2" data-ai-interview-compose>
+        <label class="text-xs text-gray-700" for="candidate-ai-interview-mode-${candidate.id}">Interview mode</label>
+        <select id="candidate-ai-interview-mode-${candidate.id}" class="md-select" data-ai-interview-mode-select>
+          <option value="text" selected>Text</option>
+          <option value="voice" ${voiceAvailable ? '' : 'disabled'}>${voiceAvailable ? 'Voice' : 'Voice (unavailable)'}</option>
+        </select>
+        <button type="button" class="md-button md-button--filled md-button--small" data-action="ai-send-interview" data-application-id="${
           candidate.applicationId
         }" data-candidate-id="${candidate.id}">
-          <span class="material-symbols-rounded">mic</span>
-          Send Voice AI Interview
-        </button>`
-      );
+          <span class="material-symbols-rounded">smart_toy</span>
+          Send AI Interview
+        </button>
+      </div>`
+    );
+    if (!voiceAvailable) {
+      actions.push(`<p class="text-xs text-muted">${escapeHtml(voiceUnavailableReason)}</p>`);
     }
     actionsEl.innerHTML = actions.join('');
     return;
