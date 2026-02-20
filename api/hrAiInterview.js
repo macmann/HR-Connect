@@ -107,10 +107,19 @@ router.get('/ai-interview/application/:applicationId', async (req, res) => {
         ? {
             scores: result.scores,
             verdict: result.verdict,
+            mode: result.mode,
             summary: result.summary,
             strengths: result.strengths,
             risks: result.risks,
             recommendedNextSteps: result.recommendedNextSteps,
+            evidence: result.evidence,
+            timeline: result.timeline,
+            rubricVersion: result.rubricVersion,
+            scoringVersion: result.scoringVersion,
+            voiceSummary: result.voiceSummary,
+            transcriptTurns: result.transcriptTurns,
+            highlights: result.highlights,
+            evidenceQuotes: result.evidenceQuotes,
             createdAt: result.createdAt
           }
         : null
