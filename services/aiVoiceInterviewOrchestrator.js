@@ -47,7 +47,7 @@ function score_answer({ session, turn }) {
   const assessment = scoreAnswer({
     answerText: turn?.text || '',
     competency,
-    turnId: turn?.id || null,
+    turnId: turn?.turnId || turn?.id || null,
     questionId,
     difficulty: orchestration.difficulty
   });

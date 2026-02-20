@@ -164,16 +164,38 @@ async function findVoiceSession(token) {
 
 function normalizeTranscriptTurn(turn, index) {
   if (!turn || typeof turn !== 'object') return null;
-  const text = typeof turn.text === 'string' ? turn.text.trim() : '';
+  const textSource =
+    typeof turn.text === 'string'
+      ? turn.text
+      : typeof turn.content === 'string'
+      ? turn.content
+      : typeof turn.utterance === 'string'
+      ? turn.utterance
+      : '';
+  const text = textSource.trim();
   if (!text) return null;
   if (text.length > TRANSCRIPT_MAX_TEXT_LENGTH) return null;
 
+  const turnId =
+    (typeof turn.turnId === 'string' && turn.turnId.trim()) ||
+    (typeof turn.id === 'string' && turn.id.trim()) ||
+    `turn_${Date.now()}_${index}`;
+
+  const startedAt = turn.startedAt || turn.timestamp || turn.time || new Date().toISOString();
+  const endedAt = turn.endedAt || startedAt;
+
+  const confidence = Number(turn.confidence);
+
   return {
-    id: turn.id || `turn_${Date.now()}_${index}`,
+    turnId,
+    id: turn.id || turnId,
     role: typeof turn.role === 'string' ? turn.role : 'candidate',
     text,
     finalized: true,
-    timestamp: turn.timestamp || new Date().toISOString(),
+    startedAt,
+    endedAt,
+    timestamp: turn.timestamp || startedAt,
+    ...(Number.isFinite(confidence) ? { confidence } : {}),
     meta: turn.meta && typeof turn.meta === 'object' ? turn.meta : undefined
   };
 }

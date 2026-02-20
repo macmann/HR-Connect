@@ -10502,17 +10502,21 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
 
     if (mode === 'voice') {
       const transcriptTurns = Array.isArray(data.voice?.transcriptTurns) ? [...data.voice.transcriptTurns] : [];
+      const getTurnId = turn => turn?.turnId || turn?.id || '';
+      const getTurnStartedAt = turn => Date.parse(turn?.startedAt || turn?.timestamp || turn?.time || '') || 0;
       transcriptTurns.sort((a, b) => {
-        const aTime = Date.parse(a?.timestamp || a?.time || '') || 0;
-        const bTime = Date.parse(b?.timestamp || b?.time || '') || 0;
-        return aTime - bTime;
+        const aTime = getTurnStartedAt(a);
+        const bTime = getTurnStartedAt(b);
+        if (aTime !== bTime) return aTime - bTime;
+        return String(getTurnId(a)).localeCompare(String(getTurnId(b)));
       });
       const transcriptHtml = transcriptTurns.length
         ? transcriptTurns
             .map((turn, index) => {
               const role = turn?.role ? String(turn.role) : 'Unknown';
               const text = turn?.text || turn?.content || turn?.utterance || '';
-              return `<li class="py-1 border-b border-gray-100 last:border-b-0"><span class="font-semibold text-gray-800">${escapeHtml(
+              const turnId = getTurnId(turn);
+              return `<li class="py-1 border-b border-gray-100 last:border-b-0"${turnId ? ` data-turn-id="${escapeHtml(String(turnId))}"` : ''}><span class="font-semibold text-gray-800">${escapeHtml(
                 role
               )}:</span> <span class="text-gray-700">${escapeHtml(String(text || `Turn ${index + 1}`))}</span></li>`;
             })

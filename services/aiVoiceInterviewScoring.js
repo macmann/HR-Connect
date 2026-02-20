@@ -55,7 +55,14 @@ function pickDifficulty(currentDifficulty, score) {
   return currentDifficulty || 'medium';
 }
 
-function scoreAnswer({ answerText, competency, turnId, questionId, difficulty }) {
+function resolveTurnId(turnId, legacyTurnId) {
+  const primary = typeof turnId === 'string' ? turnId.trim() : '';
+  if (primary) return primary;
+  const fallback = typeof legacyTurnId === 'string' ? legacyTurnId.trim() : '';
+  return fallback || null;
+}
+
+function scoreAnswer({ answerText, competency, turnId, id, questionId, difficulty }) {
   const normalizedAnswer = normalizeText(answerText);
   const wordCount = normalizedAnswer ? normalizedAnswer.split(/\s+/).length : 0;
 
@@ -68,17 +75,18 @@ function scoreAnswer({ answerText, competency, turnId, questionId, difficulty })
   }
 
   const finalScore = clampScore(baseScore);
+  const resolvedTurnId = resolveTurnId(turnId, id);
 
   return {
     score: finalScore,
     competency: competency || 'general',
     questionId: questionId || null,
-    turnId: turnId || null,
+    turnId: resolvedTurnId,
     assessedAt: new Date(),
     difficultyAfter: pickDifficulty(difficulty, finalScore),
     evidenceCandidate: {
       quote: quoteFromAnswer(normalizedAnswer),
-      turnId: turnId || null,
+      turnId: resolvedTurnId,
       competency: competency || 'general',
       questionId: questionId || null,
       score: finalScore
