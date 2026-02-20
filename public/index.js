@@ -10322,6 +10322,26 @@ function getAiInterviewMode(info) {
   return String(rawMode || '').toLowerCase() === 'voice' ? 'voice' : 'text';
 }
 
+function formatVoiceEvidenceItem(item) {
+  if (typeof item === 'string') return item;
+  if (!item || typeof item !== 'object') return '';
+
+  const quote =
+    (typeof item.quote === 'string' && item.quote.trim()) ||
+    (typeof item.text === 'string' && item.text.trim()) ||
+    (typeof item.snippet === 'string' && item.snippet.trim()) ||
+    '';
+  const competency =
+    (typeof item.competency === 'string' && item.competency.trim()) ||
+    (typeof item.category === 'string' && item.category.trim()) ||
+    (typeof item.dimension === 'string' && item.dimension.trim()) ||
+    '';
+
+  if (quote && competency) return `${competency}: ${quote}`;
+  if (quote) return quote;
+  return competency;
+}
+
 function normalizeAiInterviewData(payload) {
   const base = payload && typeof payload === 'object' ? payload : {};
   const mode = getAiInterviewMode(base);
@@ -10330,7 +10350,9 @@ function normalizeAiInterviewData(payload) {
   const result = base.result && typeof base.result === 'object' ? { ...base.result } : null;
 
   const resultHighlights = Array.isArray(result?.highlights) ? result.highlights : [];
-  const resultEvidence = Array.isArray(result?.evidenceQuotes) ? result.evidenceQuotes : [];
+  const resultEvidenceQuotes = Array.isArray(result?.evidenceQuotes) ? result.evidenceQuotes : [];
+  const resultEvidence = Array.isArray(result?.evidence) ? result.evidence : [];
+  const rawVoiceEvidence = Array.isArray(rawVoice.evidence) ? rawVoice.evidence : [];
 
   const voice = {
     ...rawVoice,
@@ -10345,8 +10367,15 @@ function normalizeAiInterviewData(payload) {
       : resultHighlights,
     evidenceQuotes: Array.isArray(rawVoice.evidenceQuotes)
       ? rawVoice.evidenceQuotes
-      : resultEvidence
+      : resultEvidenceQuotes,
+    evidence: rawVoiceEvidence.length ? rawVoiceEvidence : resultEvidence
   };
+
+  voice.evidenceEntries = [
+    ...(Array.isArray(voice.highlights) ? voice.highlights : []),
+    ...(Array.isArray(voice.evidenceQuotes) ? voice.evidenceQuotes : []),
+    ...(Array.isArray(voice.evidence) ? voice.evidence : [])
+  ];
 
   if (result) {
     result.metadata = {
@@ -10524,12 +10553,19 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
             .join('')
         : '<li class="text-muted">No transcript turns available.</li>';
 
-      const evidenceItems = [
-        ...(Array.isArray(data.voice?.highlights) ? data.voice.highlights : []),
-        ...(Array.isArray(data.voice?.evidenceQuotes) ? data.voice.evidenceQuotes : [])
-      ];
+      const evidenceItems = Array.isArray(data.voice?.evidenceEntries)
+        ? data.voice.evidenceEntries
+        : [
+            ...(Array.isArray(data.voice?.highlights) ? data.voice.highlights : []),
+            ...(Array.isArray(data.voice?.evidenceQuotes) ? data.voice.evidenceQuotes : []),
+            ...(Array.isArray(data.voice?.evidence) ? data.voice.evidence : [])
+          ];
       const evidenceHtml = evidenceItems.length
-        ? evidenceItems.map(item => `<li>${escapeHtml(String(item))}</li>`).join('')
+        ? evidenceItems
+            .map(item => formatVoiceEvidenceItem(item))
+            .filter(Boolean)
+            .map(item => `<li>${escapeHtml(item)}</li>`)
+            .join('')
         : '<li class="text-muted">No highlights or evidence quotes available.</li>';
 
       html += `
