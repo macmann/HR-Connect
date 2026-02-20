@@ -1,0 +1,464 @@
+const express = require('express');
+const { getDatabase } = require('../db');
+const { analyzeInterviewResponses } = require('../openaiClient');
+
+const router = express.Router();
+
+const DEFAULT_RECRUITER_EMAIL = process.env.RECRUITER_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || null;
+const REALTIME_MODEL = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2024-12-17';
+const REALTIME_VOICE = process.env.OPENAI_REALTIME_VOICE || 'alloy';
+const REALTIME_TRANSCRIPTION_MODEL = process.env.OPENAI_REALTIME_TRANSCRIPTION_MODEL || 'gpt-4o-mini-transcribe';
+const REALTIME_SESSION_RATE_LIMIT_MAX = Number(process.env.PUBLIC_AI_REALTIME_RATE_LIMIT_MAX || 6);
+const REALTIME_SESSION_RATE_LIMIT_WINDOW_MS = Number(process.env.PUBLIC_AI_REALTIME_RATE_LIMIT_WINDOW_MS || 60 * 1000);
+
+const realtimeSessionRateLimitState = new Map();
+
+function normalizeSessionMode(mode) {
+  return mode === 'voice' ? 'voice' : 'text';
+}
+
+function buildCandidateName(candidate) {
+  if (!candidate) return null;
+  const nameParts = [];
+  if (candidate.firstName) {
+    nameParts.push(candidate.firstName);
+  }
+  if (candidate.lastName) {
+    nameParts.push(candidate.lastName);
+  }
+  const combined = nameParts.join(' ').trim();
+  if (combined) return combined;
+  if (candidate.name) return candidate.name;
+  if (candidate.fullName) return candidate.fullName;
+  if (candidate.email) return candidate.email;
+  return null;
+}
+
+function deriveQuestionId(question, index) {
+  return question?.id || question?.questionId || question?._id?.toString?.() || `q${index + 1}`;
+}
+
+function mapQuestions(questions) {
+  if (!Array.isArray(questions)) return [];
+  return questions.map((q, index) => ({
+    id: deriveQuestionId(q, index),
+    text: q.text || q.question || ''
+  }));
+}
+
+function buildVoiceDefaults(voice) {
+  return {
+    startedAt: voice?.startedAt || null,
+    endedAt: voice?.endedAt || null,
+    durationSec: Number.isFinite(voice?.durationSec) ? voice.durationSec : null,
+    transcriptTurns: Array.isArray(voice?.transcriptTurns) ? voice.transcriptTurns : [],
+    artifacts: voice?.artifacts || null
+  };
+}
+
+function getClientIp(req) {
+  return (
+    req.headers['x-forwarded-for']?.split(',')?.[0]?.trim() ||
+    req.ip ||
+    req.socket?.remoteAddress ||
+    'unknown'
+  );
+}
+
+function isRateLimited(rateKey) {
+  const now = Date.now();
+  const entry = realtimeSessionRateLimitState.get(rateKey);
+
+  if (!entry) {
+    realtimeSessionRateLimitState.set(rateKey, { count: 1, firstSeenAtMs: now });
+    return false;
+  }
+
+  if (now - entry.firstSeenAtMs > REALTIME_SESSION_RATE_LIMIT_WINDOW_MS) {
+    realtimeSessionRateLimitState.set(rateKey, { count: 1, firstSeenAtMs: now });
+    return false;
+  }
+
+  entry.count += 1;
+  realtimeSessionRateLimitState.set(rateKey, entry);
+  return entry.count > REALTIME_SESSION_RATE_LIMIT_MAX;
+}
+
+function buildRecruiterNotificationLines({ candidateName, positionTitle, candidateEmail, result }) {
+  const lines = [
+    'Hi team,',
+    `${candidateName || 'The candidate'} has completed the AI voice interview for ${positionTitle || 'the position'}.`,
+    result?.verdict ? `Verdict: ${result.verdict}` : 'Verdict: Not provided.'
+  ];
+
+  const scores = result?.scores || {};
+  const scoreLines = [];
+  if (scores.overall != null) scoreLines.push(`Overall: ${scores.overall} / 5`);
+  if (scores.communication != null) scoreLines.push(`Communication: ${scores.communication}`);
+  if (scores.technical != null) scoreLines.push(`Technical: ${scores.technical}`);
+  if (scores.cultureFit != null) scoreLines.push(`Culture Fit: ${scores.cultureFit}`);
+
+  if (scoreLines.length) {
+    lines.push('', 'Scores:', ...scoreLines);
+  }
+
+  if (candidateEmail) {
+    lines.push('', `Candidate email: ${candidateEmail}`);
+  }
+
+  lines.push('', 'Review the full feedback in the HR Portal to move the candidate forward.');
+  return lines;
+}
+
+async function notifyRecruiterOfCompletion(req, { candidateName, positionTitle, candidateEmail, result }) {
+  const sendEmail = req.app?.locals?.sendEmail;
+  if (typeof sendEmail !== 'function' || !DEFAULT_RECRUITER_EMAIL) return false;
+
+  const subject = `AI interview completed: ${candidateName || 'Candidate'}`;
+  const body = buildRecruiterNotificationLines({ candidateName, positionTitle, candidateEmail, result }).join('\n');
+
+  try {
+    await sendEmail(DEFAULT_RECRUITER_EMAIL, subject, body);
+    return true;
+  } catch (err) {
+    console.error('Failed to notify recruiter about AI voice interview completion:', err);
+    return false;
+  }
+}
+
+async function findVoiceSession(token) {
+  const db = getDatabase();
+  const session = await db.collection('ai_interview_sessions').findOne({ token });
+
+  if (!session) {
+    return { error: 'session_not_found', status: 404 };
+  }
+
+  if (normalizeSessionMode(session.mode) !== 'voice') {
+    return { error: 'session_mode_mismatch', status: 400 };
+  }
+
+  return { db, session };
+}
+
+function normalizeTranscriptTurn(turn, index) {
+  if (!turn || typeof turn !== 'object') return null;
+  const text = typeof turn.text === 'string' ? turn.text.trim() : '';
+  if (!text) return null;
+
+  return {
+    id: turn.id || `turn_${Date.now()}_${index}`,
+    role: typeof turn.role === 'string' ? turn.role : 'candidate',
+    text,
+    finalized: true,
+    timestamp: turn.timestamp || new Date().toISOString(),
+    meta: turn.meta && typeof turn.meta === 'object' ? turn.meta : undefined
+  };
+}
+
+function toDate(input) {
+  if (!input) return null;
+  const value = input instanceof Date ? input : new Date(input);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
+async function createRealtimeSession() {
+  if (!process.env.OPENAI_API_KEY) {
+    const err = new Error('openai_not_configured');
+    err.code = 'openai_not_configured';
+    throw err;
+  }
+
+  const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: REALTIME_MODEL,
+      voice: REALTIME_VOICE,
+      modalities: ['audio', 'text'],
+      input_audio_transcription: {
+        model: REALTIME_TRANSCRIPTION_MODEL
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    const err = new Error('failed_to_create_realtime_session');
+    err.code = 'realtime_session_create_failed';
+    err.details = body;
+    throw err;
+  }
+
+  return await response.json();
+}
+
+async function enqueueFinalAnalysisAndNotification(req, sessionId) {
+  setImmediate(async () => {
+    try {
+      const db = getDatabase();
+      const session = await db.collection('ai_interview_sessions').findOne({ _id: sessionId });
+      if (!session || session.aiResultId) return;
+
+      const questions = mapQuestions(session.aiInterviewQuestions);
+      const transcriptTurns = Array.isArray(session.voice?.transcriptTurns)
+        ? session.voice.transcriptTurns
+        : [];
+
+      const candidateAnswers = transcriptTurns
+        .filter(turn => turn.role === 'candidate' && typeof turn.text === 'string' && turn.text.trim())
+        .map((turn, index) => ({
+          questionId: questions[index]?.id || `voice_q${index + 1}`,
+          answerText: turn.text.trim()
+        }));
+
+      if (!candidateAnswers.length) return;
+
+      const candidate = await db.collection('candidates').findOne({ _id: session.candidateId });
+      const position = await db.collection('positions').findOne({ _id: session.positionId });
+
+      const payload = {
+        positionTitle: position?.title || session.positionTitle,
+        positionDescription: position?.description,
+        candidateName: buildCandidateName(candidate),
+        questions,
+        answers: candidateAnswers
+      };
+
+      const analysis = await analyzeInterviewResponses(payload);
+      const { result, raw } = analysis;
+
+      const aiResultDoc = {
+        sessionId: session._id,
+        applicationId: session.applicationId,
+        candidateId: session.candidateId,
+        positionId: session.positionId,
+        scores: result.scores || {},
+        verdict: result.verdict || 'hold',
+        summary: result.summary || '',
+        strengths: result.strengths || [],
+        risks: result.risks || [],
+        recommendedNextSteps: result.recommendedNextSteps || [],
+        rawModelResponse: raw,
+        createdAt: new Date()
+      };
+
+      const insertResult = await db.collection('ai_interview_results').insertOne(aiResultDoc);
+
+      await db.collection('ai_interview_sessions').updateOne(
+        { _id: session._id },
+        {
+          $set: {
+            aiResultId: insertResult.insertedId,
+            analysisStatus: 'completed',
+            analysisCompletedAt: new Date()
+          }
+        }
+      );
+
+      await notifyRecruiterOfCompletion(req, {
+        candidateName: buildCandidateName(candidate),
+        positionTitle: position?.title || session.positionTitle,
+        candidateEmail: candidate?.email || null,
+        result: result || {}
+      });
+    } catch (err) {
+      console.error('Failed to process final voice interview analysis:', err);
+      try {
+        const db = getDatabase();
+        await db.collection('ai_interview_sessions').updateOne(
+          { _id: sessionId },
+          {
+            $set: {
+              analysisStatus: 'failed',
+              analysisFailedAt: new Date(),
+              analysisFailureReason: err?.message || 'unknown_analysis_error'
+            }
+          }
+        );
+      } catch (updateErr) {
+        console.error('Failed to update analysis failure state:', updateErr);
+      }
+    }
+  });
+}
+
+router.get('/ai-voice-interview/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const lookup = await findVoiceSession(token);
+
+    if (lookup.error) {
+      return res.status(lookup.status).json({ error: lookup.error });
+    }
+
+    const { db, session } = lookup;
+
+    const [candidate, position] = await Promise.all([
+      db.collection('candidates').findOne({ _id: session.candidateId }),
+      db.collection('positions').findOne({ _id: session.positionId })
+    ]);
+
+    return res.json({
+      status: session.status || 'pending',
+      candidateName: buildCandidateName(candidate) || 'Candidate',
+      candidateEmail: candidate?.email || null,
+      positionTitle: position?.title || session.positionTitle || 'Role',
+      templateTitle: session.templateTitle || position?.title || 'AI Voice Interview',
+      realtimeConfig: {
+        model: REALTIME_MODEL,
+        voice: REALTIME_VOICE,
+        transcriptionModel: REALTIME_TRANSCRIPTION_MODEL
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching AI voice interview session:', err);
+    return res.status(500).json({ error: 'failed_to_fetch_session' });
+  }
+});
+
+router.post('/ai-voice-interview/:token/realtime-session', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const lookup = await findVoiceSession(token);
+
+    if (lookup.error) {
+      return res.status(lookup.status).json({ error: lookup.error });
+    }
+
+    const { session } = lookup;
+
+    if (session.status === 'completed') {
+      return res.status(400).json({ error: 'session_already_completed' });
+    }
+
+    const rateKey = `${token}:${getClientIp(req)}`;
+    if (isRateLimited(rateKey)) {
+      return res.status(429).json({ error: 'realtime_session_rate_limited' });
+    }
+
+    let realtimeSession;
+    try {
+      realtimeSession = await createRealtimeSession();
+    } catch (err) {
+      if (err.code === 'openai_not_configured') {
+        return res.status(503).json({ error: 'realtime_not_available' });
+      }
+
+      console.error('Error creating realtime session:', err?.details || err);
+      return res.status(502).json({ error: 'failed_to_create_realtime_session' });
+    }
+
+    return res.status(201).json({
+      client_secret: realtimeSession?.client_secret || null,
+      expires_at: realtimeSession?.expires_at || null,
+      session: {
+        id: realtimeSession?.id || null,
+        model: realtimeSession?.model || REALTIME_MODEL,
+        voice: realtimeSession?.voice || REALTIME_VOICE
+      }
+    });
+  } catch (err) {
+    console.error('Error issuing realtime credentials:', err);
+    return res.status(500).json({ error: 'failed_to_issue_realtime_credentials' });
+  }
+});
+
+router.post('/ai-voice-interview/:token/transcript', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const lookup = await findVoiceSession(token);
+
+    if (lookup.error) {
+      return res.status(lookup.status).json({ error: lookup.error });
+    }
+
+    const { db, session } = lookup;
+
+    if (session.status === 'completed') {
+      return res.status(400).json({ error: 'session_already_completed' });
+    }
+
+    const incomingTurns = Array.isArray(req.body?.turns)
+      ? req.body.turns
+      : req.body?.turn
+        ? [req.body.turn]
+        : [];
+
+    const finalizedTurns = incomingTurns
+      .filter(turn => turn?.finalized !== false)
+      .map(normalizeTranscriptTurn)
+      .filter(Boolean);
+
+    if (!finalizedTurns.length) {
+      return res.status(400).json({ error: 'finalized_turns_required' });
+    }
+
+    const now = new Date();
+    const shouldMarkStarted = !session.voice?.startedAt;
+
+    await db.collection('ai_interview_sessions').updateOne(
+      { _id: session._id },
+      {
+        $push: { 'voice.transcriptTurns': { $each: finalizedTurns } },
+        $set: {
+          status: session.status === 'pending' || session.status === 'sent' ? 'started' : session.status,
+          ...(shouldMarkStarted ? { startedAt: now, 'voice.startedAt': now } : {})
+        }
+      }
+    );
+
+    return res.status(201).json({ appended: finalizedTurns.length });
+  } catch (err) {
+    console.error('Error appending voice transcript turns:', err);
+    return res.status(500).json({ error: 'failed_to_append_transcript' });
+  }
+});
+
+router.post('/ai-voice-interview/:token/complete', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const lookup = await findVoiceSession(token);
+
+    if (lookup.error) {
+      return res.status(lookup.status).json({ error: lookup.error });
+    }
+
+    const { db, session } = lookup;
+
+    if (session.status === 'completed') {
+      return res.json({ success: true, alreadyCompleted: true });
+    }
+
+    const now = new Date();
+    const startedAt = toDate(session.voice?.startedAt || session.startedAt) || now;
+    const durationSec = Math.max(0, Math.round((now.getTime() - startedAt.getTime()) / 1000));
+
+    await db.collection('ai_interview_sessions').updateOne(
+      { _id: session._id, status: { $ne: 'completed' } },
+      {
+        $set: {
+          status: 'completed',
+          completedAt: now,
+          'voice.startedAt': startedAt,
+          'voice.endedAt': now,
+          'voice.durationSec': durationSec,
+          analysisStatus: 'queued',
+          analysisQueuedAt: now
+        }
+      }
+    );
+
+    await enqueueFinalAnalysisAndNotification(req, session._id);
+
+    return res.json({ success: true, status: 'completed', durationSec });
+  } catch (err) {
+    console.error('Error completing AI voice interview session:', err);
+    return res.status(500).json({ error: 'failed_to_complete_session' });
+  }
+});
+
+module.exports = router;
