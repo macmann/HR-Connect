@@ -6,6 +6,8 @@ const {
   scoreAnswer
 } = require('./aiVoiceInterviewScoring');
 
+const PROMPT_VERSION = process.env.PUBLIC_AI_VOICE_PROMPT_VERSION || 'voice-prompt-v1';
+
 function toDate(input) {
   if (!input) return null;
   const value = input instanceof Date ? input : new Date(input);
@@ -22,6 +24,7 @@ function buildInitialOrchestration(session) {
     startedAt: existing.startedAt || session?.voice?.startedAt || session?.startedAt || null,
     endedAt: existing.endedAt || null,
     durationSec: Number.isFinite(existing.durationSec) ? existing.durationSec : null,
+    promptVersion: existing.promptVersion || PROMPT_VERSION,
     rubricVersion: existing.rubricVersion || RUBRIC_VERSION,
     scoringVersion: existing.scoringVersion || SCORING_VERSION,
     coverage: existing.coverage && typeof existing.coverage === 'object' ? existing.coverage : {},

@@ -16,8 +16,14 @@ const REALTIME_VOICE = process.env.OPENAI_REALTIME_VOICE || 'alloy';
 const REALTIME_TRANSCRIPTION_MODEL = process.env.OPENAI_REALTIME_TRANSCRIPTION_MODEL || 'gpt-4o-mini-transcribe';
 const REALTIME_SESSION_RATE_LIMIT_MAX = Number(process.env.PUBLIC_AI_REALTIME_RATE_LIMIT_MAX || 6);
 const REALTIME_SESSION_RATE_LIMIT_WINDOW_MS = Number(process.env.PUBLIC_AI_REALTIME_RATE_LIMIT_WINDOW_MS || 60 * 1000);
+const TRANSCRIPT_RATE_LIMIT_MAX = Number(process.env.PUBLIC_AI_TRANSCRIPT_RATE_LIMIT_MAX || 30);
+const TRANSCRIPT_RATE_LIMIT_WINDOW_MS = Number(process.env.PUBLIC_AI_TRANSCRIPT_RATE_LIMIT_WINDOW_MS || 60 * 1000);
+const TRANSCRIPT_MAX_TURNS_PER_BATCH = Number(process.env.PUBLIC_AI_TRANSCRIPT_MAX_TURNS_PER_BATCH || 20);
+const TRANSCRIPT_MAX_TEXT_LENGTH = Number(process.env.PUBLIC_AI_TRANSCRIPT_MAX_TEXT_LENGTH || 4_000);
+const PROMPT_VERSION = process.env.PUBLIC_AI_VOICE_PROMPT_VERSION || 'voice-prompt-v1';
 
 const realtimeSessionRateLimitState = new Map();
+const transcriptRateLimitState = new Map();
 
 function normalizeSessionMode(mode) {
   return mode === 'voice' ? 'voice' : 'text';
@@ -71,23 +77,23 @@ function getClientIp(req) {
   );
 }
 
-function isRateLimited(rateKey) {
+function isRateLimited({ rateState, rateKey, maxRequests, windowMs }) {
   const now = Date.now();
-  const entry = realtimeSessionRateLimitState.get(rateKey);
+  const entry = rateState.get(rateKey);
 
   if (!entry) {
-    realtimeSessionRateLimitState.set(rateKey, { count: 1, firstSeenAtMs: now });
+    rateState.set(rateKey, { count: 1, firstSeenAtMs: now });
     return false;
   }
 
-  if (now - entry.firstSeenAtMs > REALTIME_SESSION_RATE_LIMIT_WINDOW_MS) {
-    realtimeSessionRateLimitState.set(rateKey, { count: 1, firstSeenAtMs: now });
+  if (now - entry.firstSeenAtMs > windowMs) {
+    rateState.set(rateKey, { count: 1, firstSeenAtMs: now });
     return false;
   }
 
   entry.count += 1;
-  realtimeSessionRateLimitState.set(rateKey, entry);
-  return entry.count > REALTIME_SESSION_RATE_LIMIT_MAX;
+  rateState.set(rateKey, entry);
+  return entry.count > maxRequests;
 }
 
 function buildRecruiterNotificationLines({ candidateName, positionTitle, candidateEmail, result }) {
@@ -151,6 +157,7 @@ function normalizeTranscriptTurn(turn, index) {
   if (!turn || typeof turn !== 'object') return null;
   const text = typeof turn.text === 'string' ? turn.text.trim() : '';
   if (!text) return null;
+  if (text.length > TRANSCRIPT_MAX_TEXT_LENGTH) return null;
 
   return {
     id: turn.id || `turn_${Date.now()}_${index}`,
@@ -184,6 +191,7 @@ async function createRealtimeSession() {
     body: JSON.stringify({
       model: REALTIME_MODEL,
       voice: REALTIME_VOICE,
+      expires_in: 120,
       modalities: ['audio', 'text'],
       input_audio_transcription: {
         model: REALTIME_TRANSCRIPTION_MODEL
@@ -309,8 +317,25 @@ router.post('/ai-voice-interview/:token/realtime-session', async (req, res) => {
       return res.status(400).json({ error: 'session_already_completed' });
     }
 
+    const existingRealtimeSession = session?.voice?.realtimeSession;
+    const existingRealtimeExpiry = existingRealtimeSession?.expiresAt ? new Date(existingRealtimeSession.expiresAt) : null;
+    if (existingRealtimeSession?.id && existingRealtimeExpiry && existingRealtimeExpiry.getTime() > Date.now()) {
+      return res.status(409).json({
+        error: 'active_realtime_session_exists',
+        session: {
+          id: existingRealtimeSession.id,
+          expires_at: Math.floor(existingRealtimeExpiry.getTime() / 1000)
+        }
+      });
+    }
+
     const rateKey = `${token}:${getClientIp(req)}`;
-    if (isRateLimited(rateKey)) {
+    if (isRateLimited({
+      rateState: realtimeSessionRateLimitState,
+      rateKey,
+      maxRequests: REALTIME_SESSION_RATE_LIMIT_MAX,
+      windowMs: REALTIME_SESSION_RATE_LIMIT_WINDOW_MS
+    })) {
       return res.status(429).json({ error: 'realtime_session_rate_limited' });
     }
 
@@ -326,11 +351,34 @@ router.post('/ai-voice-interview/:token/realtime-session', async (req, res) => {
       return res.status(502).json({ error: 'failed_to_create_realtime_session' });
     }
 
+    const sessionId = realtimeSession?.id || null;
+    const clientSecret = realtimeSession?.client_secret?.value || null;
+    if (!sessionId || !clientSecret) {
+      return res.status(502).json({ error: 'failed_to_create_realtime_session' });
+    }
+
+    await lookup.db.collection('ai_interview_sessions').updateOne(
+      { _id: session._id },
+      {
+        $set: {
+          'voice.realtimeSession': {
+            id: sessionId,
+            issuedAt: new Date(),
+            expiresAt: realtimeSession?.expires_at ? new Date(realtimeSession.expires_at * 1000) : null,
+            promptVersion: PROMPT_VERSION
+          }
+        }
+      }
+    );
+
     return res.status(201).json({
-      client_secret: realtimeSession?.client_secret || null,
+      client_secret: {
+        value: clientSecret,
+        expires_at: realtimeSession?.client_secret?.expires_at || realtimeSession?.expires_at || null
+      },
       expires_at: realtimeSession?.expires_at || null,
       session: {
-        id: realtimeSession?.id || null,
+        id: sessionId,
         model: realtimeSession?.model || REALTIME_MODEL,
         voice: realtimeSession?.voice || REALTIME_VOICE
       }
@@ -356,11 +404,30 @@ router.post('/ai-voice-interview/:token/transcript', async (req, res) => {
       return res.status(400).json({ error: 'session_already_completed' });
     }
 
+    const rateKey = `${token}:${getClientIp(req)}`;
+    if (isRateLimited({
+      rateState: transcriptRateLimitState,
+      rateKey,
+      maxRequests: TRANSCRIPT_RATE_LIMIT_MAX,
+      windowMs: TRANSCRIPT_RATE_LIMIT_WINDOW_MS
+    })) {
+      return res.status(429).json({ error: 'transcript_rate_limited' });
+    }
+
     const incomingTurns = Array.isArray(req.body?.turns)
       ? req.body.turns
       : req.body?.turn
         ? [req.body.turn]
         : [];
+
+    if (!incomingTurns.length || incomingTurns.length > TRANSCRIPT_MAX_TURNS_PER_BATCH) {
+      return res.status(400).json({ error: 'invalid_turn_batch_size' });
+    }
+
+    const oversizedTurn = incomingTurns.find(turn => typeof turn?.text === 'string' && turn.text.trim().length > TRANSCRIPT_MAX_TEXT_LENGTH);
+    if (oversizedTurn) {
+      return res.status(400).json({ error: 'turn_text_too_long' });
+    }
 
     const finalizedTurns = incomingTurns
       .filter(turn => turn?.finalized !== false)
@@ -393,6 +460,9 @@ router.post('/ai-voice-interview/:token/transcript', async (req, res) => {
         $set: {
           status: session.status === 'pending' || session.status === 'sent' ? 'started' : session.status,
           orchestration: orchestrationState,
+          'audit.promptVersion': orchestrationState.promptVersion || PROMPT_VERSION,
+          'audit.rubricVersion': orchestrationState.rubricVersion || null,
+          'audit.scoringVersion': orchestrationState.scoringVersion || null,
           ...(shouldMarkStarted ? { startedAt: now, 'voice.startedAt': now } : {})
         }
       }
@@ -429,7 +499,7 @@ router.post('/ai-voice-interview/:token/complete', async (req, res) => {
     const durationSec = Math.max(0, Math.round((now.getTime() - startedAt.getTime()) / 1000));
     const finalizedOrchestration = finalizeOrchestration({ session, endedAt: now });
 
-    await db.collection('ai_interview_sessions').updateOne(
+    const updateResult = await db.collection('ai_interview_sessions').updateOne(
       { _id: session._id, status: { $ne: 'completed' } },
       {
         $set: {
@@ -439,11 +509,25 @@ router.post('/ai-voice-interview/:token/complete', async (req, res) => {
           'voice.endedAt': now,
           'voice.durationSec': durationSec,
           orchestration: finalizedOrchestration,
+          'audit.promptVersion': finalizedOrchestration.promptVersion || PROMPT_VERSION,
+          'audit.rubricVersion': finalizedOrchestration.rubricVersion || null,
+          'audit.scoringVersion': finalizedOrchestration.scoringVersion || null,
           analysisStatus: 'queued',
           analysisQueuedAt: now
         }
       }
     );
+
+    if (!updateResult.modifiedCount) {
+      const currentSession = await db.collection('ai_interview_sessions').findOne({ _id: session._id });
+      const currentDuration = currentSession?.voice?.durationSec ?? durationSec;
+      return res.json({
+        success: true,
+        status: currentSession?.status || 'completed',
+        durationSec: currentDuration,
+        alreadyCompleted: currentSession?.status === 'completed'
+      });
+    }
 
     await enqueueFinalAnalysisAndNotification(req, session._id);
 

@@ -128,6 +128,7 @@ function buildVoiceResult({ session, candidateId, applicationId, positionId }) {
         ? orchestration.durationSec
         : session.voice?.durationSec ?? null
     },
+    promptVersion: orchestration.promptVersion || process.env.PUBLIC_AI_VOICE_PROMPT_VERSION || 'voice-prompt-v1',
     scoringVersion: orchestration.scoringVersion || SCORING_VERSION,
     rubricVersion: orchestration.rubricVersion || RUBRIC_VERSION,
     rawModelResponse: null,
