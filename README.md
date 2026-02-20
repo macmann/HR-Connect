@@ -84,27 +84,30 @@ It supports employee lifecycle workflows such as:
 
 ## New Features
 
-- **Unified Request Center**
-  - Added standardized request APIs (`/api/requests`) for cross-category employee requests.
-  - Includes manager-facing metrics endpoints and CSV export for operational reporting.
+- **AI Interview Modes (Text + Voice)**
+  - Added dual-mode AI interview sessions with selectable **text** or **voice** delivery.
+  - Added dedicated HR/public voice interview APIs and tokenized interview links for candidate handoff.
+  - Includes interview mode backfill tooling via `npm run backfill:ai-interview-mode` for existing records.
 
-- **Expanded Recruitment AI Tooling**
+- **Unified Employee Request Center**
+  - Added standardized request workflows under `/api/requests` for cross-category employee submissions.
+  - Includes manager metrics and CSV export endpoints for operational reporting.
+
+- **Recruitment AI Enhancements**
   - Added AI screening trigger endpoint for applications (`/applications/:applicationId/ai-screening/run`).
   - Added AI-generated interview question workflow per position (`/positions/:id/ai-questions/generate`).
-  - Added dedicated AI interview session APIs for HR and public interview handoff.
 
-- **Learning Hub Authoring + Assignment Ops**
-  - Added protected course CRUD and role-assignment CRUD APIs under `/api/learning-hub`.
-  - Added on-demand role assignment reconciliation endpoint and scheduled sync support.
-  - Added learning asset playback tracking service support for learner progress telemetry.
+- **Learning Hub Progress + Assignment Automation**
+  - Added protected course and role-assignment operations under `/api/learning-hub`.
+  - Added playback/progress telemetry for learning assets and scheduled role-assignment reconciliation.
 
-- **Organization + Career Branding Settings**
-  - Added public/private settings endpoints for organization profile, career page, and widget config.
-  - Supports runtime-managed branding and recruitment page content without redeploying.
+- **Organization and Career Settings APIs**
+  - Added public/private settings APIs for organization profile, career page content, and chat widget config.
+  - Supports runtime branding/content updates without redeploying.
 
-- **OpenAPI/Integration Discoverability**
-  - Added API documentation endpoints including `/api/openapi`, `/api/recruitmentopenAI`, and recruitment JSON docs.
-  - Improves integration with external tools, assistants, and internal automation workflows.
+- **Operational Reporting + API Discoverability**
+  - Added API documentation/discovery endpoints (for example `/api/openapi` and recruitment docs).
+  - Added generated performance-cycle reporting with PDF export support.
 
 ---
 
