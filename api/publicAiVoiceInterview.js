@@ -296,7 +296,6 @@ async function createRealtimeSession() {
       body: JSON.stringify({
         model,
         voice: REALTIME_CONFIG.voice,
-        expires_in: 120,
         modalities: ['audio', 'text'],
         input_audio_transcription: {
           model: REALTIME_CONFIG.transcriptionModel
