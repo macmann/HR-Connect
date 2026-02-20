@@ -163,14 +163,23 @@
 
       setStatus('connecting', 'Creating secure voice session...');
       const realtime = await requestRealtimeSession();
+      const transport = realtime?.transport || 'webrtc';
+      if (transport !== 'webrtc') {
+        const unsupportedTransportError = new Error(`unsupported_transport:${transport}`);
+        unsupportedTransportError.code = 'unsupported_transport';
+        unsupportedTransportError.transport = transport;
+        throw unsupportedTransportError;
+      }
+
       const ephemeralKey = realtime?.client_secret?.value;
       const model = realtime?.session?.model || state.metadata?.realtimeConfig?.model || 'gpt-4o-realtime-preview-2024-12-17';
+      const iceServers = Array.isArray(realtime?.iceServers) ? realtime.iceServers : [];
 
       if (!ephemeralKey) {
         throw new Error('missing_client_secret');
       }
 
-      const pc = new RTCPeerConnection();
+      const pc = new RTCPeerConnection({ iceServers });
       state.pc = pc;
       state.stream.getTracks().forEach(track => pc.addTrack(track, state.stream));
 
@@ -258,7 +267,13 @@
       setStatus('listening', 'Connected. Start speaking when ready.');
     } catch (err) {
       console.error('Failed to start voice interview', err);
-      setStatus('error', 'Unable to start voice interview. Please refresh and try again.');
+      if (err?.code === 'unsupported_transport') {
+        const transportLabel = err.transport || 'unknown';
+        setStatus('error', `This interview transport (${transportLabel}) is not supported in this browser session. Please contact support.`);
+      } else {
+        setStatus('error', 'Unable to start voice interview. Please refresh and try again.');
+      }
+      teardownConnection();
       startBtn.disabled = false;
     }
   }
