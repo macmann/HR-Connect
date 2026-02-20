@@ -9737,13 +9737,16 @@ async function createAiInterviewSession(applicationId, triggerButton, candidateI
       const message = data?.error || 'Failed to create AI interview session.';
       throw new Error(message);
     }
+    const mode = getAiInterviewMode(data);
+    const modeLabel = getAiInterviewModeLabel(mode);
     const path = data?.interviewPath || '';
     const candidateEmail = data?.candidateEmail || '';
     const details = [];
+    details.push(`Mode: ${modeLabel}`);
     if (path) details.push(`Link: ${path}`);
     if (candidateEmail) details.push(`Candidate Email: ${candidateEmail}`);
     const info = details.length ? `\n${details.join('\n')}` : '';
-    alert(`AI Interview session created.${info}`);
+    alert(`AI Interview session created (${modeLabel}).${info}`);
     aiInterviewCache.delete(applicationId);
     if (candidateId && recruitmentActiveDetailsCandidateId == candidateId) {
       const candidate = getCachedCandidate(candidateId);
@@ -10218,29 +10221,94 @@ function refreshCandidateDetailsModal() {
 }
 
 function formatAiInterviewStatus(info) {
+  const mode = getAiInterviewMode(info);
+  const modeLabel = getAiInterviewModeLabel(mode);
+
   if (!info || info.hasSession === false) {
-    return { label: 'Not sent', description: 'Send the AI interview to notify the candidate.' };
+    return {
+      label: `Not sent (${modeLabel})`,
+      description: `Send the ${modeLabel.toLowerCase()} AI interview to notify the candidate.`
+    };
   }
 
   const sessionStatus = info.session?.status;
 
   if (info.result) {
     return {
-      label: 'Completed',
-      description: 'Candidate completed the AI interview and analysis is ready.'
+      label: `Completed (${modeLabel})`,
+      description: `Candidate completed the ${modeLabel.toLowerCase()} AI interview and analysis is ready.`
     };
   }
 
   if (sessionStatus === 'completed') {
     return {
-      label: 'Completed',
-      description: 'Candidate finished their interview. AI analysis will appear once ready.'
+      label: `Completed (${modeLabel})`,
+      description: `Candidate finished the ${modeLabel.toLowerCase()} interview. AI analysis will appear once ready.`
     };
   }
 
   return {
-    label: 'AI Interview Sent',
-    description: 'Waiting for the candidate to finish the interview.'
+    label: `AI Interview Sent (${modeLabel})`,
+    description: `Waiting for the candidate to finish the ${modeLabel.toLowerCase()} interview.`
+  };
+}
+
+function getAiInterviewModeLabel(mode) {
+  return mode === 'voice' ? 'Voice' : 'Text';
+}
+
+function getAiInterviewMode(info) {
+  const rawMode =
+    info?.session?.mode ||
+    info?.mode ||
+    info?.voice?.mode ||
+    info?.result?.mode ||
+    info?.result?.metadata?.mode;
+  return String(rawMode || '').toLowerCase() === 'voice' ? 'voice' : 'text';
+}
+
+function normalizeAiInterviewData(payload) {
+  const base = payload && typeof payload === 'object' ? payload : {};
+  const mode = getAiInterviewMode(base);
+  const session = base.session && typeof base.session === 'object' ? base.session : {};
+  const rawVoice = base.voice && typeof base.voice === 'object' ? base.voice : {};
+  const result = base.result && typeof base.result === 'object' ? { ...base.result } : null;
+
+  const resultHighlights = Array.isArray(result?.highlights) ? result.highlights : [];
+  const resultEvidence = Array.isArray(result?.evidenceQuotes) ? result.evidenceQuotes : [];
+
+  const voice = {
+    ...rawVoice,
+    summary: rawVoice.summary || result?.voiceSummary || '',
+    transcriptTurns: Array.isArray(rawVoice.transcriptTurns)
+      ? rawVoice.transcriptTurns
+      : Array.isArray(result?.transcriptTurns)
+      ? result.transcriptTurns
+      : [],
+    highlights: Array.isArray(rawVoice.highlights)
+      ? rawVoice.highlights
+      : resultHighlights,
+    evidenceQuotes: Array.isArray(rawVoice.evidenceQuotes)
+      ? rawVoice.evidenceQuotes
+      : resultEvidence
+  };
+
+  if (result) {
+    result.metadata = {
+      ...(result.metadata && typeof result.metadata === 'object' ? result.metadata : {}),
+      mode: getAiInterviewModeLabel(mode)
+    };
+  }
+
+  return {
+    ...base,
+    mode,
+    session: {
+      ...session,
+      mode
+    },
+    voice,
+    result
   };
 }
 
@@ -10290,6 +10358,8 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
   }
 
   const status = formatAiInterviewStatus(data);
+  const mode = getAiInterviewMode(data);
+  const modeLabel = getAiInterviewModeLabel(mode);
   const verdictLabel = data.result?.verdict ? `Verdict: ${escapeHtml(data.result.verdict)}` : '';
   const candidateEmail = candidate?.email || candidate?.contact || 'Not provided';
   const displayEmail = candidateEmail ? String(candidateEmail) : 'Not provided';
@@ -10300,6 +10370,7 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
         <span class="px-2 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700">${escapeHtml(
           status.label
         )}</span>
+        <span class="px-2 py-1 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700">Mode: ${escapeHtml(modeLabel)}</span>
         ${verdictLabel
           ? `<span class="px-2 py-1 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-800">${verdictLabel}</span>`
           : ''}
@@ -10308,6 +10379,10 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
         <div>
           <div class="text-[11px] uppercase tracking-wide text-gray-500">Candidate Email</div>
           <div class="text-sm text-gray-900">${escapeHtml(displayEmail)}</div>
+        </div>
+        <div>
+          <div class="text-[11px] uppercase tracking-wide text-gray-500">Interview Mode</div>
+          <div class="text-sm text-gray-900">${escapeHtml(modeLabel)}</div>
         </div>
         <div>
           <div class="text-[11px] uppercase tracking-wide text-gray-500">Invitation Status</div>
@@ -10352,6 +10427,46 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
         <div class="mb-2">
           <h4 class="text-xs font-semibold text-gray-700 mb-1">AI Summary</h4>
           <p class="text-xs text-gray-700 whitespace-pre-line">${escapeHtml(result.summary)}</p>
+        </div>`;
+    }
+
+    if (mode === 'voice') {
+      const transcriptTurns = Array.isArray(data.voice?.transcriptTurns) ? [...data.voice.transcriptTurns] : [];
+      transcriptTurns.sort((a, b) => {
+        const aTime = Date.parse(a?.timestamp || a?.time || '') || 0;
+        const bTime = Date.parse(b?.timestamp || b?.time || '') || 0;
+        return aTime - bTime;
+      });
+      const transcriptHtml = transcriptTurns.length
+        ? transcriptTurns
+            .map((turn, index) => {
+              const role = turn?.role ? String(turn.role) : 'Unknown';
+              const text = turn?.text || turn?.content || turn?.utterance || '';
+              return `<li class="py-1 border-b border-gray-100 last:border-b-0"><span class="font-semibold text-gray-800">${escapeHtml(
+                role
+              )}:</span> <span class="text-gray-700">${escapeHtml(String(text || `Turn ${index + 1}`))}</span></li>`;
+            })
+            .join('')
+        : '<li class="text-muted">No transcript turns available.</li>';
+
+      const evidenceItems = [
+        ...(Array.isArray(data.voice?.highlights) ? data.voice.highlights : []),
+        ...(Array.isArray(data.voice?.evidenceQuotes) ? data.voice.evidenceQuotes : [])
+      ];
+      const evidenceHtml = evidenceItems.length
+        ? evidenceItems.map(item => `<li>${escapeHtml(String(item))}</li>`).join('')
+        : '<li class="text-muted">No highlights or evidence quotes available.</li>';
+
+      html += `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+          <div>
+            <h4 class="text-xs font-semibold text-gray-700 mb-1">Voice Transcript Turns</h4>
+            <ul class="text-xs text-gray-700 list-none pl-0">${transcriptHtml}</ul>
+          </div>
+          <div>
+            <h4 class="text-xs font-semibold text-gray-700 mb-1">Highlights & Evidence Quotes</h4>
+            <ul class="text-xs text-gray-700 list-disc list-inside">${evidenceHtml}</ul>
+          </div>
         </div>`;
     }
 
@@ -10418,7 +10533,7 @@ async function fetchAiInterviewInfo(applicationId, { force = false } = {}) {
   }
   const res = await apiFetch(`/api/hr/ai-interview/application/${applicationId}`);
   if (!res.ok) throw new Error('Unable to load AI interview details.');
-  const data = await res.json();
+  const data = normalizeAiInterviewData(await res.json());
   aiInterviewCache.set(applicationId, data);
   return data;
 }
