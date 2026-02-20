@@ -6,6 +6,7 @@ const { analyzeInterviewResponses } = require('../openaiClient');
 const router = express.Router();
 
 const DEFAULT_RECRUITER_EMAIL = process.env.RECRUITER_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || null;
+const WRITTEN_SCORING_VERSION = 'written-evaluator-v1';
 
 function normalizeObjectId(id) {
   if (!id) return null;
@@ -70,6 +71,58 @@ function buildOrchestrationDefaults(orchestration) {
     lastQuestionId: orchestration?.lastQuestionId || null,
     difficulty: orchestration?.difficulty || null
   };
+}
+
+function toDate(value) {
+  if (!value) return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildTimeline(startedAtInput, endedAtInput) {
+  const startedAt = toDate(startedAtInput);
+  const endedAt = toDate(endedAtInput);
+
+  let durationSec = null;
+  if (startedAt && endedAt && endedAt >= startedAt) {
+    durationSec = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
+  }
+
+  return {
+    startedAt,
+    endedAt,
+    durationSec
+  };
+}
+
+function deriveRubricVersion({ session, position }) {
+  const rubricVersion = session?.orchestration?.rubricVersion || session?.rubricVersion || position?.rubricVersion;
+  if (rubricVersion) return rubricVersion;
+
+  const rubricSeed =
+    session?.orchestration?.rubricSeed ||
+    session?.rubricSeed ||
+    session?.aiInterviewRubricSeed ||
+    position?.rubricSeed ||
+    position?.aiInterviewRubricSeed;
+
+  if (!rubricSeed || typeof rubricSeed !== 'string') return null;
+  return /-v\d+$/i.test(rubricSeed) ? rubricSeed : `${rubricSeed}-v1`;
+}
+
+function extractWrittenEvidence(answers) {
+  if (!Array.isArray(answers)) return [];
+
+  return answers
+    .map(answer => ({
+      questionId: answer?.questionId || null,
+      quote: typeof answer?.answerText === 'string' ? answer.answerText.trim().replace(/\s+/g, ' ') : ''
+    }))
+    .filter(item => item.quote)
+    .map(item => ({
+      ...item,
+      quote: item.quote.length > 220 ? `${item.quote.slice(0, 217)}...` : item.quote
+    }));
 }
 
 function buildRecruiterNotificationLines({ candidateName, positionTitle, candidateEmail, result }) {
@@ -248,18 +301,25 @@ router.post('/ai-interview/:token/submit', async (req, res) => {
     }
 
     const { result, raw } = analysis;
+    const timeline = buildTimeline(updatedSession.startedAt, updatedSession.completedAt);
+    const rubricVersion = deriveRubricVersion({ session: updatedSession, position });
 
     const aiResultDoc = {
       sessionId: updatedSession._id,
       applicationId: updatedSession.applicationId,
       candidateId: updatedSession.candidateId,
       positionId: updatedSession.positionId,
+      mode: 'text',
       scores: result.scores || {},
       verdict: result.verdict || 'hold',
       summary: result.summary || '',
       strengths: result.strengths || [],
       risks: result.risks || [],
       recommendedNextSteps: result.recommendedNextSteps || [],
+      evidence: extractWrittenEvidence(updatedSession.answers),
+      timeline,
+      rubricVersion,
+      scoringVersion: WRITTEN_SCORING_VERSION,
       rawModelResponse: raw,
       createdAt: new Date(),
     };
