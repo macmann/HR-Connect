@@ -917,6 +917,8 @@ let recruitmentCandidateSearchError = null;
 const candidateCvPreviewUrls = new Map();
 const candidateDetailsCache = new Map();
 const aiInterviewCache = new Map();
+let aiInterviewFeatureConfig = null;
+let aiInterviewFeatureConfigLoading = null;
 let candidateCvModalCandidateId = null;
 let aiCvScreeningTemplate = '';
 let recruitmentPositionQuestions = [];
@@ -9197,6 +9199,7 @@ async function loadRecruitmentCandidates(positionId) {
     return;
   }
   const data = await getJSON(`/recruitment/candidates?positionId=${encodeURIComponent(positionId)}`);
+  await loadAiInterviewFeatureConfig();
   recruitmentCandidates = Array.isArray(data) ? data : [];
   recruitmentCandidates.forEach(cacheCandidateDetails);
   if (recruitmentEditingCandidateId) {
@@ -9692,7 +9695,7 @@ async function onCandidateTableClick(ev) {
     const applicationId = aiInterviewBtn.getAttribute('data-application-id');
     const candidateId = aiInterviewBtn.getAttribute('data-candidate-id');
     if (applicationId) {
-      await createAiInterviewSession(applicationId, aiInterviewBtn, candidateId);
+      await createAiInterviewSession(applicationId, aiInterviewBtn, candidateId, aiInterviewBtn.getAttribute('data-ai-interview-mode'));
     }
     return;
   }
@@ -9722,7 +9725,63 @@ async function onCandidateTableClick(ev) {
   openCandidateDetailsModal(id);
 }
 
-async function createAiInterviewSession(applicationId, triggerButton, candidateId) {
+
+function normalizeAiInterviewFeatureConfig(payload) {
+  const config = payload && typeof payload === 'object' ? payload : {};
+  return {
+    voiceInterviewEnabled: config.voiceInterviewEnabled === true,
+    voiceInterviewFeatureFlagEnabled: config.voiceInterviewFeatureFlagEnabled === true,
+    voiceInterviewOpenAiConfigured: config.voiceInterviewOpenAiConfigured === true
+  };
+}
+
+async function loadAiInterviewFeatureConfig(options = {}) {
+  const { force = false } = options;
+
+  if (aiInterviewFeatureConfig && !force) {
+    return aiInterviewFeatureConfig;
+  }
+
+  if (!force && aiInterviewFeatureConfigLoading) {
+    return aiInterviewFeatureConfigLoading;
+  }
+
+  aiInterviewFeatureConfigLoading = (async () => {
+    try {
+      const res = await apiFetch('/api/hr/ai-interview/config');
+      if (!res.ok) {
+        throw new Error('failed_to_load_ai_interview_config');
+      }
+      const data = await res.json().catch(() => ({}));
+      aiInterviewFeatureConfig = normalizeAiInterviewFeatureConfig(data);
+    } catch (err) {
+      aiInterviewFeatureConfig = normalizeAiInterviewFeatureConfig({});
+    } finally {
+      aiInterviewFeatureConfigLoading = null;
+    }
+
+    return aiInterviewFeatureConfig;
+  })();
+
+  return aiInterviewFeatureConfigLoading;
+}
+
+async function resolveAiInterviewMode(preferredMode) {
+  const normalizedPreferredMode = String(preferredMode || '').toLowerCase();
+  if (normalizedPreferredMode === 'text' || normalizedPreferredMode === 'voice') {
+    return normalizedPreferredMode;
+  }
+
+  const config = await loadAiInterviewFeatureConfig();
+  if (!config?.voiceInterviewEnabled) {
+    return 'text';
+  }
+
+  const wantsVoice = window.confirm('Send a voice AI interview?\n\nSelect OK for Voice interview, or Cancel for Text interview.');
+  return wantsVoice ? 'voice' : 'text';
+}
+
+async function createAiInterviewSession(applicationId, triggerButton, candidateId, preferredMode) {
   if (!applicationId) return;
   const button = triggerButton || null;
   if (button) button.disabled = true;
@@ -9730,7 +9789,7 @@ async function createAiInterviewSession(applicationId, triggerButton, candidateI
     const res = await apiFetch('/api/hr/ai-interview/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ applicationId })
+      body: JSON.stringify({ applicationId, mode: await resolveAiInterviewMode(preferredMode) })
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) {
@@ -9784,7 +9843,7 @@ async function onCandidateAiPanelClick(ev) {
     const applicationId = sendBtn.getAttribute('data-application-id');
     const candidateId = sendBtn.getAttribute('data-candidate-id');
     if (applicationId) {
-      await createAiInterviewSession(applicationId, sendBtn, candidateId);
+      await createAiInterviewSession(applicationId, sendBtn, candidateId, sendBtn.getAttribute('data-ai-interview-mode'));
     }
     return;
   }
@@ -10346,13 +10405,24 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
   if (!data || data.hasSession === false) {
     contentEl.innerHTML = '<p class="text-xs text-gray-700">AI Interview not sent yet.</p>';
     actions.push(
-      `<button type="button" class="md-button md-button--filled md-button--small" data-action="ai-send-interview" data-application-id="${
+      `<button type="button" class="md-button md-button--filled md-button--small" data-action="ai-send-interview" data-ai-interview-mode="text" data-application-id="${
         candidate.applicationId
       }" data-candidate-id="${candidate.id}">
         <span class="material-symbols-rounded">smart_toy</span>
-        Send AI Interview
+        Send Text AI Interview
       </button>`
     );
+
+    if (aiInterviewFeatureConfig?.voiceInterviewEnabled) {
+      actions.push(
+        `<button type="button" class="md-button md-button--outlined md-button--small" data-action="ai-send-interview" data-ai-interview-mode="voice" data-application-id="${
+          candidate.applicationId
+        }" data-candidate-id="${candidate.id}">
+          <span class="material-symbols-rounded">mic</span>
+          Send Voice AI Interview
+        </button>`
+      );
+    }
     actionsEl.innerHTML = actions.join('');
     return;
   }

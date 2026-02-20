@@ -2,6 +2,7 @@ const express = require('express');
 const { ObjectId } = require('mongodb');
 const { getDatabase } = require('../db');
 const { generateInterviewToken } = require('../utils/token');
+const { getAiVoiceInterviewConfig, isAiVoiceInterviewEnabled } = require('../utils/aiVoiceInterviewConfig');
 
 const router = express.Router();
 
@@ -32,14 +33,6 @@ function normalizeSessionMode(mode) {
   return mode === 'voice' ? 'voice' : 'text';
 }
 
-function isRealtimeInterviewEnabled() {
-  const explicitToggle =
-    process.env.AI_REALTIME_ENABLED === 'true' ||
-    process.env.ENABLE_AI_VOICE_INTERVIEW === 'true';
-
-  return Boolean(process.env.OPENAI_API_KEY && explicitToggle);
-}
-
 function buildVoiceDefaults(voice) {
   return {
     startedAt: voice?.startedAt || null,
@@ -64,6 +57,15 @@ function buildOrchestrationDefaults(orchestration) {
 }
 
 // TODO: apply auth middleware if available
+
+router.get('/ai-interview/config', (req, res) => {
+  const config = getAiVoiceInterviewConfig();
+  return res.json({
+    voiceInterviewEnabled: config.enabled,
+    voiceInterviewFeatureFlagEnabled: config.featureFlagEnabled,
+    voiceInterviewOpenAiConfigured: config.hasOpenAiKey
+  });
+});
 
 router.get('/ai-interview/application/:applicationId', async (req, res) => {
   try {
@@ -157,7 +159,7 @@ router.post('/ai-interview/sessions', async (req, res) => {
     }
 
     if (normalizedMode === 'voice') {
-      if (!isRealtimeInterviewEnabled()) {
+      if (!isAiVoiceInterviewEnabled()) {
         return res.status(400).json({ error: 'voice_realtime_not_enabled' });
       }
 
