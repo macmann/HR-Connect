@@ -14,8 +14,37 @@
     status: 'idle',
     transcriptTurns: [],
     completeSent: false,
-    disconnectTimer: null
+    disconnectTimer: null,
+    interviewTimer: null
   };
+
+  function disableInterviewControls() {
+    ['startBtn', 'muteBtn', 'repeatBtn', 'endBtn'].forEach(id => {
+      const button = document.getElementById(id);
+      if (button) button.disabled = true;
+    });
+  }
+
+  function clearInterviewTimer() {
+    if (state.interviewTimer) {
+      clearTimeout(state.interviewTimer);
+      state.interviewTimer = null;
+    }
+  }
+
+  function startInterviewTimer() {
+    if (state.interviewTimer) return;
+    const maxDurationSec = Number(state.metadata?.realtimeConfig?.maxDurationSec);
+    if (!Number.isFinite(maxDurationSec) || maxDurationSec <= 0) return;
+
+    state.interviewTimer = setTimeout(async () => {
+      disableInterviewControls();
+      setStatus('completed', 'Interview time limit reached. Submitting your session...');
+      await completeInterview('timeout');
+      teardownConnection();
+      setStatus('completed', 'Interview ended due to time limit. Thank you.');
+    }, maxDurationSec * 1000);
+  }
 
   function escapeHtml(value) {
     return String(value || '')
@@ -140,13 +169,21 @@
     state.completeSent = true;
 
     try {
-      await fetch(`/api/public/ai-voice-interview/${encodeURIComponent(token)}/complete`, {
+      const response = await fetch(`/api/public/ai-voice-interview/${encodeURIComponent(token)}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: reason || 'unknown' })
       });
+
+      const payload = await response.json().catch(() => ({}));
+      if (payload?.status === 'completed_due_to_timeout') {
+        disableInterviewControls();
+        setStatus('completed', 'Interview ended due to time limit. Thank you.');
+      }
+      return payload;
     } catch (err) {
       console.error('Failed to mark interview complete', err);
+      return null;
     }
   }
 
@@ -193,6 +230,7 @@
           state.connected = true;
           setStatus('listening', 'Connected. Speak naturally when prompted.');
           clearTimeout(state.disconnectTimer);
+          startInterviewTimer();
         } else if (status === 'disconnected' || status === 'failed' || status === 'closed') {
           setStatus('connecting', 'Connection lost. Wrapping up...');
           clearTimeout(state.disconnectTimer);
@@ -305,6 +343,9 @@
   }
 
   function teardownConnection() {
+    clearInterviewTimer();
+    state.connected = false;
+
     if (state.channel && state.channel.readyState === 'open') {
       state.channel.close();
     }

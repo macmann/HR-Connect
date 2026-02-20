@@ -206,6 +206,70 @@ function toDate(input) {
   return Number.isNaN(value.getTime()) ? null : value;
 }
 
+function getElapsedVoiceDurationSec(session, now = new Date()) {
+  const startedAt = toDate(session?.voice?.startedAt);
+  if (!startedAt) {
+    return { startedAt: null, elapsedSec: 0 };
+  }
+
+  const elapsedMs = now.getTime() - startedAt.getTime();
+  return {
+    startedAt,
+    elapsedSec: Math.max(0, Math.round(elapsedMs / 1000))
+  };
+}
+
+function getCompletionStatus(session) {
+  if (typeof session?.voice?.completionStatus === 'string' && session.voice.completionStatus.trim()) {
+    return session.voice.completionStatus;
+  }
+  return session?.status === 'completed' ? 'completed' : session?.status || 'pending';
+}
+
+async function finalizeVoiceInterviewSession(req, { db, session, now, completionStatus }) {
+  const startedAt = toDate(session?.voice?.startedAt) || now;
+  const durationSec = Math.max(0, Math.round((now.getTime() - startedAt.getTime()) / 1000));
+  const finalizedOrchestration = finalizeOrchestration({ session, endedAt: now });
+
+  const updateResult = await db.collection('ai_interview_sessions').updateOne(
+    { _id: session._id, status: { $ne: 'completed' } },
+    {
+      $set: {
+        status: 'completed',
+        completedAt: now,
+        'voice.startedAt': startedAt,
+        'voice.endedAt': now,
+        'voice.durationSec': durationSec,
+        'voice.completionStatus': completionStatus,
+        orchestration: finalizedOrchestration,
+        'audit.promptVersion': finalizedOrchestration.promptVersion || PROMPT_VERSION,
+        'audit.rubricVersion': finalizedOrchestration.rubricVersion || null,
+        'audit.scoringVersion': finalizedOrchestration.scoringVersion || null,
+        analysisStatus: 'queued',
+        analysisQueuedAt: now
+      }
+    }
+  );
+
+  if (updateResult.modifiedCount) {
+    await enqueueFinalAnalysisAndNotification(req, session._id);
+    return {
+      success: true,
+      status: completionStatus,
+      durationSec,
+      alreadyCompleted: false
+    };
+  }
+
+  const currentSession = await db.collection('ai_interview_sessions').findOne({ _id: session._id });
+  return {
+    success: true,
+    status: getCompletionStatus(currentSession),
+    durationSec: currentSession?.voice?.durationSec ?? durationSec,
+    alreadyCompleted: currentSession?.status === 'completed'
+  };
+}
+
 async function createRealtimeSession() {
   if (!process.env.OPENAI_API_KEY) {
     const err = new Error('openai_not_configured');
@@ -436,7 +500,12 @@ router.post('/ai-voice-interview/:token/transcript', async (req, res) => {
     const { db, session } = lookup;
 
     if (session.status === 'completed') {
-      return res.status(400).json({ error: 'session_already_completed' });
+      return res.status(200).json({
+        success: true,
+        status: getCompletionStatus(session),
+        durationSec: Number.isFinite(session?.voice?.durationSec) ? session.voice.durationSec : 0,
+        alreadyCompleted: true
+      });
     }
 
     const rateKey = `${token}:${getClientIp(req)}`;
@@ -474,6 +543,20 @@ router.post('/ai-voice-interview/:token/transcript', async (req, res) => {
     }
 
     const now = new Date();
+    const { elapsedSec } = getElapsedVoiceDurationSec(session, now);
+    const hasDurationLimit = Number.isFinite(REALTIME_CONFIG.maxDurationSec) && REALTIME_CONFIG.maxDurationSec > 0;
+    const isTimedOut = hasDurationLimit && elapsedSec >= REALTIME_CONFIG.maxDurationSec;
+
+    if (isTimedOut) {
+      const completion = await finalizeVoiceInterviewSession(req, {
+        db,
+        session,
+        now,
+        completionStatus: 'completed_due_to_timeout'
+      });
+      return res.status(200).json(completion);
+    }
+
     const shouldMarkStarted = !session.voice?.startedAt;
     let orchestrationState = buildInitialOrchestration(session);
 
@@ -526,47 +609,27 @@ router.post('/ai-voice-interview/:token/complete', async (req, res) => {
     const { db, session } = lookup;
 
     if (session.status === 'completed') {
-      return res.json({ success: true, alreadyCompleted: true });
-    }
-
-    const now = new Date();
-    const startedAt = toDate(session.voice?.startedAt || session.startedAt) || now;
-    const durationSec = Math.max(0, Math.round((now.getTime() - startedAt.getTime()) / 1000));
-    const finalizedOrchestration = finalizeOrchestration({ session, endedAt: now });
-
-    const updateResult = await db.collection('ai_interview_sessions').updateOne(
-      { _id: session._id, status: { $ne: 'completed' } },
-      {
-        $set: {
-          status: 'completed',
-          completedAt: now,
-          'voice.startedAt': startedAt,
-          'voice.endedAt': now,
-          'voice.durationSec': durationSec,
-          orchestration: finalizedOrchestration,
-          'audit.promptVersion': finalizedOrchestration.promptVersion || PROMPT_VERSION,
-          'audit.rubricVersion': finalizedOrchestration.rubricVersion || null,
-          'audit.scoringVersion': finalizedOrchestration.scoringVersion || null,
-          analysisStatus: 'queued',
-          analysisQueuedAt: now
-        }
-      }
-    );
-
-    if (!updateResult.modifiedCount) {
-      const currentSession = await db.collection('ai_interview_sessions').findOne({ _id: session._id });
-      const currentDuration = currentSession?.voice?.durationSec ?? durationSec;
       return res.json({
         success: true,
-        status: currentSession?.status || 'completed',
-        durationSec: currentDuration,
-        alreadyCompleted: currentSession?.status === 'completed'
+        status: getCompletionStatus(session),
+        durationSec: Number.isFinite(session?.voice?.durationSec) ? session.voice.durationSec : 0,
+        alreadyCompleted: true
       });
     }
 
-    await enqueueFinalAnalysisAndNotification(req, session._id);
+    const now = new Date();
+    const { elapsedSec } = getElapsedVoiceDurationSec(session, now);
+    const hasDurationLimit = Number.isFinite(REALTIME_CONFIG.maxDurationSec) && REALTIME_CONFIG.maxDurationSec > 0;
+    const isTimedOut = hasDurationLimit && elapsedSec >= REALTIME_CONFIG.maxDurationSec;
 
-    return res.json({ success: true, status: 'completed', durationSec });
+    const completion = await finalizeVoiceInterviewSession(req, {
+      db,
+      session,
+      now,
+      completionStatus: isTimedOut ? 'completed_due_to_timeout' : 'completed'
+    });
+
+    return res.json(completion);
   } catch (err) {
     console.error('Error completing AI voice interview session:', err);
     return res.status(500).json({ error: 'failed_to_complete_session' });
