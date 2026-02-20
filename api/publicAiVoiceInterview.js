@@ -63,7 +63,8 @@ function mapQuestions(questions) {
   if (!Array.isArray(questions)) return [];
   return questions.map((q, index) => ({
     id: deriveQuestionId(q, index),
-    text: q.text || q.question || ''
+    text: q.text || q.question || '',
+    competency: q.competency || q.category || null
   }));
 }
 
@@ -403,6 +404,7 @@ router.get('/ai-voice-interview/:token', async (req, res) => {
       candidateEmail: candidate?.email || null,
       positionTitle: position?.title || session.positionTitle || 'Role',
       templateTitle: session.templateTitle || position?.title || 'AI Voice Interview',
+      interviewQuestions: mapQuestions(session.aiInterviewQuestions),
       realtimeConfig: {
         model: REALTIME_CONFIG.model,
         voice: REALTIME_CONFIG.voice,

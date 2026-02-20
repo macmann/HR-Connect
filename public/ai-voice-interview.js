@@ -13,6 +13,7 @@
     transcriptVisible: false,
     status: 'idle',
     transcriptTurns: [],
+    askedQuestionIds: new Set(),
     completeSent: false,
     disconnectTimer: null,
     interviewTimer: null
@@ -163,11 +164,52 @@
 
   async function sendTranscriptChunk(turn) {
     if (!turn?.text) return;
-    await fetch(`/api/public/ai-voice-interview/${encodeURIComponent(token)}/transcript`, {
+    const response = await fetch(`/api/public/ai-voice-interview/${encodeURIComponent(token)}/transcript`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ turns: [turn] })
     });
+    return response.ok ? response.json() : null;
+  }
+
+  function buildInterviewerInstructions() {
+    const positionTitle = state.metadata?.positionTitle || 'the role';
+    const questions = Array.isArray(state.metadata?.interviewQuestions)
+      ? state.metadata.interviewQuestions.filter(q => q && typeof q.text === 'string' && q.text.trim())
+      : [];
+
+    const questionList = questions.length
+      ? questions
+          .map((question, index) => `${index + 1}. ${question.text.trim()}`)
+          .join('\n')
+      : '1. Ask a role-relevant question about the candidate experience and skills.';
+
+    return [
+      `You are conducting a structured AI interview for ${positionTitle}.`,
+      'Immediately begin the interview by asking the first question from the provided question list.',
+      'Do not start with small talk like "What\'s new today?" or unrelated chit-chat.',
+      'Ask one interview question at a time. After each candidate answer, ask the next question from the list.',
+      'Each question is based on job-description requirements and CV-aligned screening prompts. Keep wording close to the provided list.',
+      'If the candidate asks to repeat, restate only the current question once.',
+      'When all questions are exhausted, thank the candidate and say the interview is complete.',
+      '',
+      'Question list:',
+      questionList
+    ].join('\n');
+  }
+
+  function askInterviewQuestion(questionText) {
+    const text = typeof questionText === 'string' ? questionText.trim() : '';
+    if (!state.channel || state.channel.readyState !== 'open' || !text) return;
+
+    state.channel.send(
+      JSON.stringify({
+        type: 'response.create',
+        response: {
+          instructions: `Ask this exact interview question now, then pause for the candidate response: ${text}`
+        }
+      })
+    );
   }
 
   async function completeInterview(reason) {
@@ -251,7 +293,25 @@
 
       channel.addEventListener('open', () => {
         setStatus('listening', 'Listening for your response...');
-        channel.send(JSON.stringify({ type: 'response.create' }));
+
+        channel.send(
+          JSON.stringify({
+            type: 'session.update',
+            session: {
+              instructions: buildInterviewerInstructions()
+            }
+          })
+        );
+
+        const firstQuestion = Array.isArray(state.metadata?.interviewQuestions)
+          ? state.metadata.interviewQuestions.find(question => typeof question?.text === 'string' && question.text.trim())
+          : null;
+
+        if (firstQuestion?.id) {
+          state.askedQuestionIds.add(firstQuestion.id);
+        }
+
+        askInterviewQuestion(firstQuestion?.text || 'Please introduce yourself and summarize your most relevant experience for this role.');
       });
 
       channel.addEventListener('message', async event => {
@@ -279,7 +339,12 @@
 
             state.transcriptTurns.push(turn);
             renderTranscript();
-            await sendTranscriptChunk(turn);
+            const transcriptPayload = await sendTranscriptChunk(turn);
+            const nextQuestion = transcriptPayload?.nextQuestion;
+            if (nextQuestion?.id && !state.askedQuestionIds.has(nextQuestion.id)) {
+              state.askedQuestionIds.add(nextQuestion.id);
+              askInterviewQuestion(nextQuestion.text);
+            }
           }
         } catch (err) {
           console.error('Failed to parse realtime event', err);
