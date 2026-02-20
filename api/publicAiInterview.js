@@ -45,6 +45,33 @@ function mapQuestions(questions) {
   }));
 }
 
+function normalizeSessionMode(mode) {
+  return mode === 'voice' ? 'voice' : 'text';
+}
+
+function buildVoiceDefaults(voice) {
+  return {
+    startedAt: voice?.startedAt || null,
+    endedAt: voice?.endedAt || null,
+    durationSec: Number.isFinite(voice?.durationSec) ? voice.durationSec : null,
+    transcriptTurns: Array.isArray(voice?.transcriptTurns) ? voice.transcriptTurns : [],
+    artifacts: voice?.artifacts || null
+  };
+}
+
+function buildOrchestrationDefaults(orchestration) {
+  return {
+    rubricVersion: orchestration?.rubricVersion || null,
+    interviewPlan: Array.isArray(orchestration?.interviewPlan) ? orchestration.interviewPlan : [],
+    coverage:
+      orchestration?.coverage && typeof orchestration.coverage === 'object'
+        ? orchestration.coverage
+        : {},
+    lastQuestionId: orchestration?.lastQuestionId || null,
+    difficulty: orchestration?.difficulty || null
+  };
+}
+
 function buildRecruiterNotificationLines({ candidateName, positionTitle, candidateEmail, result }) {
   const lines = [
     'Hi team,',
@@ -119,6 +146,9 @@ router.get('/ai-interview/:token', async (req, res) => {
 
     return res.json({
       status: session.status || 'pending',
+      mode: normalizeSessionMode(session.mode),
+      voice: buildVoiceDefaults(session.voice),
+      orchestration: buildOrchestrationDefaults(session.orchestration),
       candidateName,
       positionTitle,
       templateTitle,

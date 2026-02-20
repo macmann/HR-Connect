@@ -28,6 +28,33 @@ function buildInterviewUrl(req, interviewPath) {
   }
 }
 
+function normalizeSessionMode(mode) {
+  return mode === 'voice' ? 'voice' : 'text';
+}
+
+function buildVoiceDefaults(voice) {
+  return {
+    startedAt: voice?.startedAt || null,
+    endedAt: voice?.endedAt || null,
+    durationSec: Number.isFinite(voice?.durationSec) ? voice.durationSec : null,
+    transcriptTurns: Array.isArray(voice?.transcriptTurns) ? voice.transcriptTurns : [],
+    artifacts: voice?.artifacts || null
+  };
+}
+
+function buildOrchestrationDefaults(orchestration) {
+  return {
+    rubricVersion: orchestration?.rubricVersion || null,
+    interviewPlan: Array.isArray(orchestration?.interviewPlan) ? orchestration.interviewPlan : [],
+    coverage:
+      orchestration?.coverage && typeof orchestration.coverage === 'object'
+        ? orchestration.coverage
+        : {},
+    lastQuestionId: orchestration?.lastQuestionId || null,
+    difficulty: orchestration?.difficulty || null
+  };
+}
+
 // TODO: apply auth middleware if available
 
 router.get('/ai-interview/application/:applicationId', async (req, res) => {
@@ -60,6 +87,9 @@ router.get('/ai-interview/application/:applicationId', async (req, res) => {
       session: {
         id: session._id,
         status: session.status,
+        mode: normalizeSessionMode(session.mode),
+        voice: buildVoiceDefaults(session.voice),
+        orchestration: buildOrchestrationDefaults(session.orchestration),
         createdAt: session.createdAt,
         completedAt: session.completedAt
       },
@@ -86,7 +116,7 @@ router.get('/ai-interview/application/:applicationId', async (req, res) => {
 router.post('/ai-interview/sessions', async (req, res) => {
   try {
     const db = getDatabase();
-    const { applicationId } = req.body;
+    const { applicationId, mode } = req.body;
 
     if (!applicationId) {
       return res.status(400).json({ error: 'applicationId_required' });
@@ -126,15 +156,19 @@ router.post('/ai-interview/sessions', async (req, res) => {
     }
 
     const token = generateInterviewToken();
+    const normalizedMode = normalizeSessionMode(mode);
     const sessionDoc = {
       token,
       applicationId: application._id,
       candidateId: candidate._id,
       positionId: position._id,
       status: 'sent',
+      mode: normalizedMode,
       templateTitle: position.title || 'AI Interview',
       aiInterviewQuestions: questions,
       answers: [],
+      voice: buildVoiceDefaults(),
+      orchestration: buildOrchestrationDefaults(),
       startedAt: null,
       completedAt: null,
       aiResultId: null,
