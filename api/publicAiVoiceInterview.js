@@ -7,6 +7,7 @@ const {
   finalizeOrchestration
 } = require('../services/aiVoiceInterviewOrchestrator');
 const { buildVoiceResult } = require('../services/aiVoiceInterviewScoring');
+const { isAiVoiceInterviewEnabled } = require('../utils/aiVoiceInterviewConfig');
 
 const router = express.Router();
 
@@ -24,6 +25,13 @@ const PROMPT_VERSION = process.env.PUBLIC_AI_VOICE_PROMPT_VERSION || 'voice-prom
 
 const realtimeSessionRateLimitState = new Map();
 const transcriptRateLimitState = new Map();
+
+router.use((req, res, next) => {
+  if (!isAiVoiceInterviewEnabled()) {
+    return res.status(404).json({ error: 'voice_interview_disabled' });
+  }
+  return next();
+});
 
 function normalizeSessionMode(mode) {
   return mode === 'voice' ? 'voice' : 'text';

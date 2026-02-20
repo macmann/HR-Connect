@@ -43,6 +43,7 @@ const hrApplicationsRoutes = require('./api/hrApplications');
 const publicCareersRoutes = require('./api/publicCareers');
 const publicAiInterviewRoutes = require('./api/publicAiInterview');
 const publicAiVoiceInterviewRoutes = require('./api/publicAiVoiceInterview');
+const { isAiVoiceInterviewEnabled } = require('./utils/aiVoiceInterviewConfig');
 const learningHubRoutes = require('./api/learningHub');
 const adminRolesRoutes = require('./api/adminRoles');
 const {
@@ -2972,7 +2973,10 @@ app.get('/ai-interview/:token', (req, res) => {
 });
 
 app.get('/ai-voice-interview/:token', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'ai-voice-interview.html'));
+  if (!isAiVoiceInterviewEnabled()) {
+    return res.status(404).send('Voice interview is not enabled.');
+  }
+  return res.sendFile(path.join(__dirname, 'public', 'ai-voice-interview.html'));
 });
 
 function resolveToken(req) {
