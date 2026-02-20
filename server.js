@@ -42,6 +42,7 @@ const hrAiInterviewRoutes = require('./api/hrAiInterview');
 const hrApplicationsRoutes = require('./api/hrApplications');
 const publicCareersRoutes = require('./api/publicCareers');
 const publicAiInterviewRoutes = require('./api/publicAiInterview');
+const publicAiVoiceInterviewRoutes = require('./api/publicAiVoiceInterview');
 const learningHubRoutes = require('./api/learningHub');
 const adminRolesRoutes = require('./api/adminRoles');
 const {
@@ -2958,6 +2959,7 @@ app.use('/api/hr', hrAiInterviewRoutes);
 app.use('/api/hr', hrApplicationsRoutes);
 app.use('/api/public', publicCareersRoutes);
 app.use('/api/public', publicAiInterviewRoutes);
+app.use('/api/public', publicAiVoiceInterviewRoutes);
 app.use('/api/learning-hub', authRequired, learningHubRoutes);
 app.use('/api/admin-roles', authRequired, superadminOnly, adminRolesRoutes);
 
