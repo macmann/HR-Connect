@@ -18,11 +18,22 @@ function getAiVoiceInterviewConfig() {
   };
 }
 
+function getAiVoiceInterviewRealtimeConfig() {
+  return {
+    model: process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2024-12-17',
+    voice: process.env.OPENAI_REALTIME_VOICE || 'alloy',
+    transcriptionModel: process.env.OPENAI_REALTIME_TRANSCRIPTION_MODEL || 'gpt-4o-mini-transcribe',
+    maxDurationSec: Number(process.env.PUBLIC_AI_REALTIME_MAX_DURATION_SEC || 600),
+    allowInterruptions: isTruthy(process.env.PUBLIC_AI_REALTIME_ALLOW_INTERRUPTION ?? 'true')
+  };
+}
+
 function isAiVoiceInterviewEnabled() {
   return getAiVoiceInterviewConfig().enabled;
 }
 
 module.exports = {
   getAiVoiceInterviewConfig,
+  getAiVoiceInterviewRealtimeConfig,
   isAiVoiceInterviewEnabled
 };

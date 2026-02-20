@@ -7,14 +7,15 @@ const {
   finalizeOrchestration
 } = require('../services/aiVoiceInterviewOrchestrator');
 const { buildVoiceResult } = require('../services/aiVoiceInterviewScoring');
-const { isAiVoiceInterviewEnabled } = require('../utils/aiVoiceInterviewConfig');
+const {
+  getAiVoiceInterviewRealtimeConfig,
+  isAiVoiceInterviewEnabled
+} = require('../utils/aiVoiceInterviewConfig');
 
 const router = express.Router();
 
 const DEFAULT_RECRUITER_EMAIL = process.env.RECRUITER_NOTIFICATION_EMAIL || process.env.ADMIN_EMAIL || null;
-const REALTIME_MODEL = process.env.OPENAI_REALTIME_MODEL || 'gpt-4o-realtime-preview-2024-12-17';
-const REALTIME_VOICE = process.env.OPENAI_REALTIME_VOICE || 'alloy';
-const REALTIME_TRANSCRIPTION_MODEL = process.env.OPENAI_REALTIME_TRANSCRIPTION_MODEL || 'gpt-4o-mini-transcribe';
+const REALTIME_CONFIG = getAiVoiceInterviewRealtimeConfig();
 const REALTIME_SESSION_RATE_LIMIT_MAX = Number(process.env.PUBLIC_AI_REALTIME_RATE_LIMIT_MAX || 6);
 const REALTIME_SESSION_RATE_LIMIT_WINDOW_MS = Number(process.env.PUBLIC_AI_REALTIME_RATE_LIMIT_WINDOW_MS || 60 * 1000);
 const TRANSCRIPT_RATE_LIMIT_MAX = Number(process.env.PUBLIC_AI_TRANSCRIPT_RATE_LIMIT_MAX || 30);
@@ -197,12 +198,12 @@ async function createRealtimeSession() {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: REALTIME_MODEL,
-      voice: REALTIME_VOICE,
+      model: REALTIME_CONFIG.model,
+      voice: REALTIME_CONFIG.voice,
       expires_in: 120,
       modalities: ['audio', 'text'],
       input_audio_transcription: {
-        model: REALTIME_TRANSCRIPTION_MODEL
+        model: REALTIME_CONFIG.transcriptionModel
       }
     })
   });
@@ -298,9 +299,11 @@ router.get('/ai-voice-interview/:token', async (req, res) => {
       positionTitle: position?.title || session.positionTitle || 'Role',
       templateTitle: session.templateTitle || position?.title || 'AI Voice Interview',
       realtimeConfig: {
-        model: REALTIME_MODEL,
-        voice: REALTIME_VOICE,
-        transcriptionModel: REALTIME_TRANSCRIPTION_MODEL
+        model: REALTIME_CONFIG.model,
+        voice: REALTIME_CONFIG.voice,
+        transcriptionModel: REALTIME_CONFIG.transcriptionModel,
+        maxDurationSec: REALTIME_CONFIG.maxDurationSec,
+        allowInterruptions: REALTIME_CONFIG.allowInterruptions
       },
       orchestration: buildInitialOrchestration(session)
     });
@@ -387,8 +390,8 @@ router.post('/ai-voice-interview/:token/realtime-session', async (req, res) => {
       expires_at: realtimeSession?.expires_at || null,
       session: {
         id: sessionId,
-        model: realtimeSession?.model || REALTIME_MODEL,
-        voice: realtimeSession?.voice || REALTIME_VOICE
+        model: realtimeSession?.model || REALTIME_CONFIG.model,
+        voice: realtimeSession?.voice || REALTIME_CONFIG.voice
       }
     });
   } catch (err) {
