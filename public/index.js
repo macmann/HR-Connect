@@ -10436,13 +10436,15 @@ function renderCandidateAiInterviewPanel(candidate, options = {}) {
       : 'Voice mode is currently unavailable.';
     contentEl.innerHTML = '<p class="text-xs text-gray-700">AI Interview not sent yet.</p>';
     actions.push(
-      `<div class="flex flex-wrap items-end gap-2" data-ai-interview-compose>
-        <label class="text-xs text-gray-700" for="candidate-ai-interview-mode-${candidate.id}">Interview mode</label>
-        <select id="candidate-ai-interview-mode-${candidate.id}" class="md-select" data-ai-interview-mode-select>
+      `<div class="flex flex-wrap items-end gap-2" data-ai-interview-compose style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
+          <label class="text-xs text-gray-700" for="candidate-ai-interview-mode-${candidate.id}" style="font-size:12px;color:#374151;">Interview mode</label>
+          <select id="candidate-ai-interview-mode-${candidate.id}" class="md-select" data-ai-interview-mode-select style="min-width:190px;height:36px;padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#111827;">
           <option value="text" selected>Text</option>
           <option value="voice" ${voiceAvailable ? '' : 'disabled'}>${voiceAvailable ? 'Voice' : 'Voice (unavailable)'}</option>
-        </select>
-        <button type="button" class="md-button md-button--filled md-button--small" data-action="ai-send-interview" data-application-id="${
+          </select>
+        </div>
+        <button type="button" class="md-button md-button--filled md-button--small" style="height:36px;padding:0 12px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;" data-action="ai-send-interview" data-application-id="${
           candidate.applicationId
         }" data-candidate-id="${candidate.id}">
           <span class="material-symbols-rounded">smart_toy</span>
