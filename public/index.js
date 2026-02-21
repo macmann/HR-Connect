@@ -12917,7 +12917,9 @@ function openEmpDrawer({title, fields = [], initial = {}}) {
   currentDrawerFields = Array.isArray(fields) ? fields : [];
   const titleEl = document.getElementById('empModalTitle');
   if (titleEl) titleEl.textContent = title;
-  const fieldHtml = buildDynamicFieldsHtml(currentDrawerFields, initial, 'drawer');
+  const fieldHtml = currentDrawerFields.length
+    ? buildDynamicFieldsHtml(currentDrawerFields, initial, 'drawer')
+    : '<p class="text-muted" style="font-style: italic;">No employee fields configured.</p>';
   const fieldsEl = document.getElementById('empModalFields');
   if (fieldsEl) fieldsEl.innerHTML = fieldHtml;
   const formEl = document.getElementById('empModalForm');
@@ -12978,7 +12980,17 @@ async function onEmpDrawerSubmit(ev) {
 
 async function getDynamicEmployeeFields() {
   const emps = await getJSON('/employees');
-  let sample = emps[0] || {};
+  const defaultFields = [
+    { key: 'name', label: 'Name', type: 'text', required: true },
+    { key: 'email', label: 'Email', type: 'email', required: true },
+    { key: 'title', label: 'Title', type: 'text', required: true },
+    { key: 'department', label: 'Department', type: 'text', required: false },
+    { key: 'status', label: 'Status', type: 'select', options: ['Active', 'Inactive'], required: false },
+    { key: 'country/city', label: 'Country/City', type: 'text', required: true },
+    { key: 'startDate', label: 'Start Date', type: 'date', required: false }
+  ];
+  const hasEmployees = Array.isArray(emps) && emps.length > 0;
+  const sample = hasEmployees ? emps[0] || {} : {};
   let leaveFields = [];
   if (sample.leaveBalances) {
     SUPPORTED_LEAVE_TYPES.forEach(key => {
@@ -13006,6 +13018,29 @@ async function getDynamicEmployeeFields() {
         })
         .filter(Boolean)
     : [];
+  if (!hasEmployees) {
+    return defaultFields.map(field => {
+      const keyLower = field.key.toLowerCase();
+      if (
+        keyLower.includes('supervisor') ||
+        keyLower.includes('manager') ||
+        keyLower.includes('reporting') ||
+        keyLower.includes('appraiser') ||
+        keyLower.includes('appariser')
+      ) {
+        if (managerSelectOptions.length) {
+          return {
+            ...field,
+            label: 'Supervisor / Appraiser',
+            type: 'select',
+            options: managerSelectOptions
+          };
+        }
+        return { ...field, label: 'Supervisor / Appraiser', type: 'text' };
+      }
+      return field;
+    });
+  }
   const requiredFields = ['name', 'title', 'country/city'];
   let normalFields = Object.keys(sample)
     .filter(k => k !== 'id' && k !== 'leaveBalances' && !(typeof k === 'string' && k.startsWith('_')))
@@ -13064,7 +13099,25 @@ async function getDynamicEmployeeFields() {
       }
       return {key:k,label:baseLabel,type:'text',required:isRequired};
     });
-  return [...normalFields, ...leaveFields];
+
+  const normalizedExistingKeys = new Set(
+    normalFields.map(field => String(field.key).toLowerCase())
+  );
+  const mergedDefaultFields = defaultFields
+    .filter(field => !normalizedExistingKeys.has(String(field.key).toLowerCase()))
+    .map(field => {
+      if (field.key.toLowerCase().includes('manager') && managerSelectOptions.length) {
+        return {
+          ...field,
+          label: 'Supervisor / Appraiser',
+          type: 'select',
+          options: managerSelectOptions
+        };
+      }
+      return field;
+    });
+
+  return [...normalFields, ...mergedDefaultFields, ...leaveFields];
 }
 
 function onEmpCancel() {
