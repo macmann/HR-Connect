@@ -4877,64 +4877,32 @@
 
     /* Login card visual refinements scoped in-page */
     .login-view {
-      background: radial-gradient(circle at 16% 18%, rgba(219, 234, 254, 0.7), transparent 44%),
-                  radial-gradient(circle at 92% 0%, rgba(191, 219, 254, 0.5), transparent 36%),
-                  linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+      background: #f3f6fb;
+      padding: 40px 16px;
+    }
+
+    .landing-shell {
+      display: flex;
+      justify-content: center;
+      max-width: 520px;
     }
 
     .welcome-panel {
-      background: linear-gradient(155deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      box-shadow: 0 18px 38px -30px rgba(15, 23, 42, 0.5);
-    }
-
-    .welcome-panel::after {
-      background: radial-gradient(circle at 86% 22%, rgba(37, 99, 235, 0.12), transparent 40%),
-                  radial-gradient(circle at 32% 78%, rgba(15, 23, 42, 0.08), transparent 42%);
-    }
-
-    .welcome-eyebrow {
-      color: #1e3a8a;
-    }
-
-    .welcome-eyebrow .material-symbols-rounded {
-      color: #1d4ed8;
-    }
-
-    .welcome-badge {
-      background: rgba(37, 99, 235, 0.1);
-      color: #1e40af;
-    }
-
-    .welcome-badge.success {
-      background: rgba(15, 23, 42, 0.08);
-      color: #1f2937;
-    }
-
-    .feature-pill {
-      background: rgba(255, 255, 255, 0.76);
-      border: 1px solid #dbe3ef;
-    }
-
-    .feature-pill .material-symbols-rounded {
-      color: #2563eb;
+      display: none;
     }
 
     .login-card {
       position: relative;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 253, 255, 0.94));
-      border: 1px solid rgba(15, 23, 42, 0.08);
-      backdrop-filter: blur(14px);
-      box-shadow: 0 26px 44px -34px rgba(15, 23, 42, 0.6);
+      background: #ffffff;
+      border: 1px solid #d9e1ea;
+      box-shadow: 0 14px 30px -24px rgba(15, 23, 42, 0.35);
+      border-radius: 22px;
+      padding: 34px 30px;
+      gap: 20px;
     }
 
     .login-card::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      background: linear-gradient(150deg, rgba(37, 99, 235, 0.06), transparent 38%, rgba(15, 23, 42, 0.04));
-      pointer-events: none;
+      display: none;
     }
 
     .login-card-header {
@@ -4946,17 +4914,17 @@
     }
 
     .brand-logo {
-      width: 118px;
-      filter: drop-shadow(0 10px 16px rgba(37, 99, 235, 0.18));
+      width: 98px;
+      filter: none;
     }
 
     .login-kicker {
       margin: 0;
       text-transform: uppercase;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.12em;
       font-size: 0.72rem;
-      font-weight: 800;
-      color: #1d4ed8;
+      font-weight: 700;
+      color: #334155;
     }
 
     .login-title {
@@ -4977,10 +4945,10 @@
       gap: 6px;
       padding: 6px 10px;
       border-radius: 999px;
-      background: rgba(30, 64, 175, 0.08);
-      color: #1e3a8a;
-      font-size: 0.78rem;
-      font-weight: 700;
+      background: #eef2f7;
+      color: #334155;
+      font-size: 0.76rem;
+      font-weight: 600;
     }
 
     .login-security-item .material-symbols-rounded {
@@ -5045,33 +5013,6 @@
   <!-- Login Experience -->
   <div id="loginPage" class="login-view">
     <div class="landing-shell">
-      <section class="welcome-panel">
-        <div class="welcome-header">
-          <p class="welcome-eyebrow">
-            <span class="material-symbols-rounded">workspace_premium</span>
-            People-first portal
-          </p>
-          <h1 id="welcomePortalName" class="welcome-title">Brillar HR Portal</h1>
-          <p class="welcome-copy">A clean, connected workspace for leave, performance, recruitment, and talent operations designed for modern teams.</p>
-        </div>
-        <div class="welcome-badges">
-          <span class="welcome-badge">
-            <span class="material-symbols-rounded">verified_user</span>
-            Secure single sign-on
-          </span>
-          <span class="welcome-badge success">
-            <span class="material-symbols-rounded">bolt</span>
-            AI-assisted workflows
-          </span>
-        </div>
-        <div class="feature-pills">
-          <span class="feature-pill"><span class="material-symbols-rounded">calendar_month</span>Time off & attendance</span>
-          <span class="feature-pill"><span class="material-symbols-rounded">workspace_premium</span>Performance reviews</span>
-          <span class="feature-pill"><span class="material-symbols-rounded">diversity_3</span>Talent & hiring</span>
-          <span class="feature-pill"><span class="material-symbols-rounded">insights</span>HR analytics</span>
-        </div>
-      </section>
-
       <div class="login-card">
         <div class="login-card-header">
           <img id="loginBrandLogo" src="logo.png" alt="Organization logo" class="brand-logo">
