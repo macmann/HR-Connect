@@ -1,4 +1,6 @@
-# HR Connect
+![Best Connect Logo](https://i.ibb.co/3yy36s0J/Gemini-Generated-Image-faynn3faynn3fayn.png)
+
+# Best Connect
 
 HR Connect is an all-in-one HR operations platform built with **Node.js**, **Express**, **MongoDB**, and a static front-end served from the same backend.
 
