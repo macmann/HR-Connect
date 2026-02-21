@@ -527,7 +527,7 @@ function getChatWidgetBaseUrl() {
 }
 
 function isChatWidgetEnabled() {
-  return chatWidgetSettings?.enabled !== false;
+  return chatWidgetSettings?.enabled === true;
 }
 
 function syncChatWidgetVisibility() {

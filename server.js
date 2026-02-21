@@ -5344,7 +5344,7 @@ init().then(async () => {
       await db.read();
       const stored = db.data.settings?.chatWidget;
       const storedUrl = typeof stored?.url === 'string' ? stored.url.trim() : '';
-      const enabled = typeof stored?.enabled === 'boolean' ? stored.enabled : true;
+      const enabled = typeof stored?.enabled === 'boolean' ? stored.enabled : false;
       res.json({
         url: storedUrl || DEFAULT_CHAT_WIDGET_URL,
         defaultUrl: DEFAULT_CHAT_WIDGET_URL,
@@ -5362,7 +5362,7 @@ init().then(async () => {
       await db.read();
       const stored = db.data.settings?.chatWidget;
       const storedUrl = typeof stored?.url === 'string' ? stored.url.trim() : '';
-      const enabled = typeof stored?.enabled === 'boolean' ? stored.enabled : true;
+      const enabled = typeof stored?.enabled === 'boolean' ? stored.enabled : false;
       res.json({
         url: storedUrl || DEFAULT_CHAT_WIDGET_URL,
         defaultUrl: DEFAULT_CHAT_WIDGET_URL,
@@ -5390,7 +5390,7 @@ init().then(async () => {
       db.data.settings = db.data.settings && typeof db.data.settings === 'object' ? db.data.settings : {};
       const previousEnabled = typeof db.data.settings.chatWidget?.enabled === 'boolean'
         ? db.data.settings.chatWidget.enabled
-        : true;
+        : false;
       const enabled = typeof incomingEnabled === 'boolean' ? incomingEnabled : previousEnabled;
       db.data.settings.chatWidget = { url: incomingUrl || '', enabled };
       await db.write();
